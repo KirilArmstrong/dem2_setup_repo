@@ -1,7 +1,5 @@
 # Demonstrator 2
 
----
-
 Repository for the 3D Label Free Demonstrator 2 setup.
 
 ### Motivation:
