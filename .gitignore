@@ -1,0 +1,8 @@
+# Default ignored files
+/shelf/
+/workspace.xml
+/data/
+/config/
+/.idea/
+*.pyc
+/demonstrator2/test/
