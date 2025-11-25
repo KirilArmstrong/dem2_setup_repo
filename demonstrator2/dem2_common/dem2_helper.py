@@ -1,6 +1,11 @@
 """Helper Script for Demonstrator 2."""
+import logging
 import os
-from demonstrator2.__globals__ import __configpath__, __datapath__
+from logging import Logger
+
+from zeiss_helpers.common import setup_logging
+
+from demonstrator2.__globals__ import __configpath__, __datapath__, __root__
 
 
 def setup_directories():
@@ -9,3 +14,17 @@ def setup_directories():
         os.makedirs(__configpath__)
     if not os.path.exists(__datapath__):
         os.makedirs(__datapath__)
+
+
+def setup_logger(basename = __file__) -> Logger:
+    """Setup logging.
+
+    :param basename: File that is calling this function. Use ``setup_logger(__file__)``.
+    :return Logger: Logging object.
+    """
+    # Logging should happen in root.
+    # Setup root logger - Is typically done in your main application!
+    # for classes use `self._log = logging.getLogger(self.__class__.__name__)`
+    setup_logging(verbose=False, logfile_directory=os.path.join(__root__, "logs"))
+    # Setup the logger
+    return logging.getLogger(os.path.basename(basename))

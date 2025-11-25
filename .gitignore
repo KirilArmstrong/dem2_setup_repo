@@ -3,6 +3,8 @@
 /workspace.xml
 /data/
 /config/
+/logs/
 /.idea/
 *.pyc
 /demonstrator2/test/
+/venv/

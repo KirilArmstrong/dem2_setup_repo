@@ -21,5 +21,7 @@ __root__
 │ ├ dem2_components (hardware control package)
 │ ├ dem2_devices (hardware package)
 │ └ t.b.d.
+├ logs (untracked)
+├ .gitignore
 └ README.md
 ```
