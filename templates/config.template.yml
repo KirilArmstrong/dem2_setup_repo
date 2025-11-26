@@ -1,0 +1,13 @@
+laser:
+  wavelength_center: 840.0 # nm.
+  wavelength_min: 805.0 # nm.
+  wavelength_max: 880.0 # nm.
+camera:
+  time_exposure: 20.0 # ms.
+  time_readout: 6.65 # ms.
+  lateral_size: 12.8 # mm.
+system:
+  depth_max: 10000.0 # um, determines no. of images per a-scan.
+  a-scans: 200 # number of sample positions.
+  numerical_aperture: 0.1 # objective NA.
+  magnification: 2.5 # objective Mag, i.e. 2.5x.

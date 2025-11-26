@@ -6,5 +6,4 @@
 /logs/
 /.idea/
 *.pyc
-/demonstrator2/test/
-/venv/
+/src/3d_label_free_dem_2/test/
