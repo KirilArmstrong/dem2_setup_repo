@@ -6,4 +6,6 @@
 /logs/
 /.idea/
 *.pyc
-/src/3d_label_free_dem_2/test/
+/test/
+/dem2_doc_vault/.obsidian/
+/dem2_doc_vault/Templates/

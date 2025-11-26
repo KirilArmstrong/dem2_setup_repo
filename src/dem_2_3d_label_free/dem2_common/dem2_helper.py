@@ -1,4 +1,5 @@
 """Helper Script for Demonstrator 2."""
+
 import logging
 import os
 from logging import Logger
@@ -16,14 +17,14 @@ def setup_directories():
         os.makedirs(__datapath__)
 
 
-def setup_root_logger(basename = __file__) -> Logger:
+def setup_root_logger(root_file = __file__) -> Logger:
     """Setup root logging. This is typically done in your main application!
 
-    For non-root classes, in ``self.__init__()``, use:
+    For non-root logging, use the following in a class's ``__init__()``:
 
     >>> self._log = logging.getLogger(self.__class__.__name__)
 
-    :param basename: File that is calling this function. Use ``setup_logger(__file__)``.
+    :param root_file: Root script file that is calling this function. Use ``setup_logger(__file__)``.
     :return Logger: Root logging object.
     """
     # Logging should happen in root.
@@ -32,4 +33,4 @@ def setup_root_logger(basename = __file__) -> Logger:
     # ! For non-root classes use `self._log = logging.getLogger(self.__class__.__name__)`
     setup_logging(verbose=False, logfile_directory=os.path.join(__root__, "logs"))
     # Return the root logger
-    return logging.getLogger(os.path.basename(basename))
+    return logging.getLogger(os.path.basename(root_file))
