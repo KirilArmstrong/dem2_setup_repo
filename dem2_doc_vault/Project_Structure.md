@@ -1,5 +1,14 @@
 # Project Structure
 
+## Requirements
+
+The following packages are required for the `dem_2_3d_label_free` project to work.
+- [Zeiss Conda Environment](https://python-community.zeiss.org/quick-start/python-with-anaconda.html)
+	- Contains all default packages, and adds necessary repositories for any additional packages.
+- [zeiss_helpers]([Private Conda Repository](https://python-community.zeiss.org/conda/p/jl4conda/zeiss_helpers))
+
+## File Structure
+
 The Structure is as follows:
 ```  
 __root__  
@@ -15,17 +24,38 @@ __root__
 │   │   └ Dem2<class name> (class name convention)  
 │   ├ dem2_components (hardware control package)  
 │   ├ dem2_devices (hardware package)  
-│   ├ __globals__.py (global variables)  
-│   └ t.b.d.  
+│   └ __globals__.py (global variables)  
 ├ templates  
-│ └ config.template.yml (default config file)  
+│ └ config.template.yml (default config file) 
+├ tests (git untracked)
 ├ .gitignore  
 └ README.md  
 ```
 
+Source files should be placed in the `/src` directory within the project `dem_2_3d_label_free` in its respective package.
+
+Example scripts that **should be git tracked** should be placed in the `/examples` directory.
+
+Test scripts that should **not be git tracked** should be placed in the `/tests` directory.
+
+Template configs and `.yml` files that **should be git tracked** should be placed in the `/templates` directory.
+
+Documentation files should be placed in `/dem2_doc_vault` and should be `.md` (markdown) files. This ensure compatibility with the [Obsidian](https://obsidian.md/) software for documentation organisation.
+
+See [[Packages]](https://github.com/myleneamstutz/3d_label_free_dem_2/blob/dev/dem2_doc_vault/Packages.md) for package structure and documentation.
+
+### Git Tracking
+
+Source, documentation, and template files should be the only files tracked. Test, data, or config files, unless for example purposes, should not be tracked. Directory or file omission can be done in the `.gitignore` file. 
+
+### Conventions
+
+**File names** should have the prefix `dem2_`, such as `dem2_helpers.py`.
+
+**Class names** should have the prefix `Dem2`, such as `class Dem2SystemCalculator()`.
 
 ---
 
-Last Modified: 25-11-26 | Tags: #
+Tags: # | Quick Links: [[Home]](https://github.com/myleneamstutz/3d_label_free_dem_2/blob/dev/dem2_doc_vault/Home.md)
 
 ---

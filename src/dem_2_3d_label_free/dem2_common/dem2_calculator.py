@@ -31,11 +31,11 @@ class Dem2SystemCalculator:
         :return: No of images (samples).
         """
         # k-range over k-interval (satisfying Nyquist criterion)
-        # nm / 1000 = um
+        # um * 1000 = nm
         return (
-            (2 * np.pi / (self.lambda_min / 1000))
-            - (2 * np.pi / (self.lambda_max / 1000))
-        ) / (np.pi / self.z_max)
+            (2 * np.pi / self.lambda_min)
+            - (2 * np.pi / self.lambda_max)
+        ) / (np.pi / (self.z_max * 1000))
 
     @property
     def total_time(self):

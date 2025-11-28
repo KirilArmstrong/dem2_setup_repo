@@ -3,9 +3,12 @@
 /workspace.xml
 /data/
 /config/
+/configs/
+/log/
 /logs/
 /.idea/
 *.pyc
 /test/
+/tests/
 /dem2_doc_vault/.obsidian/
 /dem2_doc_vault/Templates/

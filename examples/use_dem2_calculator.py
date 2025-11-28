@@ -1,4 +1,6 @@
 """Example script on how to use the System calculator script."""
+import logging
+import os
 
 from src.dem_2_3d_label_free.dem2_common.dem2_helper import setup_directories, setup_root_logger
 from src.dem_2_3d_label_free.dem2_common.dem2_calculator import Dem2SystemCalculator
@@ -6,10 +8,8 @@ from src.dem_2_3d_label_free.dem2_common.dem2_calculator import Dem2SystemCalcul
 from src.dem_2_3d_label_free.__globals__ import __config__
 
 
-def main():
-    # Root setup.
-    setup_directories()
-    log = setup_root_logger(__file__)
+def use_dem2_calculator():
+    log = logging.getLogger(os.path.basename(__file__))
 
     # Instantiate system calculator with config.yml.
     sys_calc = Dem2SystemCalculator(__config__)
@@ -53,6 +53,16 @@ def main():
     log.info("Lateral Spacing [um]: " + str(sys_calc.lateral_spacing))
 
     log.info("Lateral resolution [um]: " + str(sys_calc.lateral_resolution))
+
+
+def main():
+    # Root setup.
+    setup_directories()
+    log = setup_root_logger(__file__)
+    log.info("Running use_dem2_calculator().")
+
+    # run the calculator
+    use_dem2_calculator()
 
 
 if __name__ == "__main__":

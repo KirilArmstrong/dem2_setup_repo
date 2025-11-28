@@ -13,6 +13,6 @@ Repository for the 3D Label Free Demonstrator 2 setup.
 
 ### Documentation Wiki
 
-Documentation for the project can be found [here](https://github.com/myleneamstutz/3d_label_free_dem_2/blob/dev/dem2_doc_vault/Welcome.md).
+Documentation for the project can be found [here](https://github.com/myleneamstutz/3d_label_free_dem_2/blob/dev/dem2_doc_vault/Home.md).
 
 Structure of the project can be found [here](https://github.com/myleneamstutz/3d_label_free_dem_2/blob/dev/dem2_doc_vault/Project_Structure.md).

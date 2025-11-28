@@ -6,8 +6,17 @@ camera:
   time_exposure: 20.0 # ms.
   time_readout: 6.65 # ms.
   lateral_size: 12.8 # mm.
+stage:
+  axis_limit_min: -100000.0
+  axis_limit_max: 100000.0
 system:
-  depth_max: 10000.0 # um, determines no. of images per a-scan.
-  a-scans: 200 # number of sample positions.
-  numerical_aperture: 0.1 # objective NA.
+  depth_max: 2000.0 # um, determines no. of images per a-scan.
+  a-scans: 500 # number of sample positions.
+  numerical_aperture: 0.075 # objective NA.
   magnification: 2.5 # objective Mag, i.e. 2.5x.
+  # Example objectives:
+  # Mag   | NA
+  # 1.25x | 0.035
+  # 2.5x  | 0.075
+  # 4x    | 0.1
+  # 5x    | 0.15-0.25
