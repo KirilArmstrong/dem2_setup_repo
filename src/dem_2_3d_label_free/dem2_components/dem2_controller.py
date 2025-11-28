@@ -1,4 +1,5 @@
 """Control class for the Demonstrator 2."""
+
 import logging
 import math
 
@@ -28,39 +29,59 @@ class Dem2Controller:
         self.a_scans = self._cfg["system"]["a-scans"]
 
         # Device setup
-        self.stage = Dem2Stage(self._cfg["stage"]) # TODO call backs....
+        self.stage = Dem2Stage(self._cfg["stage"])  # TODO call backs....
         self.camera = Dem2Camera(self._cfg["camera"])
         self.laser = Dem2Laser(self._cfg["laser"])
 
-        self.camera.no_of_images = math.floor(((2 * np.pi / self.laser.wavelength_min) - (2 * np.pi / self.laser.wavelength_max)) / (np.pi / (self.z_max * 1000)))
-        self.laser.total_sweep_time = (self.camera.t_frame / 1000) * self.camera.no_of_images
+        self.camera.no_of_images = math.floor(
+            (
+                (2 * np.pi / self.laser.wavelength_min)
+                - (2 * np.pi / self.laser.wavelength_max)
+            )
+            / (np.pi / (self.z_max * 1000))
+        )
+        self.laser.total_sweep_time = (
+            self.camera.t_frame / 1000
+        ) * self.camera.no_of_images
 
     def connect(self):
         """Connect all devices."""
-        if self._state != Dem2State.DISCONNECTED:
-            raise Dem2Errors.ControllerError("Controller has already been connected! Disconnect first.")
         self._log.info("Connecting to all decides...")
+        if self._state != Dem2State.DISCONNECTED:
+            raise Dem2Errors.ControllerError(
+                "Already been connected! Disconnect first."
+            )
         self.stage.connect()
         self.camera.connect()
         self.laser.connect()
         self._state = Dem2State.CONNECTED
+
+    def disconnect(self):
+        """Disconnect all devices."""
+        self._log.info("Disconnecting all devices...")
+        self.camera.disconnect()
+        self.laser.disconnect()
+        self.stage.disconnect()
+        self._log.info("Disconnected from all devices.")
+        self.__init__(self._cfg)
 
     def initialize(self, stage_wait_time: float = 20):
         """
         Initialize all devices.
         :param stage_wait_time: Time to allow objective removal before stage calibration. Recommended: 20s. Min: 0
         """
-        if self._state != Dem2State.CONNECTED:
-            raise Dem2Errors.ControllerError("Controller must be connected!")
-        if stage_wait_time < 0:
-            raise Dem2Errors.ControllerError("Stage must be calibrated for Controller to use it! Min stage_wait_time = 0")
         self._log.info("Initialising Demonstrator 2...")
+        if self._state != Dem2State.CONNECTED:
+            raise Dem2Errors.ControllerError("Must be connected!")
+        if stage_wait_time < 0:
+            raise Dem2Errors.ControllerError(
+                "Stage must be calibrated for Controller to use it! Min stage_wait_time = 0"
+            )
         self.camera.initialize()
         self.laser.initialize()
         self.stage.initialize(calibration_wait_time=stage_wait_time)
         self._state = Dem2State.INITIALIZED
         self._log.info("Demonstrator 2 ready! 🎉")
-
 
     # Properties
 

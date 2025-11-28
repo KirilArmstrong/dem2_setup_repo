@@ -1,4 +1,7 @@
 """Swept Source Laser control script."""
+
+import concurrent.futures
+import serial
 import logging
 
 from src.dem_2_3d_label_free.dem2_common.dem2_constants import Dem2State
@@ -11,6 +14,10 @@ class Dem2Laser:
         self._log = logging.getLogger(self.__class__.__name__)
         self._state = Dem2State.DISCONNECTED
 
+        self._port = self._cfg["port"]
+        self._serial_connection = None
+        self._executor = concurrent.futures.ThreadPoolExecutor()
+
         self.wavelength_centre = self._cfg["wavelength_center"]
         self.wavelength_min = self._cfg["wavelength_min"]
         self.wavelength_max = self._cfg["wavelength_max"]
@@ -21,23 +28,97 @@ class Dem2Laser:
 
     def connect(self):
         """Connect to laser source."""
-        if self._state != Dem2State.DISCONNECTED:
-            raise Dem2Errors.LaserError("Laser source has already been connected! Disconnect first.")
         self._log.info("Connecting to the laser source...")
-        # TODO connect to laser
-        self._state = Dem2State.CONNECTED
-        self._log.info("Connected to the laser source.")
+        if self._state != Dem2State.DISCONNECTED:
+            raise Dem2Errors.LaserError(
+                "Already been connected! Disconnect first."
+            )
+        try:
+            self._serial_connection = serial.Serial(
+                self._port, baudrate=57600, timeout=1
+            )
+            self._log.info(
+                f"Connected to the laser source. Device: {self.get_device_info()}"
+            )
+            self._state = Dem2State.CONNECTED
+        except serial.SerialException as e:
+            raise Dem2Errors.LaserError(f"Failed to connect: {e}")
+
+    def disconnect(self):
+        """Disconnect the laser."""
+        self._log.info("Disconnecting from the laser...")
+        if self._state == Dem2State.DISCONNECTED:
+            self._log.warning("Laser already disconnected! Continuing...")
+        if self._serial_connection and self._serial_connection.is_open:
+            self._serial_connection.close()
+            self._log.info("Disconnected from the laser.")
+        self.__init__(self._cfg)
 
     def initialize(self):
         """Initialize the laser source."""
-        if self._state != Dem2State.CONNECTED:
-            raise Dem2Errors.LaserError("Laser source must be connected!")
-        if self._sweep_speed is None or self._total_sweep_time is None:
-            raise Dem2Errors.LaserError("total_sweep_time, and in turn sweep_speed, must be set to initialize!")
         self._log.info("Initialising the laser source...")
-        # TODO Initialize
+        if (
+            self._state != Dem2State.CONNECTED
+            or not self._serial_connection
+            or not self._serial_connection.is_open
+        ):
+            raise Dem2Errors.LaserError("Must be connected!")
+        if self._sweep_speed is None or self._total_sweep_time is None:
+            raise Dem2Errors.LaserError(
+                "total_sweep_time, and in turn sweep_speed, must be set to initialize!"
+            )
+
+        # convert wavelength into hex and send
+        norm_min = self.wavelength_min / 4095
+        lambda_min_hex = hex(65536 * norm_min)
+        norm_max = self.wavelength_max / 4095
+        lambda_max_hex = hex(65536 * norm_max)
+        self.send_command(f"P22{str(lambda_min_hex)}")
+        self.send_command(f"P23{str(lambda_max_hex)}")
+
+        # convert sweep speed into hex and send
+        sweep_speed_hex = format(int(self._sweep_speed * 10), "06X")
+        self.send_command(f"P24{str(sweep_speed_hex)}")
+
         self._state = Dem2State.INITIALIZED
         self._log.info("Initialized the laser source.")
+
+    def queue_command(self, command):
+        """Send a command to the laser and return the response using a future."""
+        if (
+            self._state != Dem2State.CONNECTED
+            or not self._serial_connection
+            or not self._serial_connection.is_open
+        ):
+            raise Dem2Errors.LaserError("Must be connected to queue a command!")
+
+        def task():
+            response = ""
+            try:
+                cmd = f"{command}\r\n"
+                self._log.debug(f"Sending command to laser: {cmd}")
+                self._serial_connection.write(cmd.encode())
+                response = self._serial_connection.readline().decode().strip()
+                self._log.debug(f"Laser responded with: {response}")
+                if "!" in response:
+                    raise Dem2Errors.LaserError(f"Device responded with error: {response}")
+                return response
+            except Exception as e:
+                raise Dem2Errors.LaserError(f"Failed to send command: {e}")
+
+        future = self._executor.submit(task)
+        return future
+
+    # Commands
+
+    def send_command(self, command):
+        """Send string command."""
+        future = self.queue_command(command)
+        return future.result(timeout=1)
+
+    def get_device_info(self) -> str:
+        """Read operation mode [I]."""
+        return self.send_command("I")
 
     # Properties
 
@@ -61,5 +142,7 @@ class Dem2Laser:
     def sweep_speed(self) -> float:
         """Getter for sweep speed."""
         if self._sweep_speed is None:
-            raise Dem2Errors.PropertyNotSetError("total_sweep_time, and in turn sweep_speed, was never set.")
+            raise Dem2Errors.PropertyNotSetError(
+                "total_sweep_time, and in turn sweep_speed, was never set."
+            )
         return self._sweep_speed

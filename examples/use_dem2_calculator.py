@@ -1,8 +1,12 @@
 """Example script on how to use the System calculator script."""
+
 import logging
 import os
 
-from src.dem_2_3d_label_free.dem2_common.dem2_helper import setup_directories, setup_root_logger
+from src.dem_2_3d_label_free.dem2_common.dem2_helper import (
+    setup_directories,
+    setup_root_logger,
+)
 from src.dem_2_3d_label_free.dem2_common.dem2_calculator import Dem2SystemCalculator
 
 from src.dem_2_3d_label_free.__globals__ import __config__

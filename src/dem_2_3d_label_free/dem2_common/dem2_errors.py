@@ -49,7 +49,7 @@ class Dem2Errors:
 
             :param reason: An optional reason for the mirror failure, if known.
             """
-            super().__init__(f"Laser failure: {reason}")
+            super().__init__(f"Camera failure: {reason}")
 
     class ControllerError(GenericError):
         """Stage failure."""

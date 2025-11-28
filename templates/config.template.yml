@@ -1,8 +1,10 @@
 laser:
+  port: "COM1"
   wavelength_center: 840.0 # nm.
   wavelength_min: 805.0 # nm.
   wavelength_max: 880.0 # nm.
 camera:
+  id: 0 # camera dev_id. 0 will take first one found.
   time_exposure: 20.0 # ms.
   time_readout: 6.65 # ms.
   lateral_size: 12.8 # mm.

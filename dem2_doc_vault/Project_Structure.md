@@ -5,7 +5,7 @@
 The following packages are required for the `dem_2_3d_label_free` project to work.
 - [Zeiss Conda Environment](https://python-community.zeiss.org/quick-start/python-with-anaconda.html)
 	- Contains all default packages, and adds necessary repositories for any additional packages.
-- [zeiss_helpers]([Private Conda Repository](https://python-community.zeiss.org/conda/p/jl4conda/zeiss_helpers))
+- [zeiss_helpers](https://python-community.zeiss.org/conda/p/jl4conda/zeiss_helpers)
 
 ## File Structure
 
