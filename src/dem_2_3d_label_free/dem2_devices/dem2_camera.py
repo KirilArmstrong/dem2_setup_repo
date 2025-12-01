@@ -8,6 +8,8 @@ from src.ximea import xiapi
 
 
 class Dem2Camera(xiapi.Camera):
+    """Camera control script."""
+
     def __init__(self, config: dict):
         self._cfg = config
         self._log = logging.getLogger(self.__class__.__name__)
@@ -15,21 +17,21 @@ class Dem2Camera(xiapi.Camera):
 
         super().__init__(self._cfg["id"])
 
+        # Save config exposure time.
         self._t_exp = self._cfg["time_exposure"]
         if self._t_exp < 0.1:
             raise Dem2Errors.CameraError("Minimum exposure time is 100 us.")
         self.t_read = self._cfg["time_readout"]
         self.lateral_size = self._cfg["lateral_size"]
 
-        self.no_of_images: int | None = None
+        # Number of images per a-scan.
+        self.samples_a_scan: int | None = None
 
     def connect(self):
         """Connect to Camera."""
         self._log.info("Connecting to the Camera...")
         if self._state != Dem2State.DISCONNECTED:
-            raise Dem2Errors.LaserError(
-                "Already been connected! Disconnect first."
-            )
+            raise Dem2Errors.LaserError("Already been connected! Disconnect first.")
         try:
             self.open_device()
         except Exception as e:
@@ -52,10 +54,10 @@ class Dem2Camera(xiapi.Camera):
         self._log.info("Initialising the Camera...")
         if self._state != Dem2State.CONNECTED:
             raise Dem2Errors.CameraError("Must be connected to initialize!")
-        if self.no_of_images is None:
+        if self.samples_a_scan is None:
             raise Dem2Errors.CameraError("Number of images must be set to initialize!")
-        self.set_exposure(self._t_exp * 1000) # convert ms to us
-        self.set_imgdataformat('XI_MONO8')
+        self.set_exposure(self._t_exp * 1000)  # convert ms to us
+        self.set_imgdataformat("XI_MONO8")
         self._state = Dem2State.INITIALIZED
         self._log.info("Initialized the Camera.")
 

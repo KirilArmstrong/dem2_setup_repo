@@ -4,9 +4,28 @@ import logging
 import os
 from logging import Logger
 
-from zeiss_helpers.common import setup_logging
+from zeiss_helpers.common import setup_logging, ConfigurationFile
 
-from src.dem_2_3d_label_free.__globals__ import __configpath__, __datapath__, __root__
+from src.dem_2_3d_label_free.__globals__ import (
+    __configpath__,
+    __datapath__,
+    __root__,
+    __template_path__,
+)
+
+
+def load_config_file(config_filepath: str = os.path.join(__configpath__, "config.yml")) -> dict:
+    """
+    Load and parse a config file in the ``config`` directory into a config dict.
+    :param config_filepath: file path to config yml file.
+    :return: Config dictionary.
+    """
+    return (
+        ConfigurationFile(path=config_filepath)
+        .with_defaults_from_file(os.path.join(__template_path__, "config.template.yml"))
+        .with_copy_defaults_if_missing()
+        .parse()
+    )
 
 
 def setup_directories():
@@ -17,7 +36,7 @@ def setup_directories():
         os.makedirs(__datapath__)
 
 
-def setup_root_logger(root_file = __file__) -> Logger:
+def setup_root_logger(root_file=__file__) -> Logger:
     """Setup root logging. This is typically done in your main application!
 
     For non-root logging, use the following in a class's ``__init__()``:

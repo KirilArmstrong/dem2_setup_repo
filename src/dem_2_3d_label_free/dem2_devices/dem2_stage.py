@@ -12,6 +12,8 @@ from ZEISS import MTB
 
 
 class Dem2Stage:
+    """Stage control script."""
+
     def __init__(self, config: dict, pos_settled_cb, focus_changed_cb):
         """
         Dem2Stage init function.
@@ -24,24 +26,28 @@ class Dem2Stage:
         self._cfg = config
         self._log = logging.getLogger(self.__class__.__name__)
         self._state: Dem2State = Dem2State.DISCONNECTED
+
+        self._m_Connection: MTB.Api.IMTBConnection | None = None
+        self._mtbid: str | None = None
+        self.root: MTB.Api.IMTBRoot | None = None
+
         self.pos_settled_cb = pos_settled_cb  # TODO maybe better way in control script?
         self.focus_changed_cb = (
             focus_changed_cb  # TODO maybe better way in control script?
         )
-        self._m_Connection: MTB.Api.IMTBConnection | None = None
-        self._mtbid: str | None = None
-        self.root: MTB.Api.IMTBRoot | None = None
+
         self.axis = []
         self.stage = None
         self.stage_sink = None  # TODO privatable?
         self.focus_sink = None  # TODO privatable?
         self.focus = None
         self._focus_set_pos = 0.0
-        self.b_focus_drift_detected = False
-        self.b_pattern_acquisition = False
         self._sw_limit = [self._cfg["axis_limit_max"], self._cfg["axis_limit_min"]]
         self._pos_unit = None
         self._move_mode = None
+
+        self.b_focus_drift_detected = False
+        self.b_pattern_acquisition = False
 
     def _register_pos_settled_event_handler(self):
         # create an instant of the event sink class

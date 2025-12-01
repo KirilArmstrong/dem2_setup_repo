@@ -9,11 +9,14 @@ from src.dem_2_3d_label_free.dem2_common.dem2_errors import Dem2Errors
 
 
 class Dem2Laser:
+    """Swept Source Laser control script."""
+
     def __init__(self, config: dict):
         self._cfg = config
         self._log = logging.getLogger(self.__class__.__name__)
         self._state = Dem2State.DISCONNECTED
 
+        # Set up connection variables
         self._port = self._cfg["port"]
         self._serial_connection = None
         self._executor = concurrent.futures.ThreadPoolExecutor()
@@ -27,12 +30,10 @@ class Dem2Laser:
         self._sweep_speed = None
 
     def connect(self):
-        """Connect to laser source."""
+        """Connect to laser source via serial."""
         self._log.info("Connecting to the laser source...")
         if self._state != Dem2State.DISCONNECTED:
-            raise Dem2Errors.LaserError(
-                "Already been connected! Disconnect first."
-            )
+            raise Dem2Errors.LaserError("Already been connected! Disconnect first.")
         try:
             self._serial_connection = serial.Serial(
                 self._port, baudrate=57600, timeout=1
@@ -76,15 +77,11 @@ class Dem2Laser:
         self.send_command(f"P22{str(lambda_min_hex)}")
         self.send_command(f"P23{str(lambda_max_hex)}")
 
-        # convert sweep speed into hex and send
-        sweep_speed_hex = format(int(self._sweep_speed * 10), "06X")
-        self.send_command(f"P24{str(sweep_speed_hex)}")
-
         self._state = Dem2State.INITIALIZED
         self._log.info("Initialized the laser source.")
 
     def queue_command(self, command):
-        """Send a command to the laser and return the response using a future."""
+        """Queue a command to the laser device and return the response as a future object."""
         if (
             self._state != Dem2State.CONNECTED
             or not self._serial_connection
@@ -101,7 +98,9 @@ class Dem2Laser:
                 response = self._serial_connection.readline().decode().strip()
                 self._log.debug(f"Laser responded with: {response}")
                 if "!" in response:
-                    raise Dem2Errors.LaserError(f"Device responded with error: {response}")
+                    raise Dem2Errors.LaserError(
+                        f"Device responded with error: {response}"
+                    )
                 return response
             except Exception as e:
                 raise Dem2Errors.LaserError(f"Failed to send command: {e}")
@@ -112,9 +111,14 @@ class Dem2Laser:
     # Commands
 
     def send_command(self, command):
-        """Send string command."""
+        """Send string command and wait for response."""
         future = self.queue_command(command)
         return future.result(timeout=1)
+
+    def send_sweep_speed(self, sweep_speed):
+        # convert sweep speed into hex and send
+        sweep_speed_hex = format(int(sweep_speed * 10), "06X")
+        return self.send_command(f"P24{str(sweep_speed_hex)}")
 
     def get_device_info(self) -> str:
         """Read operation mode [I]."""
