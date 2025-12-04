@@ -3,11 +3,40 @@
 ## Requirements
 
 The following packages are required for the `dem_2_3d_label_free` project to work.
-- [Zeiss Conda Environment](https://python-community.zeiss.org/quick-start/python-with-anaconda.html)
-	- Contains all default packages, and adds necessary repositories for any additional packages.
-- [zeiss_helpers](https://python-community.zeiss.org/conda/p/jl4conda/zeiss_helpers)
-- ximea api
-- ZEISS MTB api
+- [Zeiss Conda Environment](https://python-community.zeiss.org/quick-start/python-with-anaconda.html) - Contains all default packages, and adds necessary repositories for any additional packages.
+	- [zeiss_helpers](https://python-community.zeiss.org/conda/p/jl4conda/zeiss_helpers)
+- Additional Sources
+	- [ximea API](https://www.ximea.com/support/wiki/apis/APIs)
+	- ZEISS MTB API
+### Additional Sources
+After installing the additional software packages, ensure you add them as sources.
+#### VS Code
+In your `~/.vscode/settings.json` ensure the following is present:
+```json
+{
+	// ... other settings
+	
+	"python.analysis.extraPaths": [
+		"path/to/folder/containing/ximea/API/Python/v3/ximea",
+		"path/to/folder/containing/mtbapi"
+	],
+	"python.autoComplete.extraPaths": [
+		"path/to/folder/containing/ximea/API/Python/v3/ximea",
+		"path/to/folder/containing/mtbapi"
+	]
+	
+	// ... other settings
+}
+```
+
+> ⚠️ Note
+> 
+> JSON doesn't support comments. Don't include them please.
+
+#### PyCharm
+Add the following directories as source roots in `File > Settings > Project Structure > + Add Content Root`.
+- `path/to/folder/containing/ximea/API/Python/v3/ximea`
+- `path/to/folder/containing/mtbapi`
 
 ## File Structure
 

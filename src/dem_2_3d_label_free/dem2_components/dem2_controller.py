@@ -35,7 +35,7 @@ class Dem2Controller:
         self.na = self._cfg["system"]["numerical_aperture"]
 
         # Device setup
-        self.stage = Dem2Stage(self._cfg["stage"])  # TODO call backs....
+        self.stage = Dem2Stage(self._cfg["stage"])  # TODO call backs... i dont think i need them.
         self.camera = Dem2Camera(self._cfg["camera"])
         self.laser = Dem2Laser(self._cfg["laser"])
 
@@ -91,17 +91,19 @@ class Dem2Controller:
         self._state = Dem2State.INITIALIZED
         self._log.info("Demonstrator 2 ready! 🎉")
 
-    def run_bscan_pattern(self, bsp: Dem2BScanPattern, save_to_directory_path: str = "") -> Dem2SweepExperiment:
+    def run_bscan_pattern(
+        self, bsp: Dem2BScanPattern, save_to_directory_path: str = ""
+    ) -> Dem2SweepExperiment:
         """Run a bscan_pattern."""
         sweep_exp = Dem2SweepExperiment()
         # start loop
-            # start time
-            # move to next pos.
-            # end time
-            # if time less than 1ms, wait remaining time for laser to chill out.
-            # run sweep and collect images
-            #  run_signle_sweep()
-            # save Dem2SweepPacket to save_to_directory_path or __datapath__
+        # start time
+        # move to next pos.
+        # end time
+        # if time less than 1ms, wait remaining time for laser to chill out.
+        # run sweep and collect images
+        #  run_signle_sweep()
+        # save Dem2SweepPacket to save_to_directory_path or __datapath__
         if save_to_directory_path:
             sweep_exp.save(save_to_directory_path)
         return sweep_exp

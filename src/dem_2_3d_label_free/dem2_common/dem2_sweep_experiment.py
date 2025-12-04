@@ -3,6 +3,7 @@
 import logging
 import os
 
+import numpy as np
 import yaml
 
 from src.dem_2_3d_label_free.__globals__ import __datapath__

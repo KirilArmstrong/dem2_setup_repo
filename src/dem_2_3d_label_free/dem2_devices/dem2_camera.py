@@ -4,7 +4,7 @@ import logging
 
 from src.dem_2_3d_label_free.dem2_common.dem2_constants import Dem2State
 from src.dem_2_3d_label_free.dem2_common.dem2_errors import Dem2Errors
-from src.ximea import xiapi
+import xiapi
 
 
 class Dem2Camera(xiapi.Camera):
@@ -15,7 +15,7 @@ class Dem2Camera(xiapi.Camera):
         self._log = logging.getLogger(self.__class__.__name__)
         self._state = Dem2State.DISCONNECTED
 
-        super().__init__(self._cfg["id"])
+        super().__init__(self._cfg["device_id"])
 
         # Save config exposure time.
         self._t_exp = self._cfg["time_exposure"]
