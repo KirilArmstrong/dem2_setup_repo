@@ -2,9 +2,13 @@
 
 import logging
 import math
+import os
+import time
+from datetime import datetime, timedelta
 
 import numpy as np
 
+import xiapi
 from src.dem_2_3d_label_free.dem2_common.dem2_bscan_pattern import Dem2BScanPattern
 from src.dem_2_3d_label_free.dem2_common.dem2_constants import Dem2State
 from src.dem_2_3d_label_free.dem2_common.dem2_errors import Dem2Errors
@@ -16,6 +20,8 @@ from src.dem_2_3d_label_free.dem2_devices.dem2_camera import Dem2Camera
 from src.dem_2_3d_label_free.dem2_devices.dem2_laser import Dem2Laser
 from src.dem_2_3d_label_free.dem2_devices.dem2_stage import Dem2Stage
 
+
+from src.dem_2_3d_label_free.__globals__ import __datapath__
 
 class Dem2Controller:
     """Control class for the Demonstrator 2."""
@@ -35,7 +41,9 @@ class Dem2Controller:
         self.na = self._cfg["system"]["numerical_aperture"]
 
         # Device setup
-        self.stage = Dem2Stage(self._cfg["stage"])  # TODO call backs... i dont think i need them.
+        self.stage = Dem2Stage(
+            self._cfg["stage"]
+        )  # TODO call backs... i dont think i need them.
         self.camera = Dem2Camera(self._cfg["camera"])
         self.laser = Dem2Laser(self._cfg["laser"])
 
@@ -51,6 +59,7 @@ class Dem2Controller:
         ) * self.camera.samples_a_scan
 
         self.bscan_pattern: Dem2BScanPattern | None = None
+        self._buffer = xiapi.Image()
 
     def connect(self):
         """Connect all devices."""
@@ -92,24 +101,34 @@ class Dem2Controller:
         self._log.info("Demonstrator 2 ready! 🎉")
 
     def run_bscan_pattern(
-        self, bsp: Dem2BScanPattern, save_to_directory_path: str = ""
+        self, bsp: Dem2BScanPattern, save_to_directory_path: str = __datapath__
     ) -> Dem2SweepExperiment:
         """Run a bscan_pattern."""
         sweep_exp = Dem2SweepExperiment()
-        # start loop
-        # start time
-        # move to next pos.
-        # end time
-        # if time less than 1ms, wait remaining time for laser to chill out.
-        # run sweep and collect images
-        #  run_signle_sweep()
-        # save Dem2SweepPacket to save_to_directory_path or __datapath__
+        for i in range(bsp.a_scans_b_scan):
+            start_time = datetime.now()
+            self.stage.move_stage(bsp.x_positions[i], bsp.y_positions[i])
+            time_diff = start_time - datetime.now()
+            self._log.info(f"Stage moved in {time_diff.total_seconds()} seconds.")
+            # if time less than 1ms, wait remaining time for laser to chill out.
+            if time_diff < timedelta(milliseconds=1) and i != 0:
+                self._log.info(
+                    "Minimum 1ms pause time required for laser. waiting "
+                    f"{(timedelta(milliseconds=1) - time_diff).total_seconds()} s..."
+                )
+                time.sleep((timedelta(milliseconds=1) - time_diff).total_seconds())
+            sweep_exp.packets.append(self.run_single_sweep(os.path.join(save_to_directory_path, f"packet_sample{i}")))
         if save_to_directory_path:
-            sweep_exp.save(save_to_directory_path)
+            sweep_exp.save(os.path.join(save_to_directory_path, "sweep_exp"))
         return sweep_exp
 
-    def run_signle_sweep(self, save_to_directory_path: str = "") -> Dem2SweepPacket:
+    def run_single_sweep(self, save_to_directory_path: str = "") -> Dem2SweepPacket:
         """Run a single laser sweep (single a-scan)."""
+        self.camera.start_acquisition()
+        # start the laser sweep
+        self.camera.get_image(
+            self._buffer, timeout=(self.laser.total_sweep_time + 5) * 1000
+        )
         packet = Dem2SweepPacket()
         # beep boop, do the laser.
         # save to save_to_directory_path

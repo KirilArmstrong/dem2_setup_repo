@@ -9,6 +9,7 @@ camera:
   time_readout: 6.65 # ms.
   lateral_size: 12.8 # mm.
 stage:
+  focus_z_pos: 0.0 # Initial focus z position.
   axis_limit_min: -100000.0
   axis_limit_max: 100000.0
 system:

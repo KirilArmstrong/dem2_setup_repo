@@ -12,10 +12,18 @@ from src.dem_2_3d_label_free.__globals__ import __datapath__
 class Dem2SweepPacket:
     """IO for sweep data and images (data for single a-scan)."""
 
-    def __init__(self, load_from_file: str = ""):
+    def __init__(
+        self,
+        data: np.ndarray | None = None,
+        data_offset: int = 0,
+        load_from_file: str = "",
+    ):
         self._log = logging.getLogger(self.__class__.__name__)
 
-        self.images: list[images] = [] # Maybe the burst image returns a list of images, check the documentation.
+        # self.images: list[images] = [] # Maybe the burst image returns a list of images, check the documentation.
+
+        if data is not None and data_offset != 0:
+            self._data = data.reshape(-1, data_offset)
 
         if load_from_file:
             self.load(load_from_file)

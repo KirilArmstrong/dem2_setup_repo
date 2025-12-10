@@ -27,6 +27,8 @@ class Dem2Camera(xiapi.Camera):
         # Number of images per a-scan.
         self.samples_a_scan: int | None = None
 
+        self._buffer_offset = None
+
     def connect(self):
         """Connect to Camera."""
         self._log.info("Connecting to the Camera...")
@@ -56,8 +58,20 @@ class Dem2Camera(xiapi.Camera):
             raise Dem2Errors.CameraError("Must be connected to initialize!")
         if self.samples_a_scan is None:
             raise Dem2Errors.CameraError("Number of images must be set to initialize!")
+        self.set_imgdataformat("XI_FRM_TRANSPORT_DATA")  # for image burst buffer
+        self.set_gpi_mode(
+            "XI_GPI_TRIGGER"
+        )  # https://www.ximea.com/support/wiki/apis/XiAPI_Python_Manual#GPIMode
+        self.set_trigger_source("XI_TRG_RISING_EDGE")  # trigger when laser rises
+        self.set_trigger_selector(
+            "XI_TRG_SEL_FRAME_BURST_ACTIVE"
+        )  # while pulse high, it continuously exposes.
         self.set_exposure(self._t_exp * 1000)  # convert ms to us
-        self.set_imgdataformat("XI_MONO8")
+        if self.samples_a_scan is None:
+            raise Dem2Errors.CameraError("Number of samples per a scan not set.")
+        self.set_concat_img_count(self.samples_a_scan)
+        self.enable_concat_img_mode()  # multiple images in one buffer.
+        # self._buffer_offset = self.get_concat_img_transport_img_offset()
         self._state = Dem2State.INITIALIZED
         self._log.info("Initialized the Camera.")
 

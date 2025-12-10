@@ -29,7 +29,7 @@ In your `~/.vscode/settings.json` ensure the following is present:
 }
 ```
 
-> ⚠️ Note
+> [!warning]
 > 
 > JSON doesn't support comments. Don't include them please.
 
