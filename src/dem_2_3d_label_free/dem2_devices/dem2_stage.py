@@ -88,7 +88,7 @@ class Dem2Stage:
                 ]
             )
         self._log.info(
-            "software limits: cfg_max, cfg_min, actual_max, actual_min:", self._sw_limit
+            "software limits: cfg_max, cfg_min, actual_max, actual_min:" + self._sw_limit.__str__()
         )  # TODO if cfg and actual identical, remove the get limits above
 
     # Stage control.
@@ -105,7 +105,7 @@ class Dem2Stage:
         self.stage.SetPosition(
             position[0], position[1], self._pos_unit, self._move_mode
         )
-        self._log.info("moving to pos: ", position)
+        self._log.info("moving to pos: " + position.__str__())
         return self._pos_settled_future
 
     def _queue_move_focus(self, z_pos) -> Future:
@@ -113,10 +113,10 @@ class Dem2Stage:
         Move focus to position z. Must be calibrated.
         :param z_pos: position z.
         """
-        if self._state != Dem2State.CALIBRATED:
+        if self._state != Dem2State.INITIALIZED:
             raise Dem2Errors.StageError("Must be calibrated to move focus!")
         self._focus_settled_future = Future()
-        self._log.info("moving focus to: ", z_pos)
+        self._log.info("moving focus to: " + z_pos.__str__())
         self._focus_set_pos = z_pos
         self.focus.SetPosition(self._focus_set_pos, self._pos_unit, self._move_mode)
         return self._focus_settled_future
@@ -202,7 +202,7 @@ class Dem2Stage:
                 MTB.Api.MTBCmdSetModes.Default,
                 600,
             )
-        self.move_focus(0.0)
+        self._queue_move_focus(0.0)
         # Calibrate axis:
         for ax in self._axis:
             if (
@@ -218,7 +218,7 @@ class Dem2Stage:
                 )
         self._set_sw_limits()
         if self._focus_set_pos != 0:
-            self.move_focus(self._focus_set_pos)
+            self._queue_move_focus(self._focus_set_pos)
         self._state = Dem2State.CALIBRATED
         self._log.info("Stage calibrated.")
 
@@ -227,9 +227,14 @@ class Dem2Stage:
         Move the stage position and wait until it settles.
         :param z: Z position.
         """
-        future = self.stage._queue_move_focus(z)
+        current_position = self.get_focus()
+        if current_position == z:
+            self._log.warning(f"focus already at pos {current_position.__str__()}")
+            return
+        future = self._queue_move_focus(z)
         # the future.result() will wait until it settles.
-        self._log.info(f"Focus moved and settled at pos {future.result()}")
+        res = future.result()
+        self._log.info(f"Focus moved and settled at new pos.")
 
     def move_stage(self, x, y):
         """
@@ -237,9 +242,14 @@ class Dem2Stage:
         :param x: X position.
         :param y: Y position.
         """
-        future = self.stage._queue_move_stage_to_pos((x, y))
+        current_position = self.get_position()
+        if current_position[0] == x and current_position[1] == y:
+            self._log.warning(f"Stage already at pos {current_position.__str__()}")
+            return
+        future = self._queue_move_stage_to_pos((x, y))
         # the future.result() will wait until it settles.
-        self._log.info(f"Stage moved and settled at pos {future.result()}")
+        res = future.result()
+        self._log.info(f"Stage moved and settled at new pos.")
 
     def stop_moving(self):
         """Stop moving the stage."""
