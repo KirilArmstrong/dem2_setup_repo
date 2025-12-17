@@ -43,7 +43,7 @@ class Dem2Controller:
         # Device setup
         self.stage = Dem2Stage(
             self._cfg["stage"]
-        )  # TODO call backs... i dont think i need them.
+        )
         self.camera = Dem2Camera(self._cfg["camera"])
         self.laser = Dem2Laser(self._cfg["laser"])
 

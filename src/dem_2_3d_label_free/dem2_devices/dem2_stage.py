@@ -31,12 +31,14 @@ class Dem2Stage:
 
         self._pos_settled_future = Future()
         self._focus_settled_future = Future()
+        self._calibration_future = Future()
 
         self._axis = []
         self.stage = None
         self.focus = None
         self._stage_sink = None
         self._focus_sink = None
+        self._calibration_sink = None
         self._focus_set_pos = self._cfg["focus_z_pos"]
         self._sw_limit = [self._cfg["axis_limit_max"], self._cfg["axis_limit_min"]]
         self._pos_unit = None
@@ -67,6 +69,7 @@ class Dem2Stage:
         self._focus_sink = MTB.Api.MTBContinualEventSink()
         # Create an instance of the handler type
         handler2 = MTB.Api.MTBStagePositionSettledHandler(self._focus_settled_handler)
+        # TODO calling position settled handler? but that's for stage pos, no?
         # Set the handler instance on the event sink handler
         self._focus_sink.MTBPositionSettledEvent += handler2
         # Register the event sink handler with the device interface
@@ -75,6 +78,20 @@ class Dem2Stage:
     def _focus_settled_handler(self, arg1):
         self._log.debug(f"focus settled event called! Set to {arg1}")
         self._focus_settled_future.set_result(arg1)
+
+    def _register_calibration_event_handler(self):
+        # create an instant of the event sink class
+        self._calibration_sink = MTB.Api.MTBAxisEventSink()
+        # Create an instance of the handler type
+        handler3 = MTB.Api.MTBAxisCalibrationChangedHandler(self._calibration_handler)
+        # Set the handler instance on the event sink handler
+        self._calibration_sink.MTBCalibrationChangedEvent += handler3
+        # Register the event sink handler with the device interface
+        self._calibration_sink.Advise(self.stage)
+
+    def _calibration_handler(self):
+        self._log.debug("calibration mode changed event called!")
+        self._calibration_future.set_result("Calibration mode changed.")
 
     def _set_sw_limits(self):
         """Set software limits."""
@@ -88,8 +105,9 @@ class Dem2Stage:
                 ]
             )
         self._log.info(
-            "software limits: cfg_max, cfg_min, actual_max, actual_min:" + self._sw_limit.__str__()
-        )  # TODO if cfg and actual identical, remove the get limits above
+            "software limits: cfg_max, cfg_min, [x axi [actual_max, actual_min], [y axis [...]]:"
+            + self._sw_limit.__str__()
+        )
 
     # Stage control.
 
@@ -102,10 +120,15 @@ class Dem2Stage:
         if self._state != Dem2State.CALIBRATED and not emergency:
             raise Dem2Errors.StageError("Must be calibrated to move stage!")
         self._pos_settled_future = Future()
-        self.stage.SetPosition(
-            position[0], position[1], self._pos_unit, self._move_mode
-        )
-        self._log.info("moving to pos: " + position.__str__())
+        if self.get_position() == position and not emergency:
+            self._log.info("Stage Already at position " + position.__str__())
+            self._pos_settled_future.set_result(self.get_position())
+        else:
+            self._log.info("moving to pos: " + position.__str__())
+            self.stage.SetPosition(
+                position[0], position[1], self._pos_unit, self._move_mode
+            )
+            # TODO see if i need to future.set_result for emergency stop.
         return self._pos_settled_future
 
     def _queue_move_focus(self, z_pos) -> Future:
@@ -113,21 +136,41 @@ class Dem2Stage:
         Move focus to position z. Must be calibrated.
         :param z_pos: position z.
         """
-        if self._state != Dem2State.INITIALIZED:
+        if self._state != Dem2State.CALIBRATED:
             raise Dem2Errors.StageError("Must be calibrated to move focus!")
         self._focus_settled_future = Future()
-        self._log.info("moving focus to: " + z_pos.__str__())
         self._focus_set_pos = z_pos
-        self.focus.SetPosition(self._focus_set_pos, self._pos_unit, self._move_mode)
+        if self.get_focus() == self._focus_set_pos:
+            self._log.info("Focus already at pos " + z_pos.__str__())
+            self._focus_settled_future.set_result(self.get_focus())
+        else:
+            self._log.info("moving focus to: " + z_pos.__str__())
+            self.focus.SetPosition(self._focus_set_pos, self._pos_unit, self._move_mode)
         return self._focus_settled_future
 
     def _check_focus_drift(self):
         """Check if focus is drifting."""
+        # TODO i think there is a focus stabiliser that does this. IMTBFocusStabilizer. Check in config
         if self.get_focus() == self._focus_set_pos:
             self.b_focus_drift_detected = False
         else:
             self.b_focus_drift_detected = True
         return self.b_focus_drift_detected
+
+    def _calibrate_axis(self, ax) -> Future:
+        """Calibrate the given axis (X, Y, or Focus)."""
+        self._calibration_future = Future()
+        if int(ax.CalibrationMode) & int(MTB.Api.MTBCalibrationModes.OnLowerLimit) == 0:
+            # Axis requires calibration
+            ax.Calibrate(
+                MTB.Api.MTBCalibrationModes.OnFullRange
+                | MTB.Api.MTBCalibrationModes.OnLowerLimit,
+                MTB.Api.MTBCmdSetModes.Default,
+                600,
+            )
+        else:
+            self._calibration_future.set_result("Already calibrated.")
+        return self._calibration_future
 
     # # Functions
 
@@ -189,38 +232,23 @@ class Dem2Stage:
         self._log.info("Calibrating the stage...")
         if self._state != Dem2State.INITIALIZED:
             raise Dem2Errors.StageError("Must be Initialized to calibrate!")
+        self._log.info("Calibrating focus...")
         # Calibrate focus:
-        if (
-            int(self.focus.CalibrationMode)
-            & int(MTB.Api.MTBCalibrationModes.OnLowerLimit)
-            == 0
-        ):
-            # Axis requires calibration
-            self.focus.Calibrate(
-                MTB.Api.MTBCalibrationModes.OnFullRange
-                | MTB.Api.MTBCalibrationModes.OnLowerLimit,
-                MTB.Api.MTBCmdSetModes.Default,
-                600,
-            )
-        self._queue_move_focus(0.0)
+        self._calibrate_axis(self.focus)
+        self._log.info(
+            "Focus: " + self._calibration_future.result()
+        )  # wait for calibration to finish.
         # Calibrate axis:
-        for ax in self._axis:
-            if (
-                int(ax.CalibrationMode) & int(MTB.Api.MTBCalibrationModes.OnLowerLimit)
-                == 0
-            ):
-                # Axis requires calibration
-                ax.Calibrate(
-                    MTB.Api.MTBCalibrationModes.OnFullRange
-                    | MTB.Api.MTBCalibrationModes.OnLowerLimit,
-                    MTB.Api.MTBCmdSetModes.Default,
-                    600,
-                )
+        for ax in range(len(self._axis)):
+            self._calibrate_axis(self._axis[ax])
+            self._log.info(
+                f"{ax} axis: " + self._calibration_future.result()
+            )  # wait for calibration to finish.
         self._set_sw_limits()
-        if self._focus_set_pos != 0:
-            self._queue_move_focus(self._focus_set_pos)
         self._state = Dem2State.CALIBRATED
         self._log.info("Stage calibrated.")
+        if self._focus_set_pos is not None:
+            self._queue_move_focus(self._focus_set_pos)
 
     def move_focus(self, z):
         """
@@ -232,9 +260,8 @@ class Dem2Stage:
             self._log.warning(f"focus already at pos {current_position.__str__()}")
             return
         future = self._queue_move_focus(z)
-        # the future.result() will wait until it settles.
-        res = future.result()
-        self._log.info(f"Focus moved and settled at new pos.")
+        res = future.result()  # will wait until it settles.
+        self._log.info("Focus moved and settled at new pos.")
 
     def move_stage(self, x, y):
         """
@@ -270,6 +297,4 @@ class Dem2Stage:
 
     def get_focus(self):
         """Get current focus position."""
-        return [
-            self.focus.GetPosition(self._pos_unit),
-        ]
+        return self.focus.GetPosition(self._pos_unit)
