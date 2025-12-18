@@ -48,21 +48,25 @@ class Dem2Stage:
 
     # Initialization.
 
-    def _register_pos_settled_event_handler(self):
+    def _register_stage_event_handler(self):
         # create an instant of the event sink class
         self._stage_sink = MTB.Api.MTBStageEventSink()
+        self._calibration_sink = MTB.Api.MTBAxisEventSink()
         # Create an instance of the handler type
-        handler = MTB.Api.MTBStagePositionSettledHandler(self._my_pos_settled_handler)
+        settle_handler = MTB.Api.MTBStagePositionSettledHandler(self._my_pos_settled_handler)
+        calibration_handler = MTB.Api.MTBAxisCalibrationChangedHandler(self._calibration_handler)
         # Set the handler instance on the event sink handler
-        self._stage_sink.MTBPositionSettledEvent += handler
+        self._stage_sink.MTBPositionSettledEvent += settle_handler
+        self._calibration_sink.MTBCalibrationChangedEvent += calibration_handler
         # Register the event sink handler with the device interface
         self._stage_sink.Advise(self.stage)
+        self._calibration_sink.Advise(self.stage)
 
     def _my_pos_settled_handler(self, arg1, arg2):
         self._log.debug(
-            f"settled handler called. moved to pos. {arg1}, {arg2} and settled!"
+            f"settled handler called. moved to pos. {arg1['V']}, {arg2['V']} and settled!"
         )
-        self._pos_settled_future.set_result((arg1, arg2))
+        self._pos_settled_future.set_result((arg1['V'], arg2['V']))
 
     def _register_pos_changed_event_handler(self):
         # create an instant of the event sink class
@@ -76,8 +80,8 @@ class Dem2Stage:
         self._focus_sink.Advise(self.focus)
 
     def _focus_settled_handler(self, arg1):
-        self._log.debug(f"focus settled event called! Set to {arg1}")
-        self._focus_settled_future.set_result(arg1)
+        self._log.debug(f"focus settled event called! Set to {arg1['V']}")
+        self._focus_settled_future.set_result(arg1['V'])
 
     def _register_calibration_event_handler(self):
         # create an instant of the event sink class
@@ -203,7 +207,7 @@ class Dem2Stage:
         if self._state != Dem2State.CONNECTED:
             raise Dem2Errors.StageError("Must be connected to Initialize!")
         # Initialize focus:
-        self.focus = MTB.Api.IMTBAxis(self._root.GetComponent("MTBFocus"))
+        self.focus = MTB.Api.IMTBFocus(self._root.GetComponent("MTBFocus"))
         # Initialize stage:
         self.stage = MTB.Api.IMTBStage(self._root.GetComponent("MTBStage"))
         self._axis.append(self.stage.XAxis)
@@ -211,7 +215,7 @@ class Dem2Stage:
         self._pos_unit = self._axis[0].GetPositionUnit(0)
         self._move_mode = MTB.Api.MTBCmdSetModes(0)
 
-        self._register_pos_settled_event_handler()
+        self._register_stage_event_handler()
         self._register_pos_changed_event_handler()
         self._state = Dem2State.INITIALIZED
         if calibration_wait_time >= 0:
@@ -261,7 +265,7 @@ class Dem2Stage:
             return
         future = self._queue_move_focus(z)
         res = future.result()  # will wait until it settles.
-        self._log.info("Focus moved and settled at new pos.")
+        self._log.info(f"Focus moved and settled at new pos. {res}")
 
     def move_stage(self, x, y):
         """
@@ -274,9 +278,8 @@ class Dem2Stage:
             self._log.warning(f"Stage already at pos {current_position.__str__()}")
             return
         future = self._queue_move_stage_to_pos((x, y))
-        # the future.result() will wait until it settles.
-        res = future.result()
-        self._log.info(f"Stage moved and settled at new pos.")
+        res = future.result() # will wait until it settles.
+        self._log.info(f"Stage moved and settled at new pos {res[0]}, {res[1]}")
 
     def stop_moving(self):
         """Stop moving the stage."""
