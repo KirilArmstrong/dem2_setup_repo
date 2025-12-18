@@ -140,7 +140,7 @@ class Dem2Stage:
             self.b_focus_drift_detected = True
         return self.b_focus_drift_detected
 
-    def _calibrate_axis(self, ax) -> tuple[Future,Future]:
+    def _calibrate_axis(self, ax) -> tuple[Future, Future]:
         """
         Calibrate the given axis (X, Y, or Focus).
         :param ax: Axis (X, Y, Focus).
@@ -160,7 +160,6 @@ class Dem2Stage:
         return self._pos_settled_future, self._focus_settled_future
 
     # # Functions
-
 
     def connect(self):
         """Connect the Stage."""
@@ -223,14 +222,16 @@ class Dem2Stage:
         # Calibrate focus:
         self._calibrate_axis(self.focus)
         self._log.info(
-            "Focus: " + self._focus_settled_future.result()
+            "Focus: " + self._focus_settled_future.result() if isinstance(self._focus_settled_future.result(),
+                                                                          str) else "Calibrated."
         )  # wait for calibration to finish.
         # Calibrate axis:
         self._log.info("Calibrating the stage...")
         for ax in range(len(self._axis)):
             self._calibrate_axis(self._axis[ax])
             self._log.info(
-                f"{ax} axis: " + self._pos_settled_future.result() if isinstance(self._pos_settled_future.result(), str) else "Calibrated."
+                f"{ax} axis: " + self._pos_settled_future.result() if isinstance(self._pos_settled_future.result(),
+                                                                                 str) else "Calibrated."
             )  # wait for calibration to finish.
         self._set_sw_limits()
         self._state = Dem2State.CALIBRATED
@@ -262,7 +263,7 @@ class Dem2Stage:
             self._log.warning(f"Stage already at pos {current_position.__str__()}")
             return
         future = self._queue_move_stage_to_pos((x, y))
-        res = future.result() # will wait until it settles.
+        res = future.result()  # will wait until it settles.
         self._log.info(f"Stage moved and settled at new pos {res[0]}, {res[1]}")
 
     def stop_moving(self):
@@ -279,8 +280,8 @@ class Dem2Stage:
         """Get stage current position."""
         x = 0.0
         y = 0.0
-        x,y = self.stage.GetPosition(x,y, self._pos_unit)
-        return x,y
+        x, y = self.stage.GetPosition(x, y, self._pos_unit)
+        return x, y
 
     def get_focus(self):
         """Get current focus position."""
