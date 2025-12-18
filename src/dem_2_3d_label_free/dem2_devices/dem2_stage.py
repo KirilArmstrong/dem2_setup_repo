@@ -31,14 +31,12 @@ class Dem2Stage:
 
         self._pos_settled_future = Future()
         self._focus_settled_future = Future()
-        self._calibration_future = Future()
 
         self._axis = []
         self.stage = None
         self.focus = None
         self._stage_sink = None
         self._focus_sink = None
-        self._calibration_sink = None
         self._focus_set_pos = self._cfg["focus_z_pos"]
         self._sw_limit = [self._cfg["axis_limit_max"], self._cfg["axis_limit_min"]]
         self._pos_unit = None
@@ -51,29 +49,24 @@ class Dem2Stage:
     def _register_stage_event_handler(self):
         # create an instant of the event sink class
         self._stage_sink = MTB.Api.MTBStageEventSink()
-        self._calibration_sink = MTB.Api.MTBAxisEventSink()
         # Create an instance of the handler type
         settle_handler = MTB.Api.MTBStagePositionSettledHandler(self._my_pos_settled_handler)
-        calibration_handler = MTB.Api.MTBAxisCalibrationChangedHandler(self._calibration_handler)
         # Set the handler instance on the event sink handler
         self._stage_sink.MTBPositionSettledEvent += settle_handler
-        self._calibration_sink.MTBCalibrationChangedEvent += calibration_handler
         # Register the event sink handler with the device interface
         self._stage_sink.Advise(self.stage)
-        self._calibration_sink.Advise(self.stage)
 
     def _my_pos_settled_handler(self, arg1, arg2):
         self._log.debug(
-            f"settled handler called. moved to pos. {arg1['V']}, {arg2['V']} and settled!"
+            f"settled handler called. moved to pos. {arg1}, {arg2} and settled!"
         )
-        self._pos_settled_future.set_result((arg1['V'], arg2['V']))
+        self._pos_settled_future.set_result((arg1, arg2))
 
-    def _register_pos_changed_event_handler(self):
+    def _register_focus_event_handler(self):
         # create an instant of the event sink class
         self._focus_sink = MTB.Api.MTBContinualEventSink()
         # Create an instance of the handler type
-        handler2 = MTB.Api.MTBStagePositionSettledHandler(self._focus_settled_handler)
-        # TODO calling position settled handler? but that's for stage pos, no?
+        handler2 = MTB.Api.MTBContinualPositionSettledHandler(self._focus_settled_handler)
         # Set the handler instance on the event sink handler
         self._focus_sink.MTBPositionSettledEvent += handler2
         # Register the event sink handler with the device interface
@@ -81,21 +74,7 @@ class Dem2Stage:
 
     def _focus_settled_handler(self, arg1):
         self._log.debug(f"focus settled event called! Set to {arg1['V']}")
-        self._focus_settled_future.set_result(arg1['V'])
-
-    def _register_calibration_event_handler(self):
-        # create an instant of the event sink class
-        self._calibration_sink = MTB.Api.MTBAxisEventSink()
-        # Create an instance of the handler type
-        handler3 = MTB.Api.MTBAxisCalibrationChangedHandler(self._calibration_handler)
-        # Set the handler instance on the event sink handler
-        self._calibration_sink.MTBCalibrationChangedEvent += handler3
-        # Register the event sink handler with the device interface
-        self._calibration_sink.Advise(self.stage)
-
-    def _calibration_handler(self):
-        self._log.debug("calibration mode changed event called!")
-        self._calibration_future.set_result("Calibration mode changed.")
+        self._focus_settled_future.set_result(arg1)
 
     def _set_sw_limits(self):
         """Set software limits."""
@@ -161,9 +140,12 @@ class Dem2Stage:
             self.b_focus_drift_detected = True
         return self.b_focus_drift_detected
 
-    def _calibrate_axis(self, ax) -> Future:
-        """Calibrate the given axis (X, Y, or Focus)."""
-        self._calibration_future = Future()
+    def _calibrate_axis(self, ax) -> tuple[Future,Future]:
+        """
+        Calibrate the given axis (X, Y, or Focus).
+        :param ax: Axis (X, Y, Focus).
+        """
+        self._pos_settled_future, self._focus_settled_future = Future(), Future()
         if int(ax.CalibrationMode) & int(MTB.Api.MTBCalibrationModes.OnLowerLimit) == 0:
             # Axis requires calibration
             ax.Calibrate(
@@ -173,10 +155,12 @@ class Dem2Stage:
                 600,
             )
         else:
-            self._calibration_future.set_result("Already calibrated.")
-        return self._calibration_future
+            self._pos_settled_future.set_result("Already calibrated.")
+            self._focus_settled_future.set_result("Already calibrated.")
+        return self._pos_settled_future, self._focus_settled_future
 
     # # Functions
+
 
     def connect(self):
         """Connect the Stage."""
@@ -216,7 +200,7 @@ class Dem2Stage:
         self._move_mode = MTB.Api.MTBCmdSetModes(0)
 
         self._register_stage_event_handler()
-        self._register_pos_changed_event_handler()
+        self._register_focus_event_handler()
         self._state = Dem2State.INITIALIZED
         if calibration_wait_time >= 0:
             self.calibrate(calibration_wait_time)
@@ -233,20 +217,20 @@ class Dem2Stage:
                 f"Proceeding in {wait_time}s... Ctrl + C to cancel!"
             )
             time.sleep(wait_time)
-        self._log.info("Calibrating the stage...")
         if self._state != Dem2State.INITIALIZED:
             raise Dem2Errors.StageError("Must be Initialized to calibrate!")
         self._log.info("Calibrating focus...")
         # Calibrate focus:
         self._calibrate_axis(self.focus)
         self._log.info(
-            "Focus: " + self._calibration_future.result()
+            "Focus: " + self._focus_settled_future.result()
         )  # wait for calibration to finish.
         # Calibrate axis:
+        self._log.info("Calibrating the stage...")
         for ax in range(len(self._axis)):
             self._calibrate_axis(self._axis[ax])
             self._log.info(
-                f"{ax} axis: " + self._calibration_future.result()
+                f"{ax} axis: " + self._pos_settled_future.result() if isinstance(self._pos_settled_future.result(), str) else "Calibrated."
             )  # wait for calibration to finish.
         self._set_sw_limits()
         self._state = Dem2State.CALIBRATED
