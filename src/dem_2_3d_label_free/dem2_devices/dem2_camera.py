@@ -29,6 +29,8 @@ class Dem2Camera(xiapi.Camera):
 
         self._buffer_offset = None
 
+        self.image = xiapi.Image()
+
     def connect(self):
         """Connect to Camera."""
         self._log.info("Connecting to the Camera...")
@@ -72,8 +74,18 @@ class Dem2Camera(xiapi.Camera):
         self.set_concat_img_count(self.samples_a_scan)
         self.enable_concat_img_mode()  # multiple images in one buffer.
         # self._buffer_offset = self.get_concat_img_transport_img_offset()
-        self._state = Dem2State.INITIALIZED
+        self._state = Dem2State.READY
         self._log.info("Initialized the Camera.")
+
+    def start_acquisition(self):
+        self._log.info("Beginning acquisition...")
+        if self._state != Dem2State.READY:
+            raise Dem2Errors.CameraError("Camera must be initialised and not already running.")
+        self._state = Dem2State.RUNNING
+        super().start_acquisition()
+
+    def acquire_image(self) :
+        self._log.info(":) not implemented yet.")
 
     # Properties
 

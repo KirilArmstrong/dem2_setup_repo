@@ -100,7 +100,7 @@ class Dem2Stage:
         :param position: position tuple.
         :param emergency: Override calibration requirement, i.e. emergency stop.
         """
-        if self._state != Dem2State.CALIBRATED and not emergency:
+        if self._state != Dem2State.READY and not emergency:
             raise Dem2Errors.StageError("Must be calibrated to move stage!")
         self._pos_settled_future = Future()
         if self.get_position() == position and not emergency:
@@ -119,7 +119,7 @@ class Dem2Stage:
         Move focus to position z. Must be calibrated.
         :param z_pos: position z.
         """
-        if self._state != Dem2State.CALIBRATED:
+        if self._state != Dem2State.READY:
             raise Dem2Errors.StageError("Must be calibrated to move focus!")
         self._focus_settled_future = Future()
         self._focus_set_pos = z_pos
@@ -233,7 +233,7 @@ class Dem2Stage:
                 f"{ax} axis: " + self._pos_settled_future.result() if isinstance(self._pos_settled_future.result(), str) else "Calibrated."
             )  # wait for calibration to finish.
         self._set_sw_limits()
-        self._state = Dem2State.CALIBRATED
+        self._state = Dem2State.READY
         self._log.info("Stage calibrated.")
         if self._focus_set_pos is not None:
             self._queue_move_focus(self._focus_set_pos)

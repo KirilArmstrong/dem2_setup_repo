@@ -77,7 +77,7 @@ class Dem2Laser:
         self.send_command(f"P22{str(lambda_min_hex)}")
         self.send_command(f"P23{str(lambda_max_hex)}")
 
-        self._state = Dem2State.INITIALIZED
+        self._state = Dem2State.READY
         self._log.info("Initialized the laser source.")
 
     def queue_command(self, command):
