@@ -8,6 +8,7 @@ camera:
   time_exposure: 20.0 # ms.
   time_readout: 6.65 # ms.
   lateral_size: 12.8 # mm.
+  mode: 0 # Default camera mode.
 stage:
   focus_z_pos: 0.0 # Initial focus z position.
   axis_limit_min: -100000.0
