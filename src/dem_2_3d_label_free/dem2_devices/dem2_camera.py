@@ -1,6 +1,7 @@
 """Camera control script."""
 
 import logging
+from threading import Thread
 
 from src.dem_2_3d_label_free.dem2_common.dem2_constants import Dem2State, Dem2CameraMode
 from src.dem_2_3d_label_free.dem2_common.dem2_errors import Dem2Errors
@@ -8,7 +9,7 @@ import xiapi
 
 import numpy as np
 
-class Dem2Camera(xiapi.Camera):
+class Dem2Camera(Thread, xiapi.Camera):
     """Camera control script."""
 
     def __init__(self, config: dict):
@@ -17,7 +18,8 @@ class Dem2Camera(xiapi.Camera):
         self._state = Dem2State.DISCONNECTED
         self._mode = Dem2CameraMode(self._cfg["mode"])
 
-        super().__init__(self._cfg["device_id"])
+        Thread.__init__(self)
+        xiapi.Camera.__init__(self._cfg["device_id"])
 
         # Save config exposure time.
         self._t_exp = self._cfg["time_exposure"]
@@ -32,6 +34,13 @@ class Dem2Camera(xiapi.Camera):
         self._buffer_offset = None
 
         self.image = xiapi.Image()
+        self._image_buffer: list[np.ndarray] = []
+
+    def _append_to_buffer(self, data: np.ndarray) -> None:
+        """Append image data to buffer. If longer than 10, discard it. (for software live imaging)"""
+        if len(self._image_buffer) < 10:
+            self._image_buffer.append(data) # Throw away frame
+        return
 
     def connect(self):
         """Connect to Camera."""
@@ -54,6 +63,14 @@ class Dem2Camera(xiapi.Camera):
             self.close_device()
             self._log.info("Disconnected from the camera.")
         self.__init__(self._cfg)
+
+    def change_mode(self, mode: Dem2CameraMode) -> None:
+        """Change camera mode."""
+        if self._state not in (Dem2State.DISCONNECTED, Dem2State.CONNECTED):
+            raise Dem2Errors.CameraError("Must be disconnected or uninitialize to change mode!")
+        self._mode = mode
+        self._log.info("Changed mode to " + str(self._mode))
+
 
     def initialize(self):
         """Initialize the Camera."""
@@ -88,6 +105,7 @@ class Dem2Camera(xiapi.Camera):
         self._log.info("Initialized the Camera.")
 
     def start_acquisition(self):
+        """Start camera acquisition."""
         self._log.info("Beginning acquisition...")
         if self._state != Dem2State.READY:
             raise Dem2Errors.CameraError("Camera must be initialised and not already running.")
@@ -96,6 +114,7 @@ class Dem2Camera(xiapi.Camera):
         self._log.info("Acquisition started.")
 
     def stop_acquisition(self):
+        """Stop camera acquisition."""
         self._log.info("Stopping acquisition...")
         if self._state != Dem2State.RUNNING:
             raise Dem2Errors.CameraError("Camera must be running to stop acquisition!.")
@@ -103,13 +122,52 @@ class Dem2Camera(xiapi.Camera):
         super().stop_acquisition()
         self._log.info("Acquisition stopped.")
 
-    def acquire_image(self) -> np.ndarray :
+    def get_image(self, image: xiapi.Image, timeout: int = 5000) -> np.ndarray:
+        """Override ``xiapi.Camera.get_image()`` to also return as numpy array.
+        :param image: Image as xiapi.Image.
+        :param timeout: Timeout in ms.
+        :returns: Image as numpy array."""
+        super().get_image(image, timeout)
+        return image.get_image_data_numpy()
+
+    def acquire_single_image(self) -> np.ndarray :
+        """Acquire single image and return it.
+        :returns: Image as numpy array."""
         self.start_acquisition()
-        self.get_image(self.image)
-        data = self.image.get_image_data_numpy()
-        self._log.info("Acquired Image.")
+        data = self.get_image(self.image)
+        self._append_to_buffer(data)
+        self._log.info("Acquired single Image.")
         self.stop_acquisition()
         return data
+
+    def acquire_live_images(self) -> None:
+        """Acquire live images while Dem2State is RUNNING. Stop with ``stop_acquisition()``."""
+        if self._state != Dem2State.RUNNING:
+            self.start_acquisition()
+        if self._mode != Dem2CameraMode.MONO:
+            raise Dem2Errors.CameraError("Camera must be in MONO (0) mode for live image acquisition!")
+        self._log.info("Now acquiring Images live.")
+        while self._state == Dem2State.RUNNING:
+            self._append_to_buffer(self.get_image(self.image))
+        return
+
+    def pop_image_in_buffer(self, ft: bool = False, index: int = 0) -> np.ndarray | None:
+        """Pop an image from the image buffer list and return it.
+        :param index: Index of the image to pop.
+        :param ft: If ``ft`` is ``True``, return 3D ndarray with z=0 as image, and z=1 as ft of image, else z=1 is all zeros.
+        :returns: Image as 3D numpy array."""
+        if len(self._image_buffer) == 0:
+            self._log.warning("No images in buffer, returning None!")
+            return None
+        i = index
+        if len(self._image_buffer) <= i:
+            i = len(self._image_buffer) - 1
+            self._log.warning("Index out of range, using the highest possible index of " + str(len(self._image_buffer) - 1) + ".")
+        data = self._image_buffer.pop(i)
+        if not ft:
+            return np.stack((data, np.zeros(data)), axis=-1)
+        return np.stack((data, np.fft.fftshift(np.fft.fft2(data))), axis=-1)
+
 
     # Properties
 
