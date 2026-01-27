@@ -1,0 +1,176 @@
+import yaml
+import logging
+import os
+from flask import Flask, render_template, jsonify, request, flash
+# from werkzeug.utils import secure_filename
+from src.dem_2_3d_label_free.dem2_components.dem2_controller import Dem2Controller  # Assuming controller.py is in the same directory
+from src.dem_2_3d_label_free.__globals__ import __config__
+import numpy as np
+from io import BytesIO
+# from PIL import Image
+import base64
+
+
+default_config = __config__  # default config.yml file in ~/config.
+app = Flask(__name__)
+app.secret_key = 'supersecretkey'  # Required for flashing messages
+
+# Setup logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+
+controller = Dem2Controller(default_config)
+
+@app.route('/')
+def index():
+    return render_template('index.html')
+
+@app.route('/get_states', methods=['GET'])
+def get_states():
+    return jsonify({'controller': controller.state.value,
+                    'camera': controller.camera.state.value,
+                    'laser': controller.laser.state.value,
+                    'stage': controller.stage.state.value})
+
+@app.route('/get_properties', methods=['GET'])
+def get_properties():
+    properties = {
+        'z_max': controller.z_max,
+        'mag': controller.mag,
+        'na': controller.na,
+        'axial_bandwidth': controller.axial_bandwidth,
+        'exposure_lambda_range': controller.exposure_lambda_range,
+        'lateral_fov': controller.lateral_fov,
+        'lateral_resolution': controller.lateral_resolution
+    }
+    return jsonify(properties)
+
+# @app.route('/upload_config', methods=['POST'])
+# def upload_config():
+#     if 'file' not in request.files:
+#         flash('No file part')
+#         return jsonify({'error': 'No file part'}), 400
+#     file = request.files['file']
+#     if file.filename == '':
+#         flash('No selected file')
+#         return jsonify({'error': 'No selected file'}), 400
+#     if file and file.filename.endswith('.yml'):
+#         filename = secure_filename(file.filename)
+#         file_path = os.path.join('uploads', filename)
+#         file.save(file_path)
+#         with open(file_path, 'r') as f:
+#             config = yaml.safe_load(f)
+#         controller.__init__(config)
+#         logger.info("Configuration updated and controller reinitialized.")
+#         return jsonify({'success': 'Configuration updated'}), 200
+#     else:
+#         flash('Invalid file format')
+#         return jsonify({'error': 'Invalid file format'}), 400
+
+# @app.route('/upload_bscan', methods=['POST'])
+# def upload_bscan():
+#     if 'file' not in request.files:
+#         flash('No file part')
+#         return jsonify({'error': 'No file part'}), 400
+#     file = request.files['file']
+#     if file.filename == '':
+#         flash('No selected file')
+#         return jsonify({'error': 'No selected file'}), 400
+#     if file and file.filename.endswith('.yml'):
+#         filename = secure_filename(file.filename)
+#         file_path = os.path.join('uploads', filename)
+#         file.save(file_path)
+#         with open(file_path, 'r') as f:
+#             bscan_pattern = yaml.safe_load(f)
+#         controller.bscan_pattern = bscan_pattern
+#         logger.info("BScan pattern uploaded.")
+#         return jsonify({'success': 'BScan pattern uploaded'}), 200
+#     else:
+#         flash('Invalid file format')
+#         return jsonify({'error': 'Invalid file format'}), 400
+
+@app.route('/connect', methods=['POST'])
+def connect():
+    try:
+        controller.connect()
+        logger.info("Devices connected.")
+        return jsonify({'success': 'Devices connected'}), 200
+    except Exception as e:
+        logger.error(f"Error connecting devices: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/disconnect', methods=['POST'])
+def disconnect():
+    try:
+        controller.disconnect()
+        logger.info("Devices disconnected.")
+        return jsonify({'success': 'Devices disconnected'}), 200
+    except Exception as e:
+        logger.error(f"Error disconnecting devices: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/initialize', methods=['POST'])
+def initialize():
+    try:
+        stage_wait_time = request.json.get('stage_wait_time', 20)
+        controller.initialize(stage_wait_time)
+        logger.info("Demonstrator initialized.")
+        return jsonify({'success': 'Demonstrator initialized'}), 200
+    except Exception as e:
+        logger.error(f"Error initializing demonstrator: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+# @app.route('/run_bscan_pattern', methods=['POST'])
+# def run_bscan_pattern():
+#     try:
+#         controller.run_bscan_pattern(controller.bscan_pattern)
+#         logger.info("BScan pattern executed.")
+#         return jsonify({'success': 'BScan pattern executed'}), 200
+#     except Exception as e:
+#         logger.error(f"Error running BScan pattern: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+
+
+# @app.route("/get_image", methods=["POST"])
+# def get_image():
+#     try:
+#         # Retrieve the 'ft' parameter from the request
+#         ft = request.json.get("ft", False)
+#
+#         # Get the image from the controller
+#         image_array = controller.camera.pop_image_in_buffer()
+#
+#         # Perform FFT if 'ft' is True
+#         if ft:
+#             image_array = np.fft.fft2(image_array)
+#             image_array = np.fft.fftshift(image_array)
+#             image_array = np.abs(image_array)
+#
+#         # Normalize the image array to 0-255
+#         image_array = (
+#             255
+#             * (image_array - np.min(image_array))
+#             / (np.max(image_array) - np.min(image_array))
+#         )
+#         image_array = image_array.astype(np.uint8)
+#
+#         # Convert the numpy array to a PIL image
+#         image = Image.fromarray(image_array)
+#
+#         # Save the image to a bytes buffer
+#         buffer = BytesIO()
+#         image.save(buffer, format="PNG")
+#         buffer.seek(0)
+#
+#         # Encode the image to base64
+#         image_base64 = base64.b64encode(buffer.read()).decode("utf-8")
+#
+#         return jsonify({"image": image_base64}), 200
+#     except Exception as e:
+#         logger.error(f"Error getting image: {str(e)}")
+#         return jsonify({'error': str(e)}), 500
+
+
+if __name__ == '__main__':
+    app.run(debug=True)

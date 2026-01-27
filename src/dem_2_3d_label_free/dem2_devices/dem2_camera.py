@@ -172,6 +172,10 @@ class Dem2Camera(Thread, xiapi.Camera):
     # Properties
 
     @property
+    def state(self) -> Dem2State:
+        return self._state
+
+    @property
     def t_frame(self):
         """Get time for 1 frame in ms."""
         return self.t_exp if self.t_exp > self.t_read else self.t_read

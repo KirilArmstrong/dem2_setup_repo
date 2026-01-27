@@ -127,6 +127,10 @@ class Dem2Laser:
     # Properties
 
     @property
+    def state(self) -> Dem2State:
+        return self._state
+
+    @property
     def total_sweep_time(self):
         """Total time for the laser to sweep through the wavelength range in seconds."""
         return self._total_sweep_time

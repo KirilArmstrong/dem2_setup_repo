@@ -276,6 +276,10 @@ class Dem2Stage:
 
     # # Properties
 
+    @property
+    def state(self) -> Dem2State:
+        return self._state
+
     def get_position(self):
         """Get stage current position."""
         x = 0.0

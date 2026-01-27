@@ -138,6 +138,10 @@ class Dem2Controller:
     # Properties
 
     @property
+    def state(self) -> Dem2State:
+        return self._state
+
+    @property
     def axial_bandwidth(self):
         """
         Calculate axial bandwidth for specific swept source.

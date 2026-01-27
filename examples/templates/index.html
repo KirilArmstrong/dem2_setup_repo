@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Status Dashboard</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body class="light">
+    <section id="warningPopup" class="modal fixed inset-0 bg-gray-800 bg-opacity-50 flex items-center justify-center">
+        <div class="bg-white rounded-lg shadow-lg p-6 max-w-sm w-full">
+            <div class="flex items-center justify-center mb-4">
+                <svg class="w-12 h-12 text-yellow-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                </svg>
+            </div>
+            <h2 class="text-xl font-semibold text-center mb-4">Remove Objective</h2>
+            <p class="text-gray-600 text-center mb-6">Initializing Demonstrator 2 includes calibrating the Stage. Please ensure there <span class="text-red-500 font-bold">IS NO OBJECTIVE</span> attached to the revolver!</p>
+            <div class="flex justify-center space-x-4">
+                <button onclick="hidePopup()" class="px-4 py-2 bg-gray-300 text-gray-700 rounded hover:bg-gray-400 focus:outline-none">Cancel</button>
+                <button onclick="tryInitialize()" class="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600 focus:outline-none">Continue</button>
+            </div>
+        </div>
+    </section>
+
+    <section class="container mx-auto p-4 border p-4 rounded mb-4 mt-4">
+        <h1 class="title text-xl mb-4 font-bold">Demonstrator 2 Dashboard</h1>
+        
+        <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 mb-4">
+            <!-- Camera Container -->
+            <div class="border p-4 rounded">
+                <p class="">Camera <span id="camera-status" class="status rounded-full px-2 font-mono text-sm bg-red-500">Disconnected</span></p>
+            </div>
+            <!-- Laser Container -->
+            <div class="border p-4 rounded">
+                <p class="">Laser <span id="laser-status" class="status rounded-full px-2 font-mono text-sm bg-red-500">Disconnected</span></p>
+            </div>
+            <!-- Stage Container -->
+            <div class="border p-4 rounded">
+                <p class="">Stage <span id="stage-status" class="status rounded-full px-2 font-mono text-sm bg-red-500">Disconnected</span></p>
+            </div>
+            <!-- Controller Container -->
+            <div class="border p-4 rounded md:col-span-3">
+                <p class="mb-2">Controller <span id="controller-status" class="status rounded-full px-2 font-mono text-sm bg-red-500">Disconnected</span></p>
+                <button onclick="changeStatus('controller', 1)" class="bg-indigo-500 hover:bg-green-500 transition text-white px-2 md:px-4 py-1 md:py-2 rounded">Connect</button>
+                <button onclick="showPopup()" class="bg-indigo-500 hover:bg-green-500 transition text-white px-2 md:px-4 py-1 md:py-2 rounded">Initialize</button>
+                <button onclick="changeStatus('controller', 0)" class="bg-indigo-500 hover:bg-red-500 transition text-white px-2 md:px-4 py-1 md:py-2 rounded">Disconnect</button>
+            </div>
+        </div>
+        <!-- Information Container -->
+        <h2 class="mb-2 cursor-pointer" onclick="toggleSysInfo()">System Information</h2>
+        <div id="sysInfo" class="label overflow-y-hidden transition p-4 text-sm border rounded system-info grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-1">
+            <p>Max Z:<br><span id="max-z">N/A</span></p>
+            <p>NA:<br><span id="na">N/A</span></p>
+            <p>Magnification:<br><span id="magnification">N/A</span></p>
+            <p>Axial Resolution:<br><span id="axial-resolution">N/A</span></p>
+            <p>Exposure λ-range:<br><span id="exposure-range">N/A</span></p>
+            <p>Lateral FOV:<br><span id="lateral-fov">N/A</span></p>
+            <p>Lateral Spacing:<br><span id="lateral-spacing">N/A</span></p>
+            <p>Lateral Resolution:<br><span id="lateral-resolution">N/A</span></p>
+        </div>
+    </section>
+    <script src="js/main.js"></script>
+</body>
+</html>
