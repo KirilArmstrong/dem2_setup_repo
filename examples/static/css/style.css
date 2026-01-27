@@ -3,16 +3,16 @@ body.light {
     background-color: #FFFFFF;
     color: #000000;
 }
-/* body.dark {
+body.dark {
     background-color: #32373E;
     color: #FFFFFF;
+}
+/*.title {
+    color: #244A86;
 } */
 .title {
-    color: #244A86;
-}
-/* .title.dark {
     color: #6AB0E2;
-} */
+}
 .label {
     color: #8DAAC8;
 }

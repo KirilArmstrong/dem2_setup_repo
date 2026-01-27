@@ -8,7 +8,7 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
 <!--    <link rel="stylesheet" href="templates/css/style.css">-->
 </head>
-<body class="light">
+<body class="dark">
     <section id="warningPopup" class="modal fixed inset-0 bg-gray-800 bg-opacity-50 flex items-center justify-center">
         <div class="bg-white rounded-lg shadow-lg p-6 max-w-sm w-full">
             <div class="flex items-center justify-center mb-4">
@@ -25,28 +25,31 @@
         </div>
     </section>
 
-    <section class="container mx-auto p-4 border p-4 rounded mb-4 mt-4">
+    <section class="p-4 border rounded m-4">
         <h1 class="title text-xl mb-4 font-bold">Demonstrator 2 Dashboard</h1>
         
         <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 mb-4">
             <!-- Camera Container -->
             <div class="border p-4 rounded">
-                <p class="">Camera <span id="camera-status" class="status rounded-full px-2 font-mono text-sm bg-red-500">Disconnected</span></p>
+                <p class="mb-2">Camera <span id="camera-status" class="status rounded-full px-2 font-mono text-sm bg-red-500">Disconnected</span></p>
+<!--                <p class="label text-sm">Individual </p><button onclick="connectCam()" class="bg-indigo-500 hover:bg-green-500 transition text-white px-2 py-1 rounded controller-btn cam-btn">Connect</button>-->
+<!--                <button onclick="initializeCam()" class="bg-indigo-500 hover:bg-green-500 transition text-white px-2 py-1 rounded controller-btn cam-btn">Initialize</button>-->
+<!--                <button onclick="disconnectCam()" class="bg-indigo-500 hover:bg-red-500 transition text-white px-2 py-1 rounded controller-btn cam-btn">Disconnect</button>-->
             </div>
             <!-- Laser Container -->
             <div class="border p-4 rounded">
-                <p class="">Laser <span id="laser-status" class="status rounded-full px-2 font-mono text-sm bg-red-500">Disconnected</span></p>
+                <p class="mb-2">Laser <span id="laser-status" class="status rounded-full px-2 font-mono text-sm bg-red-500">Disconnected</span></p>
             </div>
             <!-- Stage Container -->
             <div class="border p-4 rounded">
-                <p class="">Stage <span id="stage-status" class="status rounded-full px-2 font-mono text-sm bg-red-500">Disconnected</span></p>
+                <p class="mb-2">Stage <span id="stage-status" class="status rounded-full px-2 font-mono text-sm bg-red-500">Disconnected</span></p>
             </div>
             <!-- Controller Container -->
             <div class="border p-4 rounded md:col-span-3">
-                <p class="mb-2">Controller <span id="controller-status" class="status rounded-full px-2 font-mono text-sm bg-red-500">Disconnected</span></p>
-                <button onclick="connect()" class="bg-indigo-500 hover:bg-green-500 transition text-white px-2 md:px-4 py-1 md:py-2 rounded">Connect</button>
-                <button onclick="showPopup()" class="bg-indigo-500 hover:bg-green-500 transition text-white px-2 md:px-4 py-1 md:py-2 rounded">Initialize</button>
-                <button onclick="disconnect()" class="bg-indigo-500 hover:bg-red-500 transition text-white px-2 md:px-4 py-1 md:py-2 rounded">Disconnect</button>
+                <p class="mb-2">Controller <span class="status rounded-full px-2 font-mono text-sm bg-green-500">Active</span> | <span class="text-sm label">Devices: </span><span id="controller-status" class="status rounded-full px-2 font-mono text-sm bg-red-500">Disconnected</span></p>
+                <button onclick="connect()" class="bg-indigo-500 hover:bg-green-500 transition text-white px-2 md:px-4 py-1 md:py-2 rounded controller-btn">Connect</button>
+                <button onclick="showPopup()" class="bg-indigo-500 hover:bg-green-500 transition text-white px-2 md:px-4 py-1 md:py-2 rounded controller-btn">Initialize</button>
+                <button onclick="disconnect()" class="bg-indigo-500 hover:bg-red-500 transition text-white px-2 md:px-4 py-1 md:py-2 rounded controller-btn">Disconnect</button>
                 <button onclick="updateStates()" class="bg-indigo-500 hover:bg-blue-500 transition text-white px-2 md:px-4 py-1 md:py-2 rounded">Test</button>
             </div>
         </div>
@@ -63,6 +66,15 @@
             <p>Lateral Resolution:<br><span id="lateral-resolution"></span></p>
         </div>
     </section>
+
+    <section class="mx-4 p-4 border rounded mb-4">
+        <h2 class="mb-2">Single Image <button onclick="get_single_image()" class="bg-indigo-500 hover:bg-blue-500 transition text-white px-2 py-1 rounded">Capture</button></h2>
+        <div class="mb-4 w-full max-w-[500px]">
+            <label class="block label">Image:</label>
+            <img id="imageDisplay" class="w-full h-auto bg-black rounded" alt="Image from Controller">
+        </div>
+    </section>
+
     <script src="{{ url_for('static', filename='js/main.js') }}"></script>
 <!--    <script src="static/js/main.js"></script>-->
 </body>

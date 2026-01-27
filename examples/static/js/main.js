@@ -69,7 +69,6 @@ function hidePopup() {
 function tryInitialize() {
     hidePopup()
     updateProperties()
-    statusVisualFeedback()
     initialize()
 }
 
@@ -98,13 +97,13 @@ function toggleBtns(className) {
   // Iterate over each element
   elements.forEach(element => {
     // Check if the element has the 'pointer-event-none' class
-    if (element.classList.contains('pointer-event-none')) {
+    if (element.classList.contains('pointer-events-none')) {
       // Remove 'pointer-event-none' and 'opacity-50' classes
-      element.classList.remove('pointer-event-none');
+      element.classList.remove('pointer-events-none');
       element.classList.remove('opacity-50');
     } else {
       // Add 'pointer-event-none' and 'opacity-50' classes
-      element.classList.add('pointer-event-none');
+      element.classList.add('pointer-events-none');
       element.classList.add('opacity-50');
     }
   });
@@ -113,29 +112,49 @@ function toggleBtns(className) {
 
 function connect() {
     statusVisualFeedback()
+    toggleBtns("controller-btn")
     fetch('/connect', {method: 'POST'})
         .then(response => response.json())
         .then(data => {
             updateStates()
+            toggleBtns("controller-btn")
 //            if (data.success)
         });
 }
 
 function disconnect() {
     statusVisualFeedback()
+    toggleBtns("controller-btn")
     fetch('/disconnect', {method: 'POST'})
         .then(response => response.json())
         .then(data => {
             updateStates()
+            toggleBtns("controller-btn")
 //            if (data.success)
         });
 }
 
 function initialize() {
+    statusVisualFeedback()
+    toggleBtns("controller-btn")
     fetch('/initialize', {method: 'POST'})
         .then(response => response.json())
         .then(data => {
             updateStates()
+            toggleBtns("controller-btn")
 //            if (data.success)
         });
+}
+
+function get_single_image(){
+    const imageDisplayElement = document.getElementById('imageDisplay');
+    fetch('/get_single_image', { method: 'POST' })
+    .then(response => response.json())
+    .then(data => {
+        if (data.image) {
+            imageDisplayElement.src = `data:image/png;base64,${data.image}`;
+        } else {
+            showNotification(data.error);
+        }
+    });
 }

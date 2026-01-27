@@ -9,7 +9,7 @@ from src.dem_2_3d_label_free.dem2_components.dem2_controller import Dem2Controll
 from src.dem_2_3d_label_free.__globals__ import __config__
 import numpy as np
 from io import BytesIO
-# from PIL import Image
+from PIL import Image
 import base64
 
 
@@ -133,6 +133,39 @@ def initialize():
 #         logger.error(f"Error running BScan pattern: {str(e)}")
         return jsonify({"error": str(e)}), 500
 
+
+@app.route("/get_single_image", methods=["POST"])
+def get_single_image():
+    try:
+
+        # Get the image from the controller
+
+        image_array = controller.camera.acquire_single_image()
+
+        # Normalize the image array to 0-255
+        # image_array = (
+        #     255 * (image_array / (np.max(image_array) + 1))
+        # )
+        #     * (image_array - np.min(image_array))
+        #     / (np.max(image_array) - np.min(image_array))
+        # )
+        image_array = image_array.astype(np.uint8)
+
+        # Convert the numpy array to a PIL image
+        image = Image.fromarray(image_array)
+
+        # Save the image to a bytes buffer
+        buffer = BytesIO()
+        image.save(buffer, format="PNG")
+        buffer.seek(0)
+
+        # Encode the image to base64
+        image_base64 = base64.b64encode(buffer.read()).decode("utf-8")
+
+        return jsonify({"image": image_base64}), 200
+    except Exception as e:
+        logger.error(f"Error getting image: {str(e)}")
+        return jsonify({'error': str(e)}), 500
 
 # @app.route("/get_image", methods=["POST"])
 # def get_image():
