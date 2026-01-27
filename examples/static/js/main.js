@@ -91,9 +91,25 @@ function updateStates(){
         });
 }
 
-function toggleBtns(class) {
+function toggleBtns(className) {
+  // Get all elements with the specified className
+  const elements = document.querySelectorAll(`.${className}`);
 
+  // Iterate over each element
+  elements.forEach(element => {
+    // Check if the element has the 'pointer-event-none' class
+    if (element.classList.contains('pointer-event-none')) {
+      // Remove 'pointer-event-none' and 'opacity-50' classes
+      element.classList.remove('pointer-event-none');
+      element.classList.remove('opacity-50');
+    } else {
+      // Add 'pointer-event-none' and 'opacity-50' classes
+      element.classList.add('pointer-event-none');
+      element.classList.add('opacity-50');
+    }
+  });
 }
+
 
 function connect() {
     statusVisualFeedback()
