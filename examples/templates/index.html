@@ -5,7 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Status Dashboard</title>
     <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+<!--    <link rel="stylesheet" href="templates/css/style.css">-->
 </head>
 <body class="light">
     <section id="warningPopup" class="modal fixed inset-0 bg-gray-800 bg-opacity-50 flex items-center justify-center">
@@ -43,24 +44,26 @@
             <!-- Controller Container -->
             <div class="border p-4 rounded md:col-span-3">
                 <p class="mb-2">Controller <span id="controller-status" class="status rounded-full px-2 font-mono text-sm bg-red-500">Disconnected</span></p>
-                <button onclick="changeStatus('controller', 1)" class="bg-indigo-500 hover:bg-green-500 transition text-white px-2 md:px-4 py-1 md:py-2 rounded">Connect</button>
+                <button onclick="connect()" class="bg-indigo-500 hover:bg-green-500 transition text-white px-2 md:px-4 py-1 md:py-2 rounded">Connect</button>
                 <button onclick="showPopup()" class="bg-indigo-500 hover:bg-green-500 transition text-white px-2 md:px-4 py-1 md:py-2 rounded">Initialize</button>
-                <button onclick="changeStatus('controller', 0)" class="bg-indigo-500 hover:bg-red-500 transition text-white px-2 md:px-4 py-1 md:py-2 rounded">Disconnect</button>
+                <button onclick="disconnect()" class="bg-indigo-500 hover:bg-red-500 transition text-white px-2 md:px-4 py-1 md:py-2 rounded">Disconnect</button>
+                <button onclick="updateStates()" class="bg-indigo-500 hover:bg-blue-500 transition text-white px-2 md:px-4 py-1 md:py-2 rounded">Test</button>
             </div>
         </div>
         <!-- Information Container -->
-        <h2 class="mb-2 cursor-pointer" onclick="toggleSysInfo()">System Information</h2>
+        <h2 class="mb-2">System Information <button onclick="toggleSysInfo()" class="bg-gray-500 hover:bg-blue-500 transition text-white px-2 py-1 rounded">Toggle</button> <button onclick="updateProperties()" class="bg-indigo-500 hover:bg-blue-500 transition text-white px-2 py-1 rounded">Update</button></h2>
         <div id="sysInfo" class="label overflow-y-hidden transition p-4 text-sm border rounded system-info grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-1">
-            <p>Max Z:<br><span id="max-z">N/A</span></p>
-            <p>NA:<br><span id="na">N/A</span></p>
-            <p>Magnification:<br><span id="magnification">N/A</span></p>
-            <p>Axial Resolution:<br><span id="axial-resolution">N/A</span></p>
-            <p>Exposure λ-range:<br><span id="exposure-range">N/A</span></p>
-            <p>Lateral FOV:<br><span id="lateral-fov">N/A</span></p>
-            <p>Lateral Spacing:<br><span id="lateral-spacing">N/A</span></p>
-            <p>Lateral Resolution:<br><span id="lateral-resolution">N/A</span></p>
+            <p>Max Z:<br><span id="max-z"></span></p>
+            <p>NA:<br><span id="na"></span></p>
+            <p>Magnification:<br><span id="magnification"></span></p>
+            <p>Axial Bandwidth:<br><span id="axial-bandwidth"></span></p>
+            <p>Exposure λ-range:<br><span id="exposure-range"></span></p>
+            <p>Lateral FOV:<br><span id="lateral-fov"></span></p>
+            <p>Lateral Spacing:<br><span id="lateral-spacing"></span></p>
+            <p>Lateral Resolution:<br><span id="lateral-resolution"></span></p>
         </div>
     </section>
-    <script src="js/main.js"></script>
+    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+<!--    <script src="static/js/main.js"></script>-->
 </body>
 </html>

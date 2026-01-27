@@ -4,7 +4,8 @@ function changeStatus(device, status) {
         1: 'Connected',
         2: 'Initialized',
         3: 'Ready',
-        4: 'Running'
+        4: 'Running',
+        99: '...'
     };
 
     const statusColor = {
@@ -12,7 +13,8 @@ function changeStatus(device, status) {
         1: 'yellow',
         2: 'yellow',
         3: 'green',
-        4: 'green'
+        4: 'green',
+        99: 'gray'
     };
 
     const element = document.getElementById(`${device}-status`);
@@ -20,12 +22,24 @@ function changeStatus(device, status) {
     element.className = `status rounded-full px-2 font-mono text-sm bg-${statusColor[status]}-500`;
 }
 
-function updateSystemInfo(jsonString) {
+function statusVisualFeedback(){
+    const devices = [
+        'controller',
+        'camera',
+        'laser',
+        'stage'
+    ];
+    for (let i = 0; i < devices.length; i++){
+        changeStatus(devices[i], 99)
+    }
+}
+
+function setSystemInfo(jsonString) {
     const info = JSON.parse(jsonString);
     document.getElementById('max-z').textContent = info.z_max;
     document.getElementById('na').textContent = info.na;
     document.getElementById('magnification').textContent = info.mag;
-    document.getElementById('axial-resolution').textContent = info.axial_resolution;
+    document.getElementById('axial-bandwidth').textContent = info.axial_bandwidth;
     document.getElementById('exposure-range').textContent = info.exposure_lambda_range;
     document.getElementById('lateral-fov').textContent = info.lateral_fov;
     document.getElementById('lateral-spacing').textContent = info.lateral_spacing;
@@ -54,22 +68,54 @@ function hidePopup() {
 
 function tryInitialize() {
     hidePopup()
-    changeStatus('controller', 2)
+    updateProperties()
+    statusVisualFeedback()
+    initialize()
 }
 
 function updateProperties() {
     fetch('/get_properties')
         .then(response => response.json())
         .then(data => {
-            propertiesElement.innerHTML = '';
-            for (const [key, value] of Object.entries(data)) {
-                const li = document.createElement('li');
-                li.textContent = `${key}: ${value}`;
-                propertiesElement.appendChild(li);
+            setSystemInfo(JSON.stringify(data))
+        });
+}
+
+function updateStates(){
+    fetch('/get_states')
+        .then(response => response.json())
+        .then(data => {
+            for (const [key, value] of Object.entries(data)){
+                changeStatus(key, value)
             }
         });
 }
 
-// Example usage:
-// changeStatus('controller', 1);
-// updateSystemInfo('{"maxZ": "100", "na": "1.4", "magnification": "60x", "axialResolution": "0.2", "exposureRange": "400-700nm", "lateralFOV": "200um", "lateralSpacing": "0.5um", "lateralResolution": "0.3um"}');
+function connect() {
+    statusVisualFeedback()
+    fetch('/connect', {method: 'POST'})
+        .then(response => response.json())
+        .then(data => {
+            updateStates()
+//            if (data.success)
+        });
+}
+
+function disconnect() {
+    statusVisualFeedback()
+    fetch('/disconnect', {method: 'POST'})
+        .then(response => response.json())
+        .then(data => {
+            updateStates()
+//            if (data.success)
+        });
+}
+
+function initialize() {
+    fetch('/initialize', {method: 'POST'})
+        .then(response => response.json())
+        .then(data => {
+            updateStates()
+//            if (data.success)
+        });
+}

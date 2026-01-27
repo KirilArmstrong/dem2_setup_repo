@@ -19,7 +19,7 @@ class Dem2Camera(Thread, xiapi.Camera):
         self._mode = Dem2CameraMode(self._cfg["mode"])
 
         Thread.__init__(self)
-        xiapi.Camera.__init__(self._cfg["device_id"])
+        xiapi.Camera.__init__(self, self._cfg["device_id"])
 
         # Save config exposure time.
         self._t_exp = self._cfg["time_exposure"]

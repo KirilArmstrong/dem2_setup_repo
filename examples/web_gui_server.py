@@ -2,6 +2,8 @@ import yaml
 import logging
 import os
 from flask import Flask, render_template, jsonify, request, flash
+
+from src.dem_2_3d_label_free.dem2_common.dem2_constants import Dem2State
 # from werkzeug.utils import secure_filename
 from src.dem_2_3d_label_free.dem2_components.dem2_controller import Dem2Controller  # Assuming controller.py is in the same directory
 from src.dem_2_3d_label_free.__globals__ import __config__
@@ -42,6 +44,7 @@ def get_properties():
         'axial_bandwidth': controller.axial_bandwidth,
         'exposure_lambda_range': controller.exposure_lambda_range,
         'lateral_fov': controller.lateral_fov,
+        # 'lateral_spacing': controller.lateral_spacing,
         'lateral_resolution': controller.lateral_resolution
     }
     return jsonify(properties)
@@ -113,8 +116,7 @@ def disconnect():
 @app.route('/initialize', methods=['POST'])
 def initialize():
     try:
-        stage_wait_time = request.json.get('stage_wait_time', 20)
-        controller.initialize(stage_wait_time)
+        controller.initialize(0)
         logger.info("Demonstrator initialized.")
         return jsonify({'success': 'Demonstrator initialized'}), 200
     except Exception as e:
