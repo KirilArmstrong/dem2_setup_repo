@@ -91,6 +91,10 @@ function updateStates(){
         });
 }
 
+function toggleBtns(class) {
+
+}
+
 function connect() {
     statusVisualFeedback()
     fetch('/connect', {method: 'POST'})
