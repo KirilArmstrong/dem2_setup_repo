@@ -1,5 +1,5 @@
 laser:
-  port: "COM1"
+  port: "COM3"
   wavelength_center: 840.0 # nm.
   wavelength_min: 805.0 # nm.
   wavelength_max: 880.0 # nm.

@@ -83,21 +83,21 @@ class Dem2Laser:
     def queue_command(self, command):
         """Queue a command to the laser device and return the response as a future object."""
         if (
-            self._state != Dem2State.CONNECTED
+            (self._state != Dem2State.CONNECTED and command != "I")
             or not self._serial_connection
             or not self._serial_connection.is_open
         ):
-            raise Dem2Errors.LaserError("Must be connected to queue a command!")
+            raise Dem2Errors.LaserError("Must be connected to queue a command other than 'I'!")
 
         def task():
             response = ""
             try:
                 cmd = f"{command}\r\n"
-                self._log.debug(f"Sending command to laser: {cmd}")
+                self._log.info(f"Sending command to laser: {cmd}")
                 self._serial_connection.write(cmd.encode())
                 response = self._serial_connection.readline().decode().strip()
-                self._log.debug(f"Laser responded with: {response}")
-                if "!" in response:
+                self._log.info(f"Laser responded with: {response}")
+                if "!" in response or response == "":
                     raise Dem2Errors.LaserError(
                         f"Device responded with error: {response}"
                     )
