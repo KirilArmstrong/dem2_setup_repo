@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Status Dashboard</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+<!--    <link rel="stylesheet" href="templates/css/style.css">-->
+</head>
+<body class="dark">
+    <section id="warningPopup" class="modal fixed inset-0 bg-gray-800 bg-opacity-50 flex items-center justify-center">
+        <div class="bg-white rounded-lg shadow-lg p-6 max-w-sm w-full">
+            <div class="flex items-center justify-center mb-4">
+                <svg class="w-12 h-12 text-yellow-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                </svg>
+            </div>
+            <h2 class="text-xl font-semibold text-center mb-4">Remove Objective</h2>
+            <p class="text-gray-600 text-center mb-6">Initializing Demonstrator 2 includes calibrating the Stage. Please ensure there <span class="text-red-500 font-bold">IS NO OBJECTIVE</span> attached to the revolver!</p>
+            <div class="flex justify-center space-x-4">
+                <button onclick="hidePopup()" class="px-4 py-2 bg-gray-300 text-gray-700 rounded hover:bg-gray-400 focus:outline-none">Cancel</button>
+                <button onclick="tryInitialize()" class="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600 focus:outline-none">Continue</button>
+            </div>
+        </div>
+    </section>
+
+    <section class="p-4 border rounded m-4">
+        <h1 class="title text-xl mb-4 font-bold">Demonstrator 2 Dashboard</h1>
+        
+        <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 mb-4">
+            <!-- Camera Container -->
+            <div class="border p-4 rounded">
+                <p class="mb-2">Camera <span id="camera-status" class="status rounded-full px-2 font-mono text-sm bg-red-500">Disconnected</span></p>
+<!--                <p class="label text-sm">Individual </p><button onclick="connectCam()" class="bg-indigo-500 hover:bg-green-500 transition text-white px-2 py-1 rounded controller-btn cam-btn">Connect</button>-->
+<!--                <button onclick="initializeCam()" class="bg-indigo-500 hover:bg-green-500 transition text-white px-2 py-1 rounded controller-btn cam-btn">Initialize</button>-->
+<!--                <button onclick="disconnectCam()" class="bg-indigo-500 hover:bg-red-500 transition text-white px-2 py-1 rounded controller-btn cam-btn">Disconnect</button>-->
+            </div>
+            <!-- Laser Container -->
+            <div class="border p-4 rounded">
+                <p class="mb-2">Laser <span id="laser-status" class="status rounded-full px-2 font-mono text-sm bg-red-500">Disconnected</span></p>
+            </div>
+            <!-- Stage Container -->
+            <div class="border p-4 rounded">
+                <p class="mb-2">Stage <span id="stage-status" class="status rounded-full px-2 font-mono text-sm bg-red-500">Disconnected</span></p>
+            </div>
+            <!-- Controller Container -->
+            <div class="border p-4 rounded md:col-span-3">
+                <p class="mb-2">Controller <span class="status rounded-full px-2 font-mono text-sm bg-green-500">Active</span> | <span class="text-sm label">Devices: </span><span id="controller-status" class="status rounded-full px-2 font-mono text-sm bg-red-500">Disconnected</span></p>
+                <button onclick="connect()" class="bg-indigo-500 hover:bg-green-500 transition text-white px-2 md:px-4 py-1 md:py-2 rounded controller-btn">Connect</button>
+                <button onclick="showPopup()" class="bg-indigo-500 hover:bg-green-500 transition text-white px-2 md:px-4 py-1 md:py-2 rounded controller-btn">Initialize</button>
+                <button onclick="disconnect()" class="bg-indigo-500 hover:bg-red-500 transition text-white px-2 md:px-4 py-1 md:py-2 rounded controller-btn">Disconnect</button>
+                <button onclick="updateStates()" class="bg-indigo-500 hover:bg-blue-500 transition text-white px-2 md:px-4 py-1 md:py-2 rounded">Test</button>
+            </div>
+        </div>
+        <!-- Information Container -->
+        <h2 class="mb-2">System Information <button onclick="toggleSysInfo()" class="bg-gray-500 hover:bg-blue-500 transition text-white px-2 py-1 rounded">Toggle</button> <button onclick="updateProperties()" class="bg-indigo-500 hover:bg-blue-500 transition text-white px-2 py-1 rounded">Update</button></h2>
+        <div id="sysInfo" class="label overflow-y-hidden transition p-4 text-sm border rounded system-info grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-1">
+            <p>Max Z:<br><span id="max-z"></span></p>
+            <p>NA:<br><span id="na"></span></p>
+            <p>Magnification:<br><span id="magnification"></span></p>
+            <p>Axial Bandwidth:<br><span id="axial-bandwidth"></span></p>
+            <p>Exposure λ-range:<br><span id="exposure-range"></span></p>
+            <p>Lateral FOV:<br><span id="lateral-fov"></span></p>
+            <p>Lateral Spacing:<br><span id="lateral-spacing"></span></p>
+            <p>Lateral Resolution:<br><span id="lateral-resolution"></span></p>
+        </div>
+    </section>
+
+    <section class="mx-4 p-4 border rounded mb-4">
+        <h2 class="mb-2">Single Image <button onclick="get_single_image()" class="bg-indigo-500 hover:bg-blue-500 transition text-white px-2 py-1 rounded">Capture</button></h2>
+        <label class="block label">Image:</label>
+        <div class="mb-4 w-full">
+
+            <img id="imageDisplay" class="w-full h-auto bg-black rounded" alt="Image from Controller">
+        </div>
+    </section>
+
+    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+<!--    <script src="static/js/main_old.js"></script>-->
+</body>
+</html>

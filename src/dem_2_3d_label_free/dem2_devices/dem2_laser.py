@@ -99,7 +99,7 @@ class Dem2Laser:
                 self._log.info(f"Laser responded with: {response}")
                 if "!" in response or response == "":
                     raise Dem2Errors.LaserError(
-                        f"Device responded with error: {response}"
+                        f"Device responded with error: {response if response != '' else 'No Response.'}"
                     )
                 return response
             except Exception as e:
