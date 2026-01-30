@@ -16,6 +16,8 @@ const SYSTEM_STATE = {
     fftEnabled: false
 };
 
+const cameLiveintervalID = 0
+
 // --- Status Codes & Helpers ---
 const STATUS_MAP = {
     0: { label: 'DISCONNECTED', color: 'bg-red-600', text: 'text-red-500' },
@@ -23,7 +25,7 @@ const STATUS_MAP = {
     2: { label: 'INITIALISED',  color: 'bg-blue-400', text: 'text-blue-400' },
     3: { label: 'READY',        color: 'bg-emerald-500', text: 'text-emerald-500' },
     4: { label: 'RUNNING',      color: 'bg-blue-600 animate-flash', text: 'text-blue-400' },
-    99: { label: 'UNKNOWN',     color: 'bg-gray-500', text: 'text-gray-500' }
+    99: { label: 'WAITING...',     color: 'bg-gray-500', text: 'text-gray-500' }
 };
 
 const MODES = {
@@ -68,7 +70,12 @@ const elements = {
 function init() {
     updateStates();
     updateProperties();
+    updateStates();
     updateUI();
+    // setInterval(() => {
+    //     updateStates();
+    //     updateUI();
+    // }, 1000)
     startClock();
 }
 
@@ -123,6 +130,13 @@ function updateStates(){
             }
             updateUI();
         });
+}
+
+function stateLoadVisual(){
+    for (let key in SYSTEM_STATE.devices){
+        changeStatus(key, 99)
+    }
+    updateUI()
 }
 
 // showPopup("Yesy", "this is a test", () => test_func(true));
@@ -249,6 +263,7 @@ function updateUI() {
 }
 
 function connect() {
+    stateLoadVisual()
     fetch('/connect', {method: 'POST'})
         .then(response => response.json())
         .then(data => {
@@ -258,6 +273,7 @@ function connect() {
 }
 
 function disconnect() {
+    stateLoadVisual()
     SYSTEM_STATE.isLive = false;
     fetch('/disconnect', {method: 'POST'})
         .then(response => response.json())
@@ -268,6 +284,7 @@ function disconnect() {
 }
 
 function initialize() {
+    stateLoadVisual()
     fetch('/initialize', {method: 'POST'})
         .then(response => response.json())
         .then(data => {
@@ -289,6 +306,46 @@ function get_single_image(){
 //            showNotification(data.error);
 //        }
     });
+}
+
+function get_image_from_buffer(){
+    const imageDisplayElement = document.getElementById('imageDisplay');
+    fetch('/get_image_from_buffer', { method: 'POST' })
+    .then(response => response.json())
+    .then(data => {
+        if (data.image != "None") {
+            imageDisplayElement.src = `data:image/png;base64,${data.image}`;
+        }
+//        else {
+//            showNotification(data.error);
+//        }
+    });
+}
+
+function toggle_live(){
+    
+    fetch('/toggle_live', {method: 'POST'})
+        .then(response => response.json())
+        .then(data => {
+            if (data.error){
+                console.log.error("Error in toggling camera live: " + data.error)
+                return;
+            }
+            if (data.success.includes("RUNNING")){
+                SYSTEM_STATE.isLive = true;
+                enableCamView(true)
+                cameLiveintervalID = setInterval(() => {
+                    get_image_from_buffer();
+                }, 1000);
+            }
+            else {
+                SYSTEM_STATE.isLive = false;
+                enableCamView(false)
+                clearInterval(cameLiveintervalID);
+            }
+            updateStates()
+            updateUI()
+        });
 }
 
 // function calibrate_stage() {}
@@ -320,11 +377,7 @@ document.getElementById('btn-cam-capture').onclick = () => {
     get_single_image();
 };
 document.getElementById('btn-cam-live').onclick = () => {
-    if(SYSTEM_STATE.devices.camera.status >= 3) {
-        SYSTEM_STATE.isLive = !SYSTEM_STATE.isLive;
-        SYSTEM_STATE.devices.camera.status = SYSTEM_STATE.isLive ? 4 : 3;
-        updateUI();
-    }
+    toggle_live()
 };
 document.getElementById('toggle-fft').onchange = (e) => {
     SYSTEM_STATE.fftEnabled = e.target.checked;

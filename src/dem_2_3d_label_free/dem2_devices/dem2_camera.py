@@ -1,6 +1,7 @@
 """Camera control script."""
 
 import logging
+from concurrent.futures.thread import ThreadPoolExecutor
 from threading import Thread
 
 from src.dem_2_3d_label_free.dem2_common.dem2_constants import Dem2State, Dem2CameraMode
@@ -17,8 +18,6 @@ class Dem2Camera(Thread, xiapi.Camera):
         self._log = logging.getLogger(self.__class__.__name__)
         self._state = Dem2State.DISCONNECTED
         self._mode = Dem2CameraMode(self._cfg["mode"])
-
-        Thread.__init__(self)
         xiapi.Camera.__init__(self, self._cfg["device_id"])
 
         # Save config exposure time.
@@ -35,6 +34,18 @@ class Dem2Camera(Thread, xiapi.Camera):
 
         self.image = xiapi.Image()
         self._image_buffer: list[np.ndarray] = []
+
+        # Threading
+
+        self.executor = ThreadPoolExecutor(max_workers=1)
+
+        # self.target = self.acquire_images
+        # self.target_args = ()
+        #
+        Thread.__init__(self)
+        # Thread.__init__(self, target=self.target, args=self.target_args)
+        self.start()
+        # self.join()
 
     def _append_to_buffer(self, data: np.ndarray) -> None:
         """Append image data to buffer. If longer than 10, discard it. (for software live imaging)"""
@@ -140,16 +151,29 @@ class Dem2Camera(Thread, xiapi.Camera):
         self.stop_acquisition()
         return data
 
-    def acquire_live_images(self) -> None:
+    def toggle_live_images(self) -> str:
         """Acquire live images while Dem2State is RUNNING. Stop with ``stop_acquisition()``."""
-        if self._state != Dem2State.RUNNING:
-            self.start_acquisition()
         if self._mode != Dem2CameraMode.MONO:
             raise Dem2Errors.CameraError("Camera must be in MONO (0) mode for live image acquisition!")
-        self._log.info("Now acquiring Images live.")
+        if self._state == Dem2State.RUNNING:
+            self.stop_acquisition()
+            return "OFF"
+        if self._state != Dem2State.RUNNING:
+            self.start_acquisition()
+        self._log.info("Now acquiring Images live...")
+        # self.acquire_images()
+        # self.target = self.acquire_images
+        # self.target_args = ()
+        # if self.is_alive():
+        #     self.join()
+        # self.run()
+        self.executor.submit(self.acquire_images)
+        return self.state.name
+
+    def acquire_images(self):
         while self._state == Dem2State.RUNNING:
             self._append_to_buffer(self.get_image(self.image))
-        return
+        self._log.info("No longer acquiring Images live.")
 
     def pop_image_in_buffer(self, ft: bool = False, index: int = 0) -> np.ndarray | None:
         """Pop an image from the image buffer list and return it.
@@ -168,6 +192,10 @@ class Dem2Camera(Thread, xiapi.Camera):
             return np.stack((data, np.zeros(data)), axis=-1)
         return np.stack((data, np.fft.fftshift(np.fft.fft2(data))), axis=-1)
 
+    # Thread
+
+    # def run(self):
+    #     self.target(*self.target_args)
 
     # Properties
 

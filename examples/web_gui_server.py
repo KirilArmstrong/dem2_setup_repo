@@ -1,3 +1,5 @@
+from concurrent.futures.thread import ThreadPoolExecutor
+
 import yaml
 import logging
 import os
@@ -133,78 +135,77 @@ def initialize():
 #         logger.error(f"Error running BScan pattern: {str(e)}")
         return jsonify({"error": str(e)}), 500
 
-
-@app.route("/get_single_image", methods=["POST"])
-def get_single_image():
+@app.route('/toggle_live', methods=['POST'])
+def toggle_live():
     try:
+        state = controller.camera.toggle_live_images()
+        # state = ""
+        # controller.executor.submit(controller.camera.acquire_images())
+        logger.info("Live: " + state)
+        return jsonify({'success': "Live: " + state}), 200
+    except Exception as e:
+        logger.error(f"Error toggling live: {str(e)}")
+        return jsonify({'error': str(e)}), 500
 
-        # Get the image from the controller
-
-        image_array = controller.camera.acquire_single_image()
-
-        # Normalize the image array to 0-255
-        # image_array = (
-        #     255 * (image_array / (np.max(image_array) + 1))
-        # )
-        #     * (image_array - np.min(image_array))
-        #     / (np.max(image_array) - np.min(image_array))
-        # )
+def convert_to_base64(image_array: np.ndarray) -> str:
         image_array = image_array.astype(np.uint8)
-
         # Convert the numpy array to a PIL image
         image = Image.fromarray(image_array)
-
         # Save the image to a bytes buffer
         buffer = BytesIO()
         image.save(buffer, format="PNG")
         buffer.seek(0)
-
         # Encode the image to base64
         image_base64 = base64.b64encode(buffer.read()).decode("utf-8")
+        return image_base64
+
+@app.route("/get_single_image", methods=["POST"])
+def get_single_image():
+    try:
+        # Get the image from the controller
+        image_array = controller.camera.acquire_single_image()
+
+        # Encode the image to base64
+        image_base64 = convert_to_base64(image_array)
 
         return jsonify({"image": image_base64}), 200
     except Exception as e:
         logger.error(f"Error getting image: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
-# @app.route("/get_image", methods=["POST"])
-# def get_image():
-#     try:
-#         # Retrieve the 'ft' parameter from the request
-#         ft = request.json.get("ft", False)
-#
-#         # Get the image from the controller
-#         image_array = controller.camera.pop_image_in_buffer()
-#
-#         # Perform FFT if 'ft' is True
-#         if ft:
-#             image_array = np.fft.fft2(image_array)
-#             image_array = np.fft.fftshift(image_array)
-#             image_array = np.abs(image_array)
-#
-#         # Normalize the image array to 0-255
-#         image_array = (
-#             255
-#             * (image_array - np.min(image_array))
-#             / (np.max(image_array) - np.min(image_array))
-#         )
-#         image_array = image_array.astype(np.uint8)
-#
-#         # Convert the numpy array to a PIL image
-#         image = Image.fromarray(image_array)
-#
-#         # Save the image to a bytes buffer
-#         buffer = BytesIO()
-#         image.save(buffer, format="PNG")
-#         buffer.seek(0)
-#
-#         # Encode the image to base64
-#         image_base64 = base64.b64encode(buffer.read()).decode("utf-8")
-#
-#         return jsonify({"image": image_base64}), 200
-#     except Exception as e:
-#         logger.error(f"Error getting image: {str(e)}")
-#         return jsonify({'error': str(e)}), 500
+
+
+@app.route("/get_image_from_buffer", methods=["POST"])
+def get_image():
+    try:
+        # Retrieve the 'ft' parameter from the request
+        # ft = request.json.get("ft", False)
+
+        # Get the image from the controller
+        image_array = controller.camera.pop_image_in_buffer()[0,:,:]
+        if image_array is None:
+            return jsonify({"image": "None"}), 200
+
+        # Perform FFT if 'ft' is True
+        # if ft:
+        #     image_array = np.fft.fft2(image_array)
+        #     image_array = np.fft.fftshift(image_array)
+        #     image_array = np.abs(image_array)
+
+        # Normalize the image array to 0-255
+        # image_array = (
+        #     255
+        #     * (image_array - np.min(image_array))
+        #     / (np.max(image_array) - np.min(image_array))
+        # )
+
+        # Encode the image to base64
+        image_base64 = convert_to_base64(image_array)
+
+        return jsonify({"image": image_base64}), 200
+    except Exception as e:
+        logger.error(f"Error getting image: {str(e)}")
+        return jsonify({'error': str(e)}), 500
 
 
 if __name__ == '__main__':
