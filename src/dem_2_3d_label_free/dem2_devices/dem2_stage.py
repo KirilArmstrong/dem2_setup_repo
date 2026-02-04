@@ -239,29 +239,36 @@ class Dem2Stage:
         if self._focus_set_pos is not None:
             self._queue_move_focus(self._focus_set_pos)
 
-    def move_focus(self, z):
+    def move_focus(self, z, relative: bool = False):
         """
         Move the stage position and wait until it settles.
         :param z: Z position.
+        :param relative: Whether to move relative to current position or absolute.
         """
         current_position = self.get_focus()
         if current_position == z:
             self._log.warning(f"focus already at pos {current_position.__str__()}")
             return
+        if relative and z != 0:
+            z = current_position + z
         future = self._queue_move_focus(z)
         res = future.result()  # will wait until it settles.
         self._log.info(f"Focus moved and settled at new pos. {res}")
 
-    def move_stage(self, x, y):
+    def move_stage(self, x, y, relative: bool = False):
         """
         Move the stage position and wait until it settles.
         :param x: X position.
         :param y: Y position.
+        :param relative: Whether to move relative to current position or absolute.
         """
         current_position = self.get_position()
-        if current_position[0] == x and current_position[1] == y:
+        if current_position[0] == x and current_position[1] == y and not relative:
             self._log.warning(f"Stage already at pos {current_position.__str__()}")
             return
+        if relative and not (x == 0 and y == 0):
+            x = current_position[0] + x
+            y = current_position[1] + y
         future = self._queue_move_stage_to_pos((x, y))
         res = future.result()  # will wait until it settles.
         self._log.info(f"Stage moved and settled at new pos {res[0]}, {res[1]}")

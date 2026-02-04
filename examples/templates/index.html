@@ -153,7 +153,7 @@
                 <div class="absolute top-0 right-0 w-32 h-32 bg-cyan-500/5 rounded-full blur-3xl -z-10 group-hover:bg-cyan-500/10 transition-all"></div>
 
                 <div class="section-header">
-                    <span class="section-title">/// MASTER CONTROLLER STATUS</span>
+                    <span class="section-title">/// MASTER CONTROLLER</span>
                     <div class="flex gap-2">
                         <button id="btn-ctrl-connect" class="btn-cyber">Connect</button>
                         <button id="btn-ctrl-init" class="btn-cyber">Initialize</button>
@@ -279,7 +279,7 @@
                 <div>
                     <div class="section-header">
                         <div class="flex flex-col">
-                            <span class="section-title text-rose-500">/// LASER SOURCE</span>
+                            <span class="section-title text-rose-500">/// SWEPT SOURCE</span>
                             <span id="laser-status-text" class="text-xs text-slate-500">STATUS: DISCONNECTED</span>
                         </div>
                         <select id="laser-mode-select" class="input-cyber h-8 w-24">
@@ -328,7 +328,7 @@
             <section class="panel-border p-6 flex flex-col">
                 <div class="section-header">
                     <div class="flex flex-col">
-                        <span class="section-title text-emerald-500">/// MOTION STAGE</span>
+                        <span class="section-title text-emerald-500">/// MICROSCOPE STAGE</span>
                         <span id="stage-status-text" class="text-xs text-slate-500">STATUS: DISCONNECTED</span>
                     </div>
                     <select id="stage-mode-select" class="input-cyber h-8 w-24">
@@ -373,6 +373,22 @@
                                 <input type="number" id="stage-delta-y" class="input-cyber w-full" placeholder="0.00">
                             </div>
                             <button id="btn-stage-move" class="btn-cyber h-8 flex items-center justify-center">MOVE</button>
+                        </div>
+                    </div>
+
+                    <div class="bg-black/30 p-3 border border-slate-800 rounded">
+                        <p class="text-[10px] text-cyan-600 mb-2 uppercase tracking-wider">Alter Focus</p>
+                        <div class="grid grid-cols-4 gap-2 items-end">
+                            <div>
+                                <label class="text-[10px] text-slate-500">Z-AXIS</label>
+                                <input type="number" id="stage-delta-x" class="input-cyber w-full" placeholder="0.00">
+                            </div>
+                            <button id="btn-stage-focus-set" class="btn-cyber h-8 flex items-center justify-center">SET</button>
+                            <div>
+                                <label class="text-[10px] text-slate-500">Δ Z</label>
+                                <input type="number" id="stage-delta-y" class="input-cyber w-full" placeholder="0.00">
+                            </div>
+                            <button id="btn-stage-focus-move" class="btn-cyber h-8 flex items-center justify-center">MOVE</button>
                         </div>
                     </div>
 

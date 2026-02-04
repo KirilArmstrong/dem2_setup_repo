@@ -208,5 +208,43 @@ def get_image():
         return jsonify({'error': str(e)}), 500
 
 
+@app.route("/get_stage_pos", methods=["POST"])
+def get_stage_pos():
+    try:
+        xy = controller.stage.get_position()
+        z = controller.stage.get_focus()
+        return jsonify({"x": xy[0], "y": xy[1], "z": z}), 200
+    except Exception as e:
+        logger.error(f"Error getting stage position: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route("/set_stage_pos", methods=["POST"])
+def set_stage_pos():
+    try:
+        # Retrieve the pos parameters from the request
+        x = request.json.get("x", False)
+        y = request.json.get("y", False)
+        controller.stage.move_stage(x, y)
+        return jsonify({'success': "New position: " + str(controller.stage.get_position())}), 200
+    except Exception as e:
+        logger.error(f"Error getting stage position: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route("/move_stage_pos", methods=["POST"])
+def move_stage_pos():
+    try:
+        # Retrieve the pos parameters from the request
+        x = request.json.get("x", False)
+        y = request.json.get("y", False)
+        controller.stage.move_stage(x, y, True)
+        return jsonify({'success': "New position: " + str(controller.stage.get_position())}), 200
+    except Exception as e:
+        logger.error(f"Error getting stage position: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+
+
 if __name__ == '__main__':
     app.run(debug=True)
