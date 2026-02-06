@@ -322,6 +322,20 @@ function get_image_from_buffer(){
     });
 }
 
+function toggle_emission(){
+    
+    fetch('/toggle_emission', {method: 'POST'})
+        .then(response => response.json())
+        .then(data => {
+            if (data.error){
+                console.log.error("Error in toggling emission: " + data.error)
+                return;
+            }
+            updateStates()
+            updateUI()
+        });
+}
+
 function toggle_live(){
     
     fetch('/toggle_live', {method: 'POST'})
@@ -393,16 +407,10 @@ document.getElementById('laser-mode-select').onchange = (e) => {
     updateUI();
 };
 document.getElementById('btn-laser-on').onclick = () => {
-    if(SYSTEM_STATE.devices.laser.status === 3) {
-        SYSTEM_STATE.devices.laser.status = 4;
-        updateUI();
-    }
+    toggle_emission()
 };
 document.getElementById('btn-laser-off').onclick = () => {
-    if(SYSTEM_STATE.devices.laser.status === 4) {
-        SYSTEM_STATE.devices.laser.status = 3;
-        updateUI();
-    }
+    toggle_emission()
 };
 
 // Stage
@@ -428,6 +436,7 @@ document.getElementById('btn-estop').onclick = () => {
 
 function emergency_stop() {
     // Stop laser and stage
+    
 }
 
 

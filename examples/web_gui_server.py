@@ -244,6 +244,16 @@ def move_stage_pos():
         logger.error(f"Error getting stage position: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
+@app.route('/toggle_emission', methods=['POST'])
+def toggle_emission():
+    try:
+        controller.laser.toggle_emission()
+        logger.info("Emission toggled. Now:" + controller.laser.state.name)
+        return jsonify({'success': 'Emission toggled. Now:' + controller.laser.state.name}), 200
+    except Exception as e:
+        logger.error(f"Error initializing demonstrator: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
 
 
 if __name__ == '__main__':

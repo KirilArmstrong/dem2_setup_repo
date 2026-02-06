@@ -4,8 +4,9 @@ import concurrent.futures
 import serial
 import logging
 
-from src.dem_2_3d_label_free.dem2_common.dem2_constants import Dem2State
+from src.dem_2_3d_label_free.dem2_common.dem2_constants import Dem2State, Dem2LaserMode
 from src.dem_2_3d_label_free.dem2_common.dem2_errors import Dem2Errors
+from src.dem_2_3d_label_free.dem2_common.dem2_helper import convert_to_hex, wavelength_to_hex, hex_to_decimal
 
 
 class Dem2Laser:
@@ -15,6 +16,7 @@ class Dem2Laser:
         self._cfg = config
         self._log = logging.getLogger(self.__class__.__name__)
         self._state = Dem2State.DISCONNECTED
+        self._mode = Dem2LaserMode.CW
 
         # Set up connection variables
         self._port = self._cfg["port"]
@@ -22,9 +24,11 @@ class Dem2Laser:
         self._executor = concurrent.futures.ThreadPoolExecutor()
 
         self.wavelength_centre = self._cfg["wavelength_center"]
+        self.wavelength = self._cfg["wavelength_center"]
         self.wavelength_min = self._cfg["wavelength_min"]
         self.wavelength_max = self._cfg["wavelength_max"]
         self.wavelength_range = self.wavelength_max - self.wavelength_min
+        self._base_wavelength = 0
 
         self._total_sweep_time = None
         self._sweep_speed = None
@@ -50,44 +54,70 @@ class Dem2Laser:
         self._log.info("Disconnecting from the laser...")
         if self._state == Dem2State.DISCONNECTED:
             self._log.warning("Laser already disconnected! Continuing...")
+        else:
+            self.kill_emission()
+            self.send_command("MT")
+            self.send_command("MO")
+            self.send_command("MB")
         if self._serial_connection and self._serial_connection.is_open:
             self._serial_connection.close()
             self._log.info("Disconnected from the laser.")
         self.__init__(self._cfg)
 
+    def change_mode(self, mode: Dem2LaserMode) -> None:
+        """Change camera mode."""
+        if self._state not in (Dem2State.DISCONNECTED, Dem2State.CONNECTED):
+            raise Dem2Errors.CameraError("Must be disconnected or uninitialize to change mode!")
+        self._mode = mode
+        self._log.info("Changed mode to " + str(self._mode))
+
     def initialize(self):
         """Initialize the laser source."""
         self._log.info("Initialising the laser source...")
         if (
-            self._state != Dem2State.CONNECTED
+            (self._state != Dem2State.CONNECTED and self._state != Dem2State.READY)
             or not self._serial_connection
             or not self._serial_connection.is_open
         ):
-            raise Dem2Errors.LaserError("Must be connected!")
-        if self._sweep_speed is None or self._total_sweep_time is None:
-            raise Dem2Errors.LaserError(
-                "total_sweep_time, and in turn sweep_speed, must be set to initialize!"
-            )
+            raise Dem2Errors.LaserError("Must be connected ande not running!")
 
-        # convert wavelength into hex and send
-        norm_min = self.wavelength_min / 4095
-        lambda_min_hex = hex(65536 * norm_min)
-        norm_max = self.wavelength_max / 4095
-        lambda_max_hex = hex(65536 * norm_max)
-        self.send_command(f"P22{str(lambda_min_hex)}")
-        self.send_command(f"P23{str(lambda_max_hex)}")
+        self._base_wavelength = hex_to_decimal(self.send_command("P04")[3:])
+        self.send_command("MC") # usb control mode
+
+        match self._mode:
+            case Dem2LaserMode.CW:
+                self.send_command("MT") # CW mode
+                # set cw wavelength
+                self.send_command(f"P21{wavelength_to_hex(self.wavelength, self._base_wavelength, 100)}")
+            case Dem2LaserMode.SINGLE:
+                if self._sweep_speed is None or self._total_sweep_time is None:
+                    raise Dem2Errors.LaserError(
+                        "total_sweep_time, and in turn sweep_speed, must be set to initialize!"
+                    )
+
+                # convert wavelength into hex and send
+                norm_min = self.wavelength_min / 4095
+                lambda_min_hex = hex(65536 * norm_min)
+                norm_max = self.wavelength_max / 4095
+                lambda_max_hex = hex(65536 * norm_max)
+                self.send_command(f"P22{str(lambda_min_hex)}")
+                self.send_command(f"P23{str(lambda_max_hex)}")
+
+        self.send_command("MW")
 
         self._state = Dem2State.READY
         self._log.info("Initialized the laser source.")
 
+
+
     def queue_command(self, command):
         """Queue a command to the laser device and return the response as a future object."""
         if (
-            (self._state != Dem2State.CONNECTED and command != "I")
+            (command != "I" and self._state == Dem2State.DISCONNECTED)
             or not self._serial_connection
             or not self._serial_connection.is_open
         ):
-            raise Dem2Errors.LaserError("Must be connected to queue a command other than 'I'!")
+            raise Dem2Errors.LaserError(f"Must be connected to queue a command other than 'I'! Command: {command}")
 
         def task():
             response = ""
@@ -123,6 +153,25 @@ class Dem2Laser:
     def get_device_info(self) -> str:
         """Read operation mode [I]."""
         return self.send_command("I")
+
+    def toggle_emission(self):
+        if self._state != Dem2State.READY and self._state != Dem2State.RUNNING:
+            self._log.warning("Laser must be initialised to toggle emission!")
+            return
+        if self._state == Dem2State.READY:
+            # self.send_command("MW") # start pump source (no emission yet)
+            self.send_command("X") # toggle emission
+            self._state = Dem2State.RUNNING
+            return
+        self.kill_emission()
+
+    def kill_emission(self):
+        if self._state != Dem2State.RUNNING:
+            self._log.warning("Laser must be running to kill emission!")
+            return
+        self.send_command("X") # toggle emission
+        # self.send_command("MO") # kill pump source
+        self._state = Dem2State.READY
 
     # Properties
 

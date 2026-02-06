@@ -14,6 +14,16 @@ from src.dem_2_3d_label_free.__globals__ import (
 )
 
 
+def convert_to_hex(decimal: float) -> str:
+    return hex(int(decimal))[2:] # ignore the "0x" in front
+
+def hex_to_decimal(hex_string: str) -> float:
+    return float(int("0x" + hex_string, 16))
+
+def wavelength_to_hex(lam: float, min_lam: float, resolution: float) -> str:
+    return convert_to_hex((lam-min_lam) * resolution)
+
+
 def load_config_file(config_filepath: str = os.path.join(__configpath__, "config.yml")) -> dict:
     """
     Load and parse a config file in the ``config`` directory into a config dict.

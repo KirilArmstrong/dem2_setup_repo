@@ -11,3 +11,8 @@ class Dem2State(Enum):
 class Dem2CameraMode(Enum):
     MONO = 0
     FRAME_BURST_EXT_TRIGGER = 1
+
+class Dem2LaserMode(Enum):
+    CW = 0
+    SINGLE = 1
+    CONTINUOUS = 2
