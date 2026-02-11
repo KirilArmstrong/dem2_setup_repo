@@ -345,6 +345,34 @@ function get_single_image(){
     });
 }
 
+// function get_image_fron_buffer(ftValue) {
+//     const imageDisplayElement = document.getElementById('imageDisplay');
+    
+//     // Create the request payload with the 'ft' parameter
+//     const payload = {
+//         ft: ftValue
+//     };
+
+//     fetch('/get_single_image', {
+//         method: 'POST',
+//         headers: {
+//             'Content-Type': 'application/json'
+//         },
+//         body: JSON.stringify(payload) // Convert the payload to a JSON string
+//     })
+//     .then(response => response.json())
+//     .then(data => {
+//         if (data.image) {
+//             imageDisplayElement.src = `data:image/png;base64,${data.image}`;
+//             enableCamView(true);
+//         }
+//     })
+//     .catch(error => {
+//         console.error('Error:', error);
+//     });
+// }
+
+
 function get_image_from_buffer(){
     const imageDisplayElement = document.getElementById('imageDisplay');
     fetch('/get_image_from_buffer', { method: 'POST' })
