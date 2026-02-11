@@ -103,7 +103,7 @@ class Dem2Laser:
                 self.send_command(f"P22{str(lambda_min_hex)}")
                 self.send_command(f"P23{str(lambda_max_hex)}")
 
-        self.send_command("MW")
+        self.send_command("MW") # wake pump source
 
         self._state = Dem2State.READY
         self._log.info("Initialized the laser source.")
@@ -178,6 +178,10 @@ class Dem2Laser:
     @property
     def state(self) -> Dem2State:
         return self._state
+
+    @property
+    def mode(self) -> Dem2LaserMode:
+        return self._mode
 
     @property
     def total_sweep_time(self):

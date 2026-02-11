@@ -56,6 +56,7 @@ const elements = {
         max: document.getElementById('laser-max-wl'),
         sweep: document.getElementById('laser-sweep')
     },
+    laserModeDropdown: document.getElementById('laser-mode-select'),
     laserStatusText: document.getElementById('laser-status-text'),
     btnLaserOn: document.getElementById('btn-laser-on'),
     btnLaserOff: document.getElementById('btn-laser-off'),
@@ -68,15 +69,19 @@ const elements = {
 
 // --- Initialization ---
 function init() {
-    updateStates();
-    updateProperties();
-    updateStates();
-    updateUI();
+    updateAll()
     // setInterval(() => {
     //     updateStates();
     //     updateUI();
     // }, 1000)
     startClock();
+}
+
+function updateAll(){
+    updateProperties();
+    updateStates();
+    updateModes()
+    updateUI();
 }
 
 // --- Rendering Logic ---
@@ -121,6 +126,20 @@ function changeStatus(device, status) {
     }
 }
 
+function changeMode(device, mode) {
+    switch (device) {
+        case SYSTEM_STATE.devices.laser.id:
+                SYSTEM_STATE.devices.laser.mode = mode
+            break;
+        case SYSTEM_STATE.devices.camera.id:
+                SYSTEM_STATE.devices.camera.mode = mode
+            break;
+        case SYSTEM_STATE.devices.stage.id:
+                SYSTEM_STATE.devices.stage.mode = mode
+            break;
+    }
+}
+
 function updateStates(){
     fetch('/get_states')
         .then(response => response.json())
@@ -130,6 +149,21 @@ function updateStates(){
             }
             updateUI();
         });
+}
+
+function updateModes(){
+    fetch('/get_modes')
+        .then(response => response.json())
+        .then(data => {
+            for (const [key, value] of Object.entries(data)){
+                changeMode(key, value)
+            }
+            updateUI();
+        });
+}
+
+function sendMode(device, newMode){
+    
 }
 
 function stateLoadVisual(){
@@ -233,6 +267,9 @@ function updateUI() {
     // On interactable when Ready (3), Off interactable when Running (4)
     elements.btnLaserOn.disabled = laser.status !== 3;
     elements.btnLaserOff.disabled = laser.status !== 4;
+    elements.laserModeDropdown.disabled = laser.status > 1
+
+    elements.laserModeDropdown.value = laser.mode
 
     // Laser Warning
     if(laser.status === 4) {
@@ -267,7 +304,7 @@ function connect() {
     fetch('/connect', {method: 'POST'})
         .then(response => response.json())
         .then(data => {
-            updateStates()
+            updateAll()
 //            if (data.success)
         });
 }
@@ -278,7 +315,7 @@ function disconnect() {
     fetch('/disconnect', {method: 'POST'})
         .then(response => response.json())
         .then(data => {
-            updateStates()
+            updateAll()
 //            if (data.success)
         });
 }
@@ -288,7 +325,7 @@ function initialize() {
     fetch('/initialize', {method: 'POST'})
         .then(response => response.json())
         .then(data => {
-            updateStates()
+            updateAll()
 //            if (data.success)
         });
 }
@@ -331,8 +368,7 @@ function toggle_emission(){
                 console.log.error("Error in toggling emission: " + data.error)
                 return;
             }
-            updateStates()
-            updateUI()
+            updateAll()
         });
 }
 
@@ -357,8 +393,7 @@ function toggle_live(){
                 enableCamView(false)
                 clearInterval(cameLiveintervalID);
             }
-            updateStates()
-            updateUI()
+            updateAll()
         });
 }
 
@@ -404,7 +439,7 @@ document.getElementById('btn-laser-init').onclick = () => {};
 document.getElementById('btn-laser-disc').onclick = () => {};
 document.getElementById('laser-mode-select').onchange = (e) => {
     SYSTEM_STATE.devices.laser.mode = parseInt(e.target.value);
-    updateUI();
+    // send mode
 };
 document.getElementById('btn-laser-on').onclick = () => {
     toggle_emission()

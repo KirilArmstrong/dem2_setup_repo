@@ -37,6 +37,12 @@ def get_states():
                     'laser': controller.laser.state.value,
                     'stage': controller.stage.state.value})
 
+@app.route('/get_modes', methods=['GET'])
+def get_modes():
+    return jsonify({'camera': controller.camera.mode.value,
+                    'laser': controller.laser.mode.value,
+                    'stage': controller.stage.mode.value})
+
 @app.route('/get_properties', methods=['GET'])
 def get_properties():
     properties = {

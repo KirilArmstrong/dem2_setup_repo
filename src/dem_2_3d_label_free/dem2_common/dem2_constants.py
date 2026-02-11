@@ -16,3 +16,7 @@ class Dem2LaserMode(Enum):
     CW = 0
     SINGLE = 1
     CONTINUOUS = 2
+
+class Dem2StageMode(Enum):
+    MANUAL = 0
+    PATTERN = 1

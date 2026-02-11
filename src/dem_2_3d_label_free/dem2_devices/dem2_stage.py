@@ -24,6 +24,7 @@ class Dem2Stage:
         self._cfg = config
         self._log = logging.getLogger(self.__class__.__name__)
         self._state: Dem2State = Dem2State.DISCONNECTED
+        self._mode: Dem2StageMode = Dem2StageMode.MANUAL
 
         self._m_Connection: MTB.Api.IMTBConnection | None = None
         self._mtbid: str | None = None
@@ -286,6 +287,10 @@ class Dem2Stage:
     @property
     def state(self) -> Dem2State:
         return self._state
+
+    @property
+    def mode(self) -> Dem2StageMode:
+        return self._mode
 
     def get_position(self):
         """Get stage current position."""
