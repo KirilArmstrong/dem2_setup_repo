@@ -162,8 +162,24 @@ function updateModes(){
         });
 }
 
-function sendMode(device, newMode){
-    
+function setMode(device, newMode){
+    const payload = {
+        device: device,
+        newMode: newMode
+    };
+
+    fetch('/set_mode', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(payload) // Convert the payload to a JSON string
+    })
+        .then(response => response.json())
+        .then(data => {
+            updateAll()
+//            if (data.success)
+        });
 }
 
 function stateLoadVisual(){
@@ -447,8 +463,8 @@ document.getElementById('btn-cam-init').onclick = () => {};
 document.getElementById('btn-cam-disc').onclick = () => {};
 
 document.getElementById('cam-mode-select').onchange = (e) => {
-    SYSTEM_STATE.devices.camera.mode = parseInt(e.target.value);
-    updateUI();
+    // SYSTEM_STATE.devices.camera.mode = parseInt(e.target.value);
+    setMode("camera", parseInt(e.target.value))
 };
 document.getElementById('btn-cam-capture').onclick = () => {
     get_single_image();
@@ -466,8 +482,9 @@ document.getElementById('btn-laser-connect').onclick = () => {};
 document.getElementById('btn-laser-init').onclick = () => {};
 document.getElementById('btn-laser-disc').onclick = () => {};
 document.getElementById('laser-mode-select').onchange = (e) => {
-    SYSTEM_STATE.devices.laser.mode = parseInt(e.target.value);
+    // SYSTEM_STATE.devices.laser.mode = parseInt(e.target.value);
     // send mode
+    setMode("laser", parseInt(e.target.value))
 };
 document.getElementById('btn-laser-on').onclick = () => {
     toggle_emission()
@@ -484,8 +501,8 @@ document.getElementById('btn-stage-calib').onclick = () => {
 };
 document.getElementById('btn-stage-disc').onclick = () => {};
 document.getElementById('stage-mode-select').onchange = (e) => {
-    SYSTEM_STATE.devices.stage.mode = parseInt(e.target.value);
-    updateUI();
+    // SYSTEM_STATE.devices.stage.mode = parseInt(e.target.value);
+    setMode("stage", parseInt(e.target.value))
 };
 document.getElementById('btn-stage-estop').onclick = () => {
     // Safety first

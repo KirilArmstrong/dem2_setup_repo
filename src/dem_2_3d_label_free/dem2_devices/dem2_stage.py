@@ -4,7 +4,7 @@ import logging
 import time
 import clr
 from concurrent.futures import Future
-from src.dem_2_3d_label_free.dem2_common.dem2_constants import Dem2State
+from src.dem_2_3d_label_free.dem2_common.dem2_constants import Dem2State, Dem2StageMode
 from src.dem_2_3d_label_free.dem2_common.dem2_errors import Dem2Errors
 
 clr.AddReference(r"C:\Program Files\Carl Zeiss\ZEN 2\ZEN 2 (blue edition)\MTBApi.dll")
@@ -187,6 +187,7 @@ class Dem2Stage:
         :param calibration_wait_time: Auto calibrate after initialization with Time to wait for objective removal. Recommended min = 20s. Disable with ``-1``.
         :return:
         """
+        # todo mode check
         self._log.info("Initialising the stage...")
         if self._state != Dem2State.CONNECTED:
             raise Dem2Errors.StageError("Must be connected to Initialize!")
@@ -239,6 +240,13 @@ class Dem2Stage:
         self._log.info("Stage calibrated.")
         if self._focus_set_pos is not None:
             self._queue_move_focus(self._focus_set_pos)
+
+    def change_mode(self, mode: Dem2StageMode) -> None:
+        """Change camera mode."""
+        if self._state not in (Dem2State.DISCONNECTED, Dem2State.CONNECTED):
+            raise Dem2Errors.CameraError("Must be disconnected or uninitialize to change mode!")
+        self._mode = mode
+        self._log.info("Changed mode to " + str(self._mode))
 
     def move_focus(self, z, relative: bool = False):
         """

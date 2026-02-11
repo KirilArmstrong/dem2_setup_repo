@@ -5,7 +5,7 @@ import logging
 import os
 from flask import Flask, render_template, jsonify, request, flash
 
-from src.dem_2_3d_label_free.dem2_common.dem2_constants import Dem2State
+from src.dem_2_3d_label_free.dem2_common.dem2_constants import Dem2State, Dem2LaserMode, Dem2CameraMode
 # from werkzeug.utils import secure_filename
 from src.dem_2_3d_label_free.dem2_components.dem2_controller import Dem2Controller  # Assuming controller.py is in the same directory
 from src.dem_2_3d_label_free.__globals__ import __config__
@@ -14,6 +14,7 @@ from io import BytesIO
 from PIL import Image
 import base64
 
+from src.dem_2_3d_label_free.dem2_devices.dem2_camera import Dem2Camera
 
 default_config = __config__  # default config.yml file in ~/config.
 app = Flask(__name__)
@@ -42,6 +43,31 @@ def get_modes():
     return jsonify({'camera': controller.camera.mode.value,
                     'laser': controller.laser.mode.value,
                     'stage': controller.stage.mode.value})
+
+
+@app.route("/set_mode", methods=["POST"])
+def set_modes():
+    try:
+        # Retrieve the 'ft' parameter from the request
+        device = request.json.get("device", "")
+        new_mode = request.json.get("newMode", "")
+
+        match device:
+            case "laser":
+                controller.laser.change_mode(Dem2LaserMode(new_mode))
+            case "camera":
+                controller.camera.change_mode(Dem2CameraMode(new_mode))
+            case "stage":
+                controller.stage.change_mode(Dem2LaserMode(new_mode))
+            case _:
+                return jsonify({'error': "No device specified."}), 500
+
+
+        return jsonify({"success": f"New Mode of {device}: {new_mode}"}), 200
+    except Exception as e:
+        logger.error(f"Error getting image: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
 
 @app.route('/get_properties', methods=['GET'])
 def get_properties():
