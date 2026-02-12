@@ -235,6 +235,7 @@ class Dem2Stage:
                 f"{ax} axis: " + self._pos_settled_future.result() if isinstance(self._pos_settled_future.result(),
                                                                                  str) else "Calibrated."
             )  # wait for calibration to finish.
+        time.sleep(1)
         self._set_sw_limits()
         self._state = Dem2State.READY
         self._log.info("Stage calibrated.")
@@ -264,7 +265,7 @@ class Dem2Stage:
         res = future.result()  # will wait until it settles.
         self._log.info(f"Focus moved and settled at new pos. {res}")
 
-    def move_stage(self, x, y, relative: bool = False):
+    def move_stage(self, x: float, y: float, relative: bool = False):
         """
         Move the stage position and wait until it settles.
         :param x: X position.

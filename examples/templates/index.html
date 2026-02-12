@@ -312,8 +312,12 @@
                             <input type="number" id="laser-max-wl" min="805" max="880" value="880" class="input-cyber w-20 text-right">
                         </div>
                         <div class="flex justify-between items-center">
-                            <label class="text-xs text-slate-400">Sweep Speed</label>
+                            <label class="text-xs text-slate-400">Sweep Speed Time</label>
                             <input type="number" id="laser-sweep" step="0.1" value="1.0" class="input-cyber w-20 text-right">
+                        </div>
+                        <div class="flex justify-between items-center">
+                            <label class="text-xs text-slate-400">Resulting Sweep Speed</label>
+                            <input type="number" id="laser-sweep-actual" step="0.1" value="1.0" class="input-cyber w-20 text-right" disabled>
                         </div>
                     </div>
                 </div>
@@ -381,12 +385,12 @@
                         <div class="grid grid-cols-4 gap-2 items-end">
                             <div>
                                 <label class="text-[10px] text-slate-500">Z-AXIS</label>
-                                <input type="number" id="stage-delta-x" class="input-cyber w-full" placeholder="0.00">
+                                <input type="number" id="stage-pos-z" class="input-cyber w-full" placeholder="0.00">
                             </div>
                             <button id="btn-stage-focus-set" class="btn-cyber h-8 flex items-center justify-center">SET</button>
                             <div>
                                 <label class="text-[10px] text-slate-500">Δ Z</label>
-                                <input type="number" id="stage-delta-y" class="input-cyber w-full" placeholder="0.00">
+                                <input type="number" id="stage-delta-z" class="input-cyber w-full" placeholder="0.00">
                             </div>
                             <button id="btn-stage-focus-move" class="btn-cyber h-8 flex items-center justify-center">MOVE</button>
                         </div>

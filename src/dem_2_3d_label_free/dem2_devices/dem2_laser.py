@@ -23,15 +23,15 @@ class Dem2Laser:
         self._serial_connection = None
         self._executor = concurrent.futures.ThreadPoolExecutor()
 
-        self.wavelength_centre = self._cfg["wavelength_center"]
-        self.wavelength = self._cfg["wavelength_center"]
-        self.wavelength_min = self._cfg["wavelength_min"]
-        self.wavelength_max = self._cfg["wavelength_max"]
-        self.wavelength_range = self.wavelength_max - self.wavelength_min
+        self._wavelength_centre = self._cfg["wavelength_center"]
+        self._wavelength = self._cfg["wavelength_center"]
+        self._wavelength_min = self._cfg["wavelength_min"]
+        self._wavelength_max = self._cfg["wavelength_max"]
         self._base_wavelength = 0
 
         self._total_sweep_time = None
         self._sweep_speed = None
+        self.total_sweep_time = 21.15 # default
 
     def connect(self):
         """Connect to laser source via serial."""
@@ -88,7 +88,7 @@ class Dem2Laser:
             case Dem2LaserMode.CW:
                 self.send_command("MT") # CW mode
                 # set cw wavelength
-                self.send_command(f"P21{wavelength_to_hex(self.wavelength, self._base_wavelength, 100)}")
+                self.send_command(f"P21{wavelength_to_hex(self._wavelength, self._base_wavelength, 100)}")
             case Dem2LaserMode.SINGLE:
                 if self._sweep_speed is None or self._total_sweep_time is None:
                     raise Dem2Errors.LaserError(
@@ -96,12 +96,14 @@ class Dem2Laser:
                     )
 
                 # convert wavelength into hex and send
-                norm_min = self.wavelength_min / 4095
-                lambda_min_hex = hex(65536 * norm_min)
-                norm_max = self.wavelength_max / 4095
-                lambda_max_hex = hex(65536 * norm_max)
-                self.send_command(f"P22{str(lambda_min_hex)}")
-                self.send_command(f"P23{str(lambda_max_hex)}")
+                # norm_min = self._wavelength_min / 4095
+                # lambda_min_hex = hex(65536 * norm_min)
+                # norm_max = self._wavelength_max / 4095
+                # lambda_max_hex = hex(65536 * norm_max)
+                self.send_command("P22")
+                self._log.info(f"Sending wavelength min {self._wavelength_min} wavelength max {self._wavelength_max}  with base wavelength as {self._base_wavelength} as {wavelength_to_hex(self._wavelength_min, self._base_wavelength, 100)}, and {wavelength_to_hex(self._wavelength_max, self._base_wavelength, 100)}")
+                self.send_command(f"P22{wavelength_to_hex(self._wavelength_min, self._base_wavelength, 100)}")
+                self.send_command(f"P23{wavelength_to_hex(self._wavelength_max, self._base_wavelength, 100)}")
 
         self.send_command("MW") # wake pump source
 
@@ -196,8 +198,72 @@ class Dem2Laser:
         Also updates sweep speed.
         :param value: Total time in seconds.
         """
+        if self._state in (Dem2State.READY, Dem2State.RUNNING, Dem2State.INITIALIZED):
+            raise Dem2Errors.LaserError("sweep time can only be changed when uninitialised!")
+
         self._total_sweep_time = value
-        self._sweep_speed = self.wavelength_range / self._total_sweep_time
+        new_speed = (self._wavelength_max - self._wavelength_min) / self._total_sweep_time
+        if new_speed < 0.1:
+            raise Dem2Errors.LaserError(f"Total sweep time is too high! Sweep speed min is 0.1 nm/s, calculated = {new_speed}")
+        self._sweep_speed = new_speed
+        # self.send_sweep_speed(self._sweep_speed)
+
+    @property
+    def wavelength(self):
+        """Current laser wavelength in nm."""
+        return self._wavelength
+
+    @wavelength.setter
+    def wavelength(self, value: float):
+        """
+        Setter for Total time for the laser to sweep through the wavelength range in seconds.
+
+        Also updates sweep speed.
+        :param value: Total time in seconds.
+        """
+        if self._state in (Dem2State.READY, Dem2State.RUNNING, Dem2State.INITIALIZED):
+            raise Dem2Errors.LaserError("wavelength can only be changed when uninitialised!")
+        if value < self._cfg["wavelength_min"] or value > self._cfg["wavelength_max"]:
+            raise Dem2Errors.LaserError("wavelength out of configuration range!")
+        self._wavelength = value
+
+    @property
+    def wavelength_max(self):
+        """Current laser wavelength in nm."""
+        return self._wavelength_max
+
+    @wavelength_max.setter
+    def wavelength_max(self, value: float):
+        """
+        Setter for Total time for the laser to sweep through the wavelength range in seconds.
+
+        Also updates sweep speed.
+        :param value: Total time in seconds.
+        """
+        if self._state in (Dem2State.READY, Dem2State.RUNNING, Dem2State.INITIALIZED):
+            raise Dem2Errors.LaserError("wavelength can only be changed when uninitialised!")
+        if value < self._cfg["wavelength_min"] or value > self._cfg["wavelength_max"]:
+            raise Dem2Errors.LaserError("wavelength out of configuration range!")
+        self._wavelength_max = value
+
+    @property
+    def wavelength_min(self):
+        """Current laser wavelength in nm."""
+        return self._wavelength_min
+
+    @wavelength_min.setter
+    def wavelength_min(self, value: float):
+        """
+        Setter for Total time for the laser to sweep through the wavelength range in seconds.
+
+        Also updates sweep speed.
+        :param value: Total time in seconds.
+        """
+        if self._state in (Dem2State.READY, Dem2State.RUNNING, Dem2State.INITIALIZED):
+            raise Dem2Errors.LaserError("wavelength can only be changed when uninitialised!")
+        if value < self._cfg["wavelength_min"] or value > self._cfg["wavelength_max"]:
+            raise Dem2Errors.LaserError("wavelength out of configuration range!")
+        self._wavelength_min = value
 
     @property
     def sweep_speed(self) -> float:

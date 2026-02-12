@@ -49,8 +49,8 @@ class Dem2Controller:
 
         self.camera.samples_a_scan = math.floor(
             (
-                (2 * np.pi / self.laser.wavelength_min)
-                - (2 * np.pi / self.laser.wavelength_max)
+                (2 * np.pi / self.laser._wavelength_min)
+                - (2 * np.pi / self.laser._wavelength_max)
             )
             / (np.pi / (self.z_max * 1000))
         )
@@ -147,8 +147,8 @@ class Dem2Controller:
         Calculate axial bandwidth for specific swept source.
         :return: Axial bandwidth in um.
         """
-        return ((2 * math.log(2)) * (pow(self.laser.wavelength_centre / 1000, 2))) / (
-            self.laser.wavelength_range / 1000
+        return ((2 * math.log(2)) * (pow(self.laser._wavelength_centre / 1000, 2))) / (
+            self.laser._wavelength_centre / 1000
         )
 
     @property
@@ -191,4 +191,4 @@ class Dem2Controller:
         """
         # for full field OCT 0.61
         constant = 0.61
-        return (constant * (self.laser.wavelength_centre / 1000)) / self.na
+        return (constant * (self.laser._wavelength_centre / 1000)) / self.na

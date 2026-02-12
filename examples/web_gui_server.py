@@ -83,6 +83,65 @@ def get_properties():
     }
     return jsonify(properties)
 
+
+@app.route('/get_laser_properties', methods=['GET'])
+def get_laser_properties():
+    properties = {
+        'max': controller.laser.wavelength_max,
+        'min': controller.laser.wavelength_min,
+        'cfg_max': controller.laser._cfg["wavelength_max"],
+        'cfg_min': controller.laser._cfg["wavelength_min"],
+        'wavelength': controller.laser.wavelength,
+        'total_time': controller.laser.total_sweep_time,
+    }
+    return jsonify(properties)
+
+
+@app.route('/get_stage_properties', methods=['GET'])
+def get_stage_properties():
+    pos = controller.stage.get_position()
+    properties = {
+        'x': pos[0],
+        'y': pos[1],
+        'z': controller.stage.get_focus(),
+    }
+    return jsonify(properties)
+
+
+@app.route('/set_laser_properties', methods=['POST'])
+def set_laser_properties():
+    try:
+        controller.laser.wavelength = float(request.json.get("wavelength", 840.0))
+        controller.laser.wavelength_max = float(request.json.get("max", 880.0))
+        controller.laser.wavelength_min = float(request.json.get("min", 805.0))
+        controller.laser.total_sweep_time = float(request.json.get("total_time", 25.0))
+
+        return jsonify({"success": "Laser properties set"}), 200
+    except Exception as e:
+        logger.error(f"Error getting image: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/set_stage_properties', methods=['POST'])
+def set_stage_properties():
+    try:
+        relative = bool(request.json.get("relative", False))
+        focus = bool(request.json.get("focus", False))
+        x = float("0" + request.json.get("x", 0.0))
+        y = float("0" + request.json.get("y", 0.0))
+        z = float("0" + request.json.get("z", 0.0))
+
+        if focus:
+            controller.stage.move_focus(z, relative)
+            return jsonify({"success": "Stage focus set"}), 200
+        controller.stage.move_stage(x, y, relative)
+
+        return jsonify({"success": "Stage position set"}), 200
+    except Exception as e:
+        logger.error(f"Error setting stage position: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+
 # @app.route('/upload_config', methods=['POST'])
 # def upload_config():
 #     if 'file' not in request.files:
@@ -130,31 +189,77 @@ def get_properties():
 @app.route('/connect', methods=['POST'])
 def connect():
     try:
-        controller.connect()
-        logger.info("Devices connected.")
-        return jsonify({'success': 'Devices connected'}), 200
+        device = request.json.get("device", "controller")
+
+        match device:
+            case "laser":
+                controller.laser.connect()
+            case "camera":
+                controller.camera.connect()
+            case "stage":
+                controller.stage.connect()
+            case _:
+                controller.connect()
+        logger.info(f"Device {device} connected.")
+        return jsonify({'success': f"Device {device} connected."}), 200
     except Exception as e:
-        logger.error(f"Error connecting devices: {str(e)}")
+        logger.error(f"Error connecting device: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 @app.route('/disconnect', methods=['POST'])
 def disconnect():
     try:
-        controller.disconnect()
-        logger.info("Devices disconnected.")
-        return jsonify({'success': 'Devices disconnected'}), 200
+        device = request.json.get("device", "controller")
+
+        match device:
+            case "laser":
+                controller.laser.disconnect()
+            case "camera":
+                controller.camera.disconnect()
+            case "stage":
+                controller.stage.disconnect()
+            case _:
+                controller.disconnect()
+        logger.info(f"Device {device} disconnected.")
+        return jsonify({'success': f"Device {device} disconnected."}), 200
     except Exception as e:
-        logger.error(f"Error disconnecting devices: {str(e)}")
+        logger.error(f"Error disconnecting device: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 @app.route('/initialize', methods=['POST'])
 def initialize():
     try:
-        controller.initialize(0)
-        logger.info("Demonstrator initialized.")
-        return jsonify({'success': 'Demonstrator initialized'}), 200
+        device = request.json.get("device", "controller")
+
+        match device:
+            case "laser":
+                controller.laser.initialize()
+            case "camera":
+                controller.camera.initialize()
+            case "stage":
+                controller.stage.initialize(0)
+            case "stage-no-calib":
+                controller.stage.initialize()
+            case _:
+                controller.initialize(0)
+                logger.info("Demonstrator initialized.")
+                return jsonify({'success': 'Demonstrator initialized'}), 200
+
+        logger.info(f"{device} initialized.")
+        return jsonify({'success': f"{device} initialized."}), 200
     except Exception as e:
-        logger.error(f"Error initializing demonstrator: {str(e)}")
+        logger.error(f"Error initializing device: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/calibrate', methods=['POST'])
+def calibrate():
+    try:
+        controller.stage.calibrate(0)
+
+        logger.info("stage calibrated.")
+        return jsonify({'success': "stage calibrated."}), 200
+    except Exception as e:
+        logger.error(f"Error initializing device: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 # @app.route('/run_bscan_pattern', methods=['POST'])
@@ -214,7 +319,10 @@ def get_image():
         # ft = request.json.get("ft", False)
 
         # Get the image from the controller
-        image_array = controller.camera.pop_image_in_buffer()[0,:,:]
+        if controller.camera.state != Dem2State.RUNNING:
+            logger.error("Error getting image: Not running")
+            return jsonify({'error': "Error getting image: Not running"}), 500
+        image_array = controller.camera.get_image(controller.camera.image)
         if image_array is None:
             return jsonify({"image": "None"}), 200
 

@@ -16,7 +16,7 @@ const SYSTEM_STATE = {
     fftEnabled: false
 };
 
-const cameLiveintervalID = 0
+cameLiveintervalID = 0
 
 // --- Status Codes & Helpers ---
 const STATUS_MAP = {
@@ -41,7 +41,14 @@ const elements = {
     laserWarning: document.getElementById('laser-warning-banner'),
     estopBanner: document.getElementById('emergency-stop-banner'),
 
+    ctrlBtnConnect: document.getElementById('btn-ctrl-connect'),
+    ctrlBtnDisc: document.getElementById('btn-ctrl-disc'),
+    ctrlBtnInit: document.getElementById('btn-ctrl-init'),
+
     // Camera
+    camBtnConnect: document.getElementById('btn-cam-connect'),
+    camBtnInit: document.getElementById('btn-cam-init'),
+    camBtnDisc: document.getElementById('btn-cam-disc'),
     camImg: document.getElementById('imageDisplay'),
     camPlaceholder: document.getElementById('cam-feed-placeholder'),
     camFftCanvas: document.getElementById('cam-fft-canvas'),
@@ -50,11 +57,15 @@ const elements = {
     liveIndicator: document.getElementById('live-indicator'),
 
     // Laser
+    laserBtnConnect: document.getElementById('btn-laser-connect'),
+    laserBtnInit: document.getElementById('btn-laser-init'),
+    laserBtnDisc: document.getElementById('btn-laser-disc'),
     laserInputs: {
         cw: document.getElementById('laser-cw-wl'),
         min: document.getElementById('laser-min-wl'),
         max: document.getElementById('laser-max-wl'),
-        sweep: document.getElementById('laser-sweep')
+        sweep: document.getElementById('laser-sweep'),
+        sweepSpeed: document.getElementById('laser-sweep-actual')
     },
     laserModeDropdown: document.getElementById('laser-mode-select'),
     laserStatusText: document.getElementById('laser-status-text'),
@@ -62,9 +73,21 @@ const elements = {
     btnLaserOff: document.getElementById('btn-laser-off'),
 
     // Stage
+    stageBtnConnect: document.getElementById('btn-stage-connect'),
+    stageBtnInit: document.getElementById('btn-stage-init'),
+    stageBtnCalib: document.getElementById('btn-stage-calib'),
+    stageBtnDisc: document.getElementById('btn-stage-disc'),
     stageUiManual: document.getElementById('stage-ui-manual'),
     stageUiPattern: document.getElementById('stage-ui-pattern'),
-    stageStatusText: document.getElementById('stage-status-text')
+    stageStatusText: document.getElementById('stage-status-text'),
+    stageInputs: {
+        x: document.getElementById('stage-pos-x'),
+        y: document.getElementById('stage-pos-y'),
+        z: document.getElementById('stage-pos-z'),
+        dx: document.getElementById('stage-delta-x'),
+        dy: document.getElementById('stage-delta-y'),
+        dz: document.getElementById('stage-delta-z'),
+    },
 };
 
 // --- Initialization ---
@@ -80,6 +103,8 @@ function init() {
 function updateAll(){
     updateProperties();
     updateStates();
+    updateLaserProperties()
+    updateStageProperties()
     updateModes()
     updateUI();
 }
@@ -208,7 +233,8 @@ function controller_initialise(){
     showPopup("Remove Objective", `Initializing Demonstrator 2 includes calibrating the Stage.<br>Please ensure there <span class="text-red-600 font-bold">IS NO OBJECTIVE</span> attached to the revolver!`,
         () => {
             updateProperties();
-            initialize();
+            sendLaserProperties()
+            initialize("controller");
         }
     )
 }
@@ -217,7 +243,7 @@ function stage_calibrate(){
     showPopup("Remove Objective", `Initializing Demonstrator 2 includes calibrating the Stage.<br>Please ensure there <span class="text-red-600 font-bold">IS NO OBJECTIVE</span> attached to the revolver!`,
         () => {
             updateProperties();
-            // initialize();
+            calibrate();
         }
     )
 }
@@ -234,11 +260,108 @@ function setSystemInfo(jsonString) {
     document.getElementById('lateral-resolution').textContent = info.lateral_resolution;
 }
 
+function setLaserInfo(jsonString){
+    const info = JSON.parse(jsonString);
+    elements.laserInputs.max.value = info.max;
+    elements.laserInputs.min.value = info.min;
+    elements.laserInputs.max.max = info.cfg_max;
+    elements.laserInputs.min.max = info.cfg_max;
+    elements.laserInputs.min.min = info.cfg_min;
+    elements.laserInputs.max.min = info.cfg_min;
+    elements.laserInputs.cw.value = info.wavelength;
+    elements.laserInputs.cw.max = info.cfg_max;
+    elements.laserInputs.cw.min = info.cfg_min;
+    elements.laserInputs.sweep.value = info.total_time;
+    elements.laserInputs.sweep.max = (( info.cfg_max - info.cfg_min ) * 10);
+}
+
+function setStageInfo(jsonString){
+    const info = JSON.parse(jsonString);
+    elements.stageInputs.x.value = info.x;
+    elements.stageInputs.y.value = info.y;
+    elements.stageInputs.z.value = info.z;
+}
+
+function updateSweepSpeed() {
+    elements.laserInputs.sweepSpeed.value = (elements.laserInputs.max.value - elements.laserInputs.min.value) / elements.laserInputs.sweep.value
+}
+
 function updateProperties() {
     fetch('/get_properties')
         .then(response => response.json())
         .then(data => {
             setSystemInfo(JSON.stringify(data))
+        });
+}
+
+function updateLaserProperties() {
+    if (SYSTEM_STATE.devices.laser.status == 0)
+        return
+    fetch('/get_laser_properties')
+        .then(response => response.json())
+        .then(data => {
+            setLaserInfo(JSON.stringify(data))
+        });
+}
+
+function updateStageProperties() {
+    if (SYSTEM_STATE.devices.stage.status < 2 || SYSTEM_STATE.devices.stage.status == 99)
+        return
+    fetch('/get_stage_properties')
+        .then(response => response.json())
+        .then(data => {
+            setStageInfo(JSON.stringify(data))
+        });
+}
+
+function sendLaserProperties() {
+    const payload = {
+        wavelength: elements.laserInputs.cw.value,
+        min: elements.laserInputs.min.value,
+        max: elements.laserInputs.max.value,
+        total_time: elements.laserInputs.sweep.value,
+    };
+    fetch('/set_laser_properties', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(payload) // Convert the payload to a JSON string
+    })
+        .then(response => response.json())
+        .then(data => {
+            updateAll()
+//            if (data.success)
+        });
+}
+
+function sendStageProperties(relative, focus) {
+    x = elements.stageInputs.x.value
+    y = elements.stageInputs.y.value
+    z = elements.stageInputs.z.value
+    if (relative){
+        x = elements.stageInputs.dx.value
+        y = elements.stageInputs.dy.value
+        z = elements.stageInputs.dz.value
+    }
+    const payload = {
+        relative: relative,
+        focus: focus,
+        x: x,
+        y: y,
+        z: z,
+    };
+    fetch('/set_stage_properties', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(payload) // Convert the payload to a JSON string
+    })
+        .then(response => response.json())
+        .then(data => {
+            updateAll()
+//            if (data.success)
         });
 }
 
@@ -254,12 +377,19 @@ function enableCamView(enable){
 
 function updateUI() {
     renderStatusTable();
+    const ctrl = SYSTEM_STATE.devices.controller;
+    elements.ctrlBtnConnect.disabled = (ctrl.status > 0 || ctrl.status == 99)
+    elements.ctrlBtnDisc.disabled = (ctrl.status == 0 || ctrl.status == 99)
+    elements.ctrlBtnInit.disabled = (ctrl.status !== 1 || ctrl.status == 99)
 
     // 1. Camera Logic
     const cam = SYSTEM_STATE.devices.camera;
     elements.camStatusText.innerHTML = `STATUS: <span class="${getStatusObj(cam.status).text}">${getStatusObj(cam.status).label}</span> | MODE: ${MODES.camera[cam.mode]}`;
 
     if (cam.status != 3 && cam.status != 4) enableCamView(false);
+    elements.camBtnConnect.disabled = (cam.status > 0 || cam.status == 99)
+    elements.camBtnDisc.disabled = (cam.status == 0 || cam.status == 99)
+    elements.camBtnInit.disabled = (cam.status !== 1 || cam.status == 99)
 
     // Live Indicator
     if(SYSTEM_STATE.isLive) {
@@ -271,6 +401,9 @@ function updateUI() {
     // 2. Laser Logic
     const laser = SYSTEM_STATE.devices.laser;
     elements.laserStatusText.innerHTML = `STATUS: <span class="${getStatusObj(laser.status).text}">${getStatusObj(laser.status).label}</span>`;
+    elements.laserBtnConnect.disabled = (laser.status > 0 || laser.status == 99)
+    elements.laserBtnDisc.disabled = (laser.status == 0 || laser.status == 99)
+    elements.laserBtnInit.disabled = (laser.status !== 1 || laser.status == 99)
 
     // Mode Dependent Inputs
     const isCW = laser.mode == 0;
@@ -299,6 +432,10 @@ function updateUI() {
     // 3. Stage Logic
     const stage = SYSTEM_STATE.devices.stage;
     elements.stageStatusText.innerHTML = `STATUS: <span class="${getStatusObj(stage.status).text}">${getStatusObj(stage.status).label}</span>`;
+    elements.stageBtnConnect.disabled = (stage.status > 0 || stage.status == 99)
+    elements.stageBtnDisc.disabled = (stage.status == 0 || stage.status == 99)
+    elements.stageBtnCalib.disabled = (stage.status !== 2 || stage.status == 99)
+    elements.stageBtnInit.disabled = (stage.status !== 1 || stage.status == 99)
 
     if (stage.mode == 0) {
         elements.stageUiManual.classList.remove('hidden');
@@ -313,11 +450,22 @@ function updateUI() {
     } else if (laser.status !== 4 && stage.status !== 4){
         elements.estopBanner.classList.add('-translate-y-full');
     }
+    
+    updateSweepSpeed()
 }
 
-function connect() {
+function connect(device) {
+    const payload = {
+        device: device
+    };
     stateLoadVisual()
-    fetch('/connect', {method: 'POST'})
+    fetch('/connect', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(payload) // Convert the payload to a JSON string
+    })
         .then(response => response.json())
         .then(data => {
             updateAll()
@@ -325,10 +473,19 @@ function connect() {
         });
 }
 
-function disconnect() {
+function disconnect(device) {
+    const payload = {
+        device: device
+    };
     stateLoadVisual()
     SYSTEM_STATE.isLive = false;
-    fetch('/disconnect', {method: 'POST'})
+    fetch('/disconnect', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(payload) // Convert the payload to a JSON string
+    })
         .then(response => response.json())
         .then(data => {
             updateAll()
@@ -336,9 +493,30 @@ function disconnect() {
         });
 }
 
-function initialize() {
+function initialize(device) {
+    const payload = {
+        device: device
+    };
     stateLoadVisual()
-    fetch('/initialize', {method: 'POST'})
+    fetch('/initialize', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(payload) // Convert the payload to a JSON string
+    })
+        .then(response => response.json())
+        .then(data => {
+            updateAll()
+//            if (data.success)
+        });
+}
+
+function calibrate() {
+    stateLoadVisual()
+    fetch('/calibrate', {
+        method: 'POST'
+    })
         .then(response => response.json())
         .then(data => {
             updateAll()
@@ -417,7 +595,10 @@ function toggle_emission(){
 }
 
 function toggle_live(){
-    
+    SYSTEM_STATE.isLive = false;
+    enableCamView(false)
+    clearInterval(cameLiveintervalID);
+    updateAll()
     fetch('/toggle_live', {method: 'POST'})
         .then(response => response.json())
         .then(data => {
@@ -428,17 +609,13 @@ function toggle_live(){
             if (data.success.includes("RUNNING")){
                 SYSTEM_STATE.isLive = true;
                 enableCamView(true)
+                updateAll()
                 cameLiveintervalID = setInterval(() => {
                     get_image_from_buffer();
                 }, 1000);
             }
-            else {
-                SYSTEM_STATE.isLive = false;
-                enableCamView(false)
-                clearInterval(cameLiveintervalID);
-            }
-            updateAll()
         });
+    updateAll()
 }
 
 // function calibrate_stage() {}
@@ -448,24 +625,39 @@ function toggle_live(){
 
 // Controller
 document.getElementById('btn-ctrl-connect').onclick = () => {
-    connect();
+    connect("controller");
 };
 document.getElementById('btn-ctrl-init').onclick = () => {
     controller_initialise();
 };
 document.getElementById('btn-ctrl-disc').onclick = () => {
-    disconnect()
+    disconnect("controller")
 };
 
 // Camera
-document.getElementById('btn-cam-connect').onclick = () => {};
-document.getElementById('btn-cam-init').onclick = () => {};
-document.getElementById('btn-cam-disc').onclick = () => {};
+document.getElementById('btn-cam-connect').onclick = () => {
+    connect("camera");
+};
+document.getElementById('btn-cam-init').onclick = () => {
+    initialize("camera");
+};
+document.getElementById('btn-cam-disc').onclick = () => {
+    disconnect("camera")
+};
 
 document.getElementById('cam-mode-select').onchange = (e) => {
     // SYSTEM_STATE.devices.camera.mode = parseInt(e.target.value);
     setMode("camera", parseInt(e.target.value))
 };
+elements.laserInputs.max.onchange = (e) => {
+    updateSweepSpeed()
+}
+elements.laserInputs.min.onchange = (e) => {
+    updateSweepSpeed()
+}
+elements.laserInputs.sweep.onchange = (e) => {
+    updateSweepSpeed()
+}
 document.getElementById('btn-cam-capture').onclick = () => {
     get_single_image();
 };
@@ -478,9 +670,16 @@ document.getElementById('toggle-fft').onchange = (e) => {
 };
 
 // Laser
-document.getElementById('btn-laser-connect').onclick = () => {};
-document.getElementById('btn-laser-init').onclick = () => {};
-document.getElementById('btn-laser-disc').onclick = () => {};
+document.getElementById('btn-laser-connect').onclick = () => {
+    connect("laser");
+};
+document.getElementById('btn-laser-init').onclick = () => {
+    sendLaserProperties()
+    initialize("laser");
+};
+document.getElementById('btn-laser-disc').onclick = () => {
+    disconnect("laser")
+};
 document.getElementById('laser-mode-select').onchange = (e) => {
     // SYSTEM_STATE.devices.laser.mode = parseInt(e.target.value);
     // send mode
@@ -494,15 +693,33 @@ document.getElementById('btn-laser-off').onclick = () => {
 };
 
 // Stage
-document.getElementById('btn-stage-connect').onclick = () => {};
-document.getElementById('btn-stage-init').onclick = () => {}; // Then auto 3
 document.getElementById('btn-stage-calib').onclick = () => {
     stage_calibrate();
 };
-document.getElementById('btn-stage-disc').onclick = () => {};
+document.getElementById('btn-stage-connect').onclick = () => {
+    connect("stage");
+};
+document.getElementById('btn-stage-init').onclick = () => {
+    initialize("stage-no-calib");
+};
+document.getElementById('btn-stage-disc').onclick = () => {
+    disconnect("stage")
+};
 document.getElementById('stage-mode-select').onchange = (e) => {
     // SYSTEM_STATE.devices.stage.mode = parseInt(e.target.value);
     setMode("stage", parseInt(e.target.value))
+};
+document.getElementById('btn-stage-set').onclick = () => {
+    sendStageProperties(false, false)
+};
+document.getElementById('btn-stage-move').onclick = () => {
+    sendStageProperties(true, false)
+};
+document.getElementById('btn-stage-focus-set').onclick = () => {
+    sendStageProperties(false, true)
+};
+document.getElementById('btn-stage-focus-move').onclick = () => {
+    sendStageProperties(true, true)
 };
 document.getElementById('btn-stage-estop').onclick = () => {
     // Safety first

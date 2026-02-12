@@ -15,7 +15,9 @@ from src.dem_2_3d_label_free.__globals__ import (
 
 
 def convert_to_hex(decimal: float) -> str:
-    return hex(int(decimal))[2:] # ignore the "0x" in front
+    hexcode = hex(int(decimal))[2:]  # ignore the "0x" in front
+    while len(hexcode) < 4: hexcode = "0" + hexcode
+    return hexcode
 
 def hex_to_decimal(hex_string: str) -> float:
     return float(int("0x" + hex_string, 16))

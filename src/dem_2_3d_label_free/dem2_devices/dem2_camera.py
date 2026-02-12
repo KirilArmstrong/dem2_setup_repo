@@ -39,14 +39,6 @@ class Dem2Camera(Thread, xiapi.Camera):
 
         self.executor = ThreadPoolExecutor(max_workers=1)
 
-        # self.target = self.acquire_images
-        # self.target_args = ()
-        #
-        Thread.__init__(self)
-        # Thread.__init__(self, target=self.target, args=self.target_args)
-        self.start()
-        # self.join()
-
     def _append_to_buffer(self, data: np.ndarray) -> None:
         """Append image data to buffer. If longer than 10, discard it. (for software live imaging)"""
         if len(self._image_buffer) < 10:
@@ -133,7 +125,7 @@ class Dem2Camera(Thread, xiapi.Camera):
         super().stop_acquisition()
         self._log.info("Acquisition stopped.")
 
-    def get_image(self, image: xiapi.Image, timeout: int = 5000) -> np.ndarray:
+    def get_image(self, image: xiapi.Image|None = None, timeout: int = 5000) -> np.ndarray:
         """Override ``xiapi.Camera.get_image()`` to also return as numpy array.
         :param image: Image as xiapi.Image.
         :param timeout: Timeout in ms.
@@ -167,7 +159,7 @@ class Dem2Camera(Thread, xiapi.Camera):
         # if self.is_alive():
         #     self.join()
         # self.run()
-        self.executor.submit(self.acquire_images)
+        # self.executor.submit(self.acquire_images)
         return self.state.name
 
     def acquire_images(self):
