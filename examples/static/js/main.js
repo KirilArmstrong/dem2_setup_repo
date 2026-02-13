@@ -369,9 +369,13 @@ function enableCamView(enable){
     if (enable){
         elements.camImg.classList.remove('hidden');
         elements.camPlaceholder.classList.add('hidden');
+        elements.camFftCanvas.classList.remove('hidden');
+        elements.camFftPlaceholder.classList.add('hidden');
     }else{
         elements.camImg.classList.add('hidden');
         elements.camPlaceholder.classList.remove('hidden');
+        elements.camFftCanvas.classList.add('hidden');
+        elements.camFftPlaceholder.classList.remove('hidden');
     }
 }
 
@@ -526,11 +530,21 @@ function calibrate() {
 
 function get_single_image(){
     const imageDisplayElement = document.getElementById('imageDisplay');
-    fetch('/get_single_image', { method: 'POST' })
+    const payload = {
+        ft: SYSTEM_STATE.fftEnabled
+    };
+    fetch('/get_single_image', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(payload) // Convert the payload to a JSON string
+    })
     .then(response => response.json())
     .then(data => {
         if (data.image) {
             imageDisplayElement.src = `data:image/png;base64,${data.image}`;
+            elements.camFftCanvas.src = `data:image/png;base64,${data.ft}`;
             enableCamView(true)
         }
 //        else {
@@ -738,6 +752,7 @@ function emergency_stop() {
         .then(data => {
             if (data.success){
                 console.log(data.success)
+                updateAll()
             }
         });
     updateAll()

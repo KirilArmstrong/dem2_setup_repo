@@ -109,6 +109,7 @@ class Dem2Stage:
         self._state = Dem2State.RUNNING
         if self.get_position() == position and not emergency:
             self._log.info("Stage Already at position " + position.__str__())
+            self._state = Dem2State.READY
             self._pos_settled_future.set_result(self.get_position())
         else:
             self._log.info("moving to pos: " + position.__str__())
@@ -130,6 +131,7 @@ class Dem2Stage:
         self._state = Dem2State.RUNNING
         if self.get_focus() == self._focus_set_pos:
             self._log.info("Focus already at pos " + z_pos.__str__())
+            self._state = Dem2State.READY
             self._focus_settled_future.set_result(self.get_focus())
         else:
             self._log.info("moving focus to: " + z_pos.__str__())
@@ -289,6 +291,9 @@ class Dem2Stage:
 
     def stop_moving(self):
         """Stop moving the stage."""
+        if self._state == Dem2State.DISCONNECTED:
+            self._log.info("stage isnt connected to stop.")
+            return
         # override current movement
         # self._queue_move_stage_to_pos(self.get_position(), emergency=True)
         # call stop

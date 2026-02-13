@@ -4,6 +4,7 @@ import yaml
 import logging
 import os
 from flask import Flask, render_template, jsonify, request, flash
+from numpy.array_api import zeros
 
 from src.dem_2_3d_label_free.dem2_common.dem2_constants import Dem2State, Dem2LaserMode, Dem2CameraMode
 # from werkzeug.utils import secure_filename
@@ -307,13 +308,23 @@ def convert_to_base64(image_array: np.ndarray) -> str:
 @app.route("/get_single_image", methods=["POST"])
 def get_single_image():
     try:
+        # Retrieve the 'ft' parameter from the request
+        ft = request.json.get("ft", False)
+
         # Get the image from the controller
         image_array = controller.camera.acquire_single_image()
+        ft_array = np.zeros(image_array.shape)
+
+        if ft:
+            ft_array = np.fft.fft2(image_array)
+            ft_array = np.fft.fftshift(ft_array)
+            ft_array = np.abs(ft_array)
 
         # Encode the image to base64
         image_base64 = convert_to_base64(image_array)
+        ft_base64 = convert_to_base64(ft_array)
 
-        return jsonify({"image": image_base64}), 200
+        return jsonify({"image": image_base64, "ft": ft_base64}), 200
     except Exception as e:
         logger.error(f"Error getting image: {str(e)}")
         return jsonify({'error': str(e)}), 500
