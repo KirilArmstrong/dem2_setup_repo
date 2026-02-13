@@ -61,6 +61,7 @@ class Dem2Stage:
         self._log.debug(
             f"settled handler called. moved to pos. {arg1}, {arg2} and settled!"
         )
+        self._state = Dem2State.READY
         self._pos_settled_future.set_result((arg1, arg2))
 
     def _register_focus_event_handler(self):
@@ -75,6 +76,7 @@ class Dem2Stage:
 
     def _focus_settled_handler(self, arg1):
         self._log.debug(f"focus settled event called! Set to {arg1['V']}")
+        self._state = Dem2State.READY
         self._focus_settled_future.set_result(arg1)
 
     def _set_sw_limits(self):
@@ -104,6 +106,7 @@ class Dem2Stage:
         if self._state != Dem2State.READY and not emergency:
             raise Dem2Errors.StageError("Must be calibrated to move stage!")
         self._pos_settled_future = Future()
+        self._state = Dem2State.RUNNING
         if self.get_position() == position and not emergency:
             self._log.info("Stage Already at position " + position.__str__())
             self._pos_settled_future.set_result(self.get_position())
@@ -124,6 +127,7 @@ class Dem2Stage:
             raise Dem2Errors.StageError("Must be calibrated to move focus!")
         self._focus_settled_future = Future()
         self._focus_set_pos = z_pos
+        self._state = Dem2State.RUNNING
         if self.get_focus() == self._focus_set_pos:
             self._log.info("Focus already at pos " + z_pos.__str__())
             self._focus_settled_future.set_result(self.get_focus())
@@ -286,9 +290,10 @@ class Dem2Stage:
     def stop_moving(self):
         """Stop moving the stage."""
         # override current movement
-        self._queue_move_stage_to_pos(self.get_position(), emergency=True)
+        # self._queue_move_stage_to_pos(self.get_position(), emergency=True)
         # call stop
         self.stage.Stop()
+        self._state = Dem2State.READY
         self._log.info("stage stopped at: ", self.get_position())
 
     # # Properties

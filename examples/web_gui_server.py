@@ -31,6 +31,14 @@ controller = Dem2Controller(default_config)
 def index():
     return render_template('index.html')
 
+
+@app.route('/stop', methods=['GET'])
+def stop():
+    controller.laser.kill_emission()
+    controller.stage.stop_moving()
+    return jsonify({"success": "Stopped"})
+
+
 @app.route('/get_states', methods=['GET'])
 def get_states():
     return jsonify({'controller': controller.state.value,
@@ -309,6 +317,8 @@ def get_single_image():
     except Exception as e:
         logger.error(f"Error getting image: {str(e)}")
         return jsonify({'error': str(e)}), 500
+
+
 
 
 

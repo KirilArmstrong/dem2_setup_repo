@@ -733,7 +733,14 @@ document.getElementById('btn-estop').onclick = () => {
 
 function emergency_stop() {
     // Stop laser and stage
-    
+    fetch('/stop')
+        .then(response => response.json())
+        .then(data => {
+            if (data.success){
+                console.log(data.success)
+            }
+        });
+    updateAll()
 }
 
 
