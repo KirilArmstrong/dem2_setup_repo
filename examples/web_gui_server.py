@@ -310,6 +310,9 @@ def get_single_image():
     try:
         # Retrieve the 'ft' parameter from the request
         ft = request.json.get("ft", False)
+        gamma = float(request.json.get("gamma", 0.5))
+        if gamma < 0 or gamma > 1:
+            raise Exception(f"Invalid gamma value: {gamma}. Must be between 0 and 1.")
 
         # Get the image from the controller
         image_array = controller.camera.acquire_single_image()
@@ -319,6 +322,9 @@ def get_single_image():
             ft_array = np.fft.fft2(image_array)
             ft_array = np.fft.fftshift(ft_array)
             ft_array = np.abs(ft_array)
+            # Gamma Correction
+            ft_array = ft_array ** gamma
+            # ft_array = (ft_array - np.min(ft_array)) / (np.max(ft_array) - np.min(ft_array))
 
         # Encode the image to base64
         image_base64 = convert_to_base64(image_array)

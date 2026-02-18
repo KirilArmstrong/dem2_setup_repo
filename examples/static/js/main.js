@@ -54,6 +54,7 @@ const elements = {
     camFftCanvas: document.getElementById('cam-fft-canvas'),
     camFftPlaceholder: document.getElementById('cam-fft-placeholder'),
     camStatusText: document.getElementById('cam-status-text'),
+    camGammaInput: document.getElementById("cam-gamma"),
     liveIndicator: document.getElementById('live-indicator'),
 
     // Laser
@@ -531,7 +532,8 @@ function calibrate() {
 function get_single_image(){
     const imageDisplayElement = document.getElementById('imageDisplay');
     const payload = {
-        ft: SYSTEM_STATE.fftEnabled
+        ft: SYSTEM_STATE.fftEnabled,
+        gamma: elements.camGammaInput.value
     };
     fetch('/get_single_image', {
         method: 'POST',
