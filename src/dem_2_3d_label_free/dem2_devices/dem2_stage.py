@@ -4,6 +4,8 @@ import logging
 import time
 import clr
 from concurrent.futures import Future
+
+from src.dem_2_3d_label_free.dem2_common.dem2_bscan_pattern import Dem2BScanPattern
 from src.dem_2_3d_label_free.dem2_common.dem2_constants import Dem2State, Dem2StageMode
 from src.dem_2_3d_label_free.dem2_common.dem2_errors import Dem2Errors
 
@@ -44,6 +46,9 @@ class Dem2Stage:
         self._move_mode = None
 
         self.b_focus_drift_detected = False
+
+        self._b_scan_pattern: None|Dem2BScanPattern = None
+        self._bsp_current_index = 0
 
     # Initialization.
 
@@ -301,6 +306,27 @@ class Dem2Stage:
         self._state = Dem2State.READY
         self._log.info("stage stopped at: ", self.get_position())
 
+    def move_along_scan_pattern(self):
+        """Move to the next index of the scan pattern."""
+        if self._state is None:
+            raise Dem2Errors.StageError("Scan pattern must be set!")
+        self.move_stage(self._b_scan_pattern.x_positions[self._bsp_current_index],
+                        self._b_scan_pattern.y_positions[self._bsp_current_index])
+        self.move_focus(self._b_scan_pattern.focus_positions[self._bsp_current_index])
+        self._bsp_current_index += 1
+        if self._b_scan_pattern.a_scans_b_scan == self._bsp_current_index:
+            self._log.info("Reached the end of the scan pattern. Resetting to index 0.")
+            self._bsp_current_index = 0
+
+    def run_b_scan_pattern(self):
+        if self._state is None:
+            raise Dem2Errors.StageError("Scan pattern must be set!")
+        self._bsp_current_index = 0
+        for i in range(self._b_scan_pattern.a_scans_b_scan):
+            self.move_along_scan_pattern()
+
+
+
     # # Properties
 
     @property
@@ -310,6 +336,20 @@ class Dem2Stage:
     @property
     def mode(self) -> Dem2StageMode:
         return self._mode
+
+    @property
+    def b_scan_pattern(self) -> tuple[Dem2BScanPattern,int]:
+        """
+        Get the b-scan pattern of the stage, and the current index it's at.
+
+        :return: tuple of the b scan pattern object and current index.
+        """
+        return self._b_scan_pattern, self._bsp_current_index
+
+    @b_scan_pattern.setter
+    def b_scan_pattern(self, b_scan_pattern: Dem2BScanPattern):
+        self._b_scan_pattern = b_scan_pattern
+        self._bsp_current_index = 0
 
     def get_position(self):
         """Get stage current position."""
@@ -321,3 +361,5 @@ class Dem2Stage:
     def get_focus(self):
         """Get current focus position."""
         return self.focus.GetPosition(self._pos_unit)
+
+

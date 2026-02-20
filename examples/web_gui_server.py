@@ -6,6 +6,7 @@ import os
 from flask import Flask, render_template, jsonify, request, flash
 from numpy.array_api import zeros
 
+from src.dem_2_3d_label_free.dem2_common.dem2_bscan_pattern import Dem2BScanPattern
 from src.dem_2_3d_label_free.dem2_common.dem2_constants import Dem2State, Dem2LaserMode, Dem2CameraMode
 # from werkzeug.utils import secure_filename
 from src.dem_2_3d_label_free.dem2_components.dem2_controller import Dem2Controller  # Assuming controller.py is in the same directory
@@ -353,6 +354,19 @@ def set_integration_time():
         return jsonify({"success": new_time}), 200
     except Exception as e:
         logger.error(f"Error getting integration_time: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/change_stage_b_scan_pattern', methods=['POST'])
+def change_stage_b_scan_pattern():
+    try:
+        yml_string = request.json.get("yml", "")
+        bsp = Dem2BScanPattern()
+        bsp.from_string(yml_string)
+        controller.stage.b_scan_pattern = bsp
+        # controller.stage.run_b_scan_pattern()
+        return jsonify({"success": True}), 200
+    except Exception as e:
+        logger.error(f"Error setting stage b scan pattern: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 @app.route("/get_image_from_buffer", methods=["POST"])

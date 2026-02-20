@@ -94,16 +94,14 @@ class Dem2Laser:
                     raise Dem2Errors.LaserError(
                         "total_sweep_time, and in turn sweep_speed, must be set to initialize!"
                     )
+                self.send_command("MY") # single sweep mode
 
                 # convert wavelength into hex and send
-                # norm_min = self._wavelength_min / 4095
-                # lambda_min_hex = hex(65536 * norm_min)
-                # norm_max = self._wavelength_max / 4095
-                # lambda_max_hex = hex(65536 * norm_max)
                 self.send_command("P22")
                 self._log.info(f"Sending wavelength min {self._wavelength_min} wavelength max {self._wavelength_max}  with base wavelength as {self._base_wavelength} as {wavelength_to_hex(self._wavelength_min, self._base_wavelength, 100)}, and {wavelength_to_hex(self._wavelength_max, self._base_wavelength, 100)}")
                 self.send_command(f"P22{wavelength_to_hex(self._wavelength_min, self._base_wavelength, 100)}")
                 self.send_command(f"P23{wavelength_to_hex(self._wavelength_max, self._base_wavelength, 100)}")
+                self.send_sweep_speed(self._sweep_speed)
 
         self.send_command("MW") # wake pump source
         self.send_command("M")
@@ -207,7 +205,6 @@ class Dem2Laser:
         if new_speed < 0.1:
             raise Dem2Errors.LaserError(f"Total sweep time is too high! Sweep speed min is 0.1 nm/s, calculated = {new_speed}")
         self._sweep_speed = new_speed
-        # self.send_sweep_speed(self._sweep_speed)
 
     @property
     def wavelength(self):

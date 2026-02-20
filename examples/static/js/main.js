@@ -14,6 +14,7 @@ const SYSTEM_STATE = {
     vars: [0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00],
     isLive: false,
     integration_time: 0.1,
+    bspFileContent: "",
     fftEnabled: false
 };
 
@@ -92,6 +93,7 @@ const elements = {
         dy: document.getElementById('stage-delta-y'),
         dz: document.getElementById('stage-delta-z'),
     },
+    stageBtnApply: document.getElementById('btn-stage-apply'),
 };
 
 // --- Initialization ---
@@ -473,6 +475,9 @@ function updateUI() {
     elements.stageBtnCalib.disabled = (stage.status !== 2 || stage.status == 99)
     elements.stageBtnInit.disabled = (stage.status !== 1 || stage.status == 99)
 
+    if (SYSTEM_STATE.bspFileContent) elements.stageBtnApply.disabled = false;
+    else elements.stageBtnApply.disabled = true;
+
     if (stage.mode == 0) {
         elements.stageUiManual.classList.remove('hidden');
         elements.stageUiPattern.classList.add('hidden');
@@ -665,6 +670,23 @@ function toggle_live(){
     updateAll()
 }
 
+function send_bsp(){
+    if (!SYSTEM_STATE.bspFileContent) return;
+
+    const payload = {
+        yml: SYSTEM_STATE.bspFileContent  // File contents as a string with newlines preserved
+    };
+
+    // Send to Python backend
+    fetch('/change_stage_b_scan_pattern', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload)
+    });
+}
+
 // function calibrate_stage() {}
 
 // --- Interaction Handlers ---
@@ -771,6 +793,14 @@ document.getElementById('btn-stage-focus-set').onclick = () => {
 document.getElementById('btn-stage-focus-move').onclick = () => {
     sendStageProperties(true, true)
 };
+document.getElementById('stage-pattern-input').addEventListener('change', async (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    // Read file as text (preserves newlines)
+    SYSTEM_STATE.bspFileContent = await file.text();
+    updateUI()
+});
 document.getElementById('btn-stage-estop').onclick = () => {
     // Safety first
     emergency_stop();
@@ -779,6 +809,10 @@ document.getElementById('btn-stage-estop').onclick = () => {
 document.getElementById('btn-estop').onclick = () => {
     // Safety first
     emergency_stop();
+};
+
+document.getElementById('btn-stage-apply').onclick = () => {
+    send_bsp();
 };
 
 function emergency_stop() {

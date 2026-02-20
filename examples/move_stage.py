@@ -14,7 +14,7 @@ from src.dem_2_3d_label_free.__globals__ import __config__
 CONFIG = __config__  # default config.yml file in ~/config.
 # CONFIG = load_config_file("path to config yml file here")
 
-B_SCAN_PATTERN_FILEPATH = ""
+B_SCAN_PATTERN_FILEPATH = "line_bsp.yml"
 
 
 def main():
@@ -38,12 +38,17 @@ def main():
         "---------------------------------------"
     )
     controller.stage.connect()
-    controller.stage.initialize()
+    controller.stage.initialize(1)
+    log.info("Stage initialized and calibrated.")
+    time.sleep(5)
+    log.info("Running scan pattern...")
+    bsp = Dem2BScanPattern()
+    bsp.generate_line(0,9000,0,9000,100)
+    bsp.as_file(B_SCAN_PATTERN_FILEPATH)
+    controller.stage.b_scan_pattern = bsp
+    controller.stage.run_b_scan_pattern()
+    log.info("Finished scan pattern, shutting down...")
     time.sleep(1)
-    controller.stage.calibrate(5)
-    time.sleep(5)
-    controller.stage.move_focus(1000)
-    time.sleep(5)
     controller.stage.disconnect()
 
     log.info("Done.")

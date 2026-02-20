@@ -21,6 +21,16 @@ class Dem2Errors:
             """
             super().__init__(f"Stage failure: {reason}")
 
+    class BScanPatternError(GenericError):
+        """Stage failure."""
+
+        def __init__(self, reason: str) -> None:
+            """Create a new Mirror error.
+
+            :param reason: An optional reason for the mirror failure, if known.
+            """
+            super().__init__(f"B Scan pattern failure: {reason}")
+
     class PropertyNotSetError(GenericError):
         """Stage failure."""
 

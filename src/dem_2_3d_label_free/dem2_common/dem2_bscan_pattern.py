@@ -4,8 +4,11 @@ import logging
 import os
 from contextlib import suppress
 
+import numpy as np
 import yaml
 from zeiss_helpers.common import expect_or_raise
+
+from src.dem_2_3d_label_free.dem2_common.dem2_errors import Dem2Errors
 
 
 class Dem2BScanPattern:
@@ -31,6 +34,25 @@ class Dem2BScanPattern:
         return f"Description: '{self.description}', no_of_a_scans={self.a_scans_b_scan}"
 
     # Functions
+
+    def _validate(self):
+        lists = [self._a_scans["focus_positions"], self._a_scans["x_positions"], self._a_scans["y_positions"]]
+        non_empty_lists = [lst for lst in lists if lst]
+
+        # Check: not all lists are Empty
+        if not non_empty_lists:
+            raise Dem2Errors.BScanPatternError("All lists cant be empty.")
+
+        # Check: all non-Empty lists have equal length
+        first_length = len(non_empty_lists[0])
+        if not all(len(lst) == first_length for lst in non_empty_lists):
+            raise Dem2Errors.BScanPatternError("All non empty lists must be equal in length.")
+
+        # Check: all non-Empty lists have length equal to number
+        if first_length != self.a_scans_b_scan:
+            raise Dem2Errors.BScanPatternError("All non empty lists must have length equal to a_scans_b_scan.")
+
+        return
 
     def as_dict(self) -> dict:
         """Return as dictionary."""
@@ -75,8 +97,7 @@ class Dem2BScanPattern:
 
             # Open and read the values from file
             with open(_filename, encoding="utf-8") as value_file:
-                # todo what datatype does stage accept?
-                values = [int(x) for x in value_file.readline().split(",")]
+                values = [float(x) for x in value_file.readline().split(",")]
                 self._log.info(
                     "Scan pattern 'values' loaded from file '%s'.", _filename
                 )
@@ -89,6 +110,7 @@ class Dem2BScanPattern:
             self.x_positions = read_values(value=sp_dict["x_positions"])
             self.y_positions = read_values(value=sp_dict["y_positions"])
             self.focus_positions = read_values(value=sp_dict["focus_positions"])
+            self._validate()
 
     def from_file(self, filepath: str) -> None:
         """Load Dem2 b-scan pattern from file.
@@ -102,9 +124,7 @@ class Dem2BScanPattern:
 
         # Open and read file
         with open(filepath, encoding="utf-8") as yml_file:
-            _dict = yaml.safe_load(yml_file)
-
-        self.from_dict(sp_dict=_dict)
+            self.from_string(yml_file)
 
         self._log.info(
             "Dem2 b-scan pattern %s loaded from file '%s'.",
@@ -112,15 +132,38 @@ class Dem2BScanPattern:
             filepath,
         )
 
+    def from_string(self, string) -> None:
+        """Load Dem2 b-scan pattern from string."""
+        _dict = yaml.safe_load(string)
+
+        self.from_dict(sp_dict=_dict)
+
+    def generate_line(self, min_x, max_x, min_y, max_y, amount):
+        """
+        Creates linearly spaced lines for listA and listB.
+        
+        Parameters:
+            min_x: minimum value for listA
+            max_x: maximum value for listA
+            min_y: minimum value for listB
+            max_y: maximum value for listB
+            amount: length of both lists
+        """
+        self.a_scans_b_scan = amount
+        self.x_positions = np.linspace(min_x, max_x, amount).tolist()
+        self.y_positions = np.linspace(min_y, max_y, amount).tolist()
+
     # Properties
 
     @property
-    def x_positions(self) -> list[int]:
+    def x_positions(self) -> list[float]:
         """X-Position list."""
-        return self._a_scans["x_positions"]
+        if self._a_scans["x_positions"]:
+            return self._a_scans["x_positions"]
+        return [0]*self.a_scans_b_scan
 
     @x_positions.setter
-    def x_positions(self, value: list[int]) -> None:
+    def x_positions(self, value: list[float]) -> None:
         """Set x-position list.
 
         Length of the list must match the number of samples! Empty lists are always ok.
@@ -142,12 +185,14 @@ class Dem2BScanPattern:
         self._a_scans["x_positions"] = value
 
     @property
-    def y_positions(self) -> list[int]:
+    def y_positions(self) -> list[float]:
         """Y-Position list."""
-        return self._a_scans["y_positions"]
+        if self._a_scans["y_positions"]:
+            return self._a_scans["y_positions"]
+        return [0]*self.a_scans_b_scan
 
     @y_positions.setter
-    def y_positions(self, value: list[int]) -> None:
+    def y_positions(self, value: list[float]) -> None:
         """Set y-position list.
 
         Length of the list must match the number of samples! Empty lists are always ok.
@@ -169,12 +214,14 @@ class Dem2BScanPattern:
         self._a_scans["y_positions"] = value
 
     @property
-    def focus_positions(self) -> list[int]:
+    def focus_positions(self) -> list[float]:
         """Focus Position list."""
-        return self._a_scans["focus_positions"]
+        if self._a_scans["focus_positions"]:
+            return self._a_scans["focus_positions"]
+        return [0]*self.a_scans_b_scan
 
     @focus_positions.setter
-    def focus_positions(self, value: list[int]) -> None:
+    def focus_positions(self, value: list[float]) -> None:
         """Set focus position list.
 
         Length of the list must match the number of samples! Empty lists are always ok.
