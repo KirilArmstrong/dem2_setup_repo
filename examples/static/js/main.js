@@ -13,6 +13,7 @@ const SYSTEM_STATE = {
     },
     vars: [0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00],
     isLive: false,
+    integration_time: 0.1,
     fftEnabled: false
 };
 
@@ -55,6 +56,8 @@ const elements = {
     camFftPlaceholder: document.getElementById('cam-fft-placeholder'),
     camStatusText: document.getElementById('cam-status-text'),
     camGammaInput: document.getElementById("cam-gamma"),
+    camIntegrationInput: document.getElementById("cam-integration-time"),
+    camIntegrationSetBtn: document.getElementById("btn-cam-set-integration-time"),
     liveIndicator: document.getElementById('live-indicator'),
 
     // Laser
@@ -106,6 +109,7 @@ function updateAll(){
     updateStates();
     updateLaserProperties()
     updateStageProperties()
+    get_integration_time()
     updateModes()
     updateUI();
 }
@@ -184,6 +188,15 @@ function updateModes(){
             for (const [key, value] of Object.entries(data)){
                 changeMode(key, value)
             }
+            updateUI();
+        });
+}
+
+function get_integration_time(){
+    fetch('/get_integration_time')
+        .then(response => response.json())
+        .then(data => {
+            SYSTEM_STATE.integration_time = data.integration_time;
             updateUI();
         });
 }
@@ -366,6 +379,23 @@ function sendStageProperties(relative, focus) {
         });
 }
 
+function set_integration_time(){
+    const payload = {
+        integration_time: elements.camIntegrationInput.value,
+    };
+    fetch('/set_integration_time', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(payload) // Convert the payload to a JSON string
+    })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) get_integration_time();
+        });
+}
+
 function enableCamView(enable){
     if (enable){
         elements.camImg.classList.remove('hidden');
@@ -395,6 +425,7 @@ function updateUI() {
     elements.camBtnConnect.disabled = (cam.status > 0 || cam.status == 99)
     elements.camBtnDisc.disabled = (cam.status == 0 || cam.status == 99)
     elements.camBtnInit.disabled = (cam.status !== 1 || cam.status == 99)
+    elements.camIntegrationInput.value = SYSTEM_STATE.integration_time;
 
     // Live Indicator
     if(SYSTEM_STATE.isLive) {
@@ -676,6 +707,9 @@ elements.laserInputs.sweep.onchange = (e) => {
 }
 document.getElementById('btn-cam-capture').onclick = () => {
     get_single_image();
+};
+document.getElementById('btn-cam-set-integration-time').onclick = () => {
+    set_integration_time();
 };
 document.getElementById('btn-cam-live').onclick = () => {
     toggle_live()

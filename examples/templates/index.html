@@ -278,6 +278,15 @@
                         <span class="text-xs font-bold text-slate-400 peer-checked:text-fuchsia-400">GAMMA</span>
                     </label>
                 </div>
+                <div class="flex gap-3 border-t border-slate-800 pt-4">
+                    <button id="btn-cam-set-integration-time" class="btn-cyber w-16">SET</button>
+                    <label class="flex items-center gap-2 cursor-pointer select-none">
+                        <div class="relative">
+                            <input type="number" id="cam-integration-time" class="input-cyber w-full" placeholder="0.0" min="0.1" max="1000" step="0.01" value="0.1">
+                        </div>
+                        <span class="text-xs font-bold text-slate-400 peer-checked:text-fuchsia-400">INTEGRATION TIME [ms]</span>
+                    </label>
+                </div>
             </section>
 
             <!-- 3. Laser Section -->

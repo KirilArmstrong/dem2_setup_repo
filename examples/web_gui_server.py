@@ -136,9 +136,9 @@ def set_stage_properties():
     try:
         relative = bool(request.json.get("relative", False))
         focus = bool(request.json.get("focus", False))
-        x = float("0" + request.json.get("x", 0.0))
-        y = float("0" + request.json.get("y", 0.0))
-        z = float("0" + request.json.get("z", 0.0))
+        x = float(request.json.get("x", 0.0) if request.json.get("x", 0.0) else 0.0)
+        y = float(request.json.get("y", 0.0) if request.json.get("y", 0.0) else 0.0)
+        z = float(request.json.get("z", 0.0) if request.json.get("z", 0.0) else 0.0)
 
         if focus:
             controller.stage.move_focus(z, relative)
@@ -336,8 +336,24 @@ def get_single_image():
         return jsonify({'error': str(e)}), 500
 
 
+@app.route("/get_integration_time", methods=["GET"])
+def get_integration_time():
+    try:
+        return jsonify({"integration_time": controller.camera.t_exp}), 200
+    except Exception as e:
+        logger.error(f"Error getting integration_time: {str(e)}")
+        return jsonify({'error': str(e)}), 500
 
 
+@app.route("/set_integration_time", methods=["POST"])
+def set_integration_time():
+    try:
+        new_time = request.json.get("integration_time", 0.1)
+        controller.camera.t_exp = float(new_time)
+        return jsonify({"success": new_time}), 200
+    except Exception as e:
+        logger.error(f"Error getting integration_time: {str(e)}")
+        return jsonify({'error': str(e)}), 500
 
 @app.route("/get_image_from_buffer", methods=["POST"])
 def get_image():
@@ -390,12 +406,17 @@ def get_stage_pos():
 def set_stage_pos():
     try:
         # Retrieve the pos parameters from the request
-        x = request.json.get("x", False)
-        y = request.json.get("y", False)
+        x = request.json.get("x", 0.0)
+        y = request.json.get("y", 0.0)
+        if x.contains("0-"):
+            x = x[1:]
+        if y.contains("0-"):
+            y = y[1:]
+        # controller.stage.set_position(x, y, True)
         controller.stage.move_stage(x, y)
         return jsonify({'success': "New position: " + str(controller.stage.get_position())}), 200
     except Exception as e:
-        logger.error(f"Error getting stage position: {str(e)}")
+        logger.error(f"Error setting stage position: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 
@@ -403,12 +424,16 @@ def set_stage_pos():
 def move_stage_pos():
     try:
         # Retrieve the pos parameters from the request
-        x = request.json.get("x", False)
-        y = request.json.get("y", False)
+        x = request.json.get("x", 0.0)
+        y = request.json.get("y", 0.0)
+        if x.contains("0-"):
+            x = x[1:]
+        if y.contains("0-"):
+            y = y[1:]
         controller.stage.move_stage(x, y, True)
         return jsonify({'success': "New position: " + str(controller.stage.get_position())}), 200
     except Exception as e:
-        logger.error(f"Error getting stage position: {str(e)}")
+        logger.error(f"Error moving stage position: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 @app.route('/toggle_emission', methods=['POST'])

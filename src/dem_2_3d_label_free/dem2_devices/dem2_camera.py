@@ -210,3 +210,13 @@ class Dem2Camera(Thread, xiapi.Camera):
         if self._state == Dem2State.DISCONNECTED:
             return self._t_exp
         return self.get_exposure() / 1000
+
+    @t_exp.setter
+    def t_exp(self, value: float):
+        """Set camera integration time in ms."""
+
+        if value < 0.1:
+            raise Dem2Errors.CameraError("Camera integration time must be more than 100 us!")
+        self._t_exp = value
+        if self._state != Dem2State.DISCONNECTED:
+            self.set_exposure(self._t_exp * 1000)

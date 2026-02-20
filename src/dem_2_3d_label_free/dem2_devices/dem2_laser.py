@@ -106,6 +106,7 @@ class Dem2Laser:
                 self.send_command(f"P23{wavelength_to_hex(self._wavelength_max, self._base_wavelength, 100)}")
 
         self.send_command("MW") # wake pump source
+        self.send_command("M")
 
         self._state = Dem2State.READY
         self._log.info("Initialized the laser source.")
