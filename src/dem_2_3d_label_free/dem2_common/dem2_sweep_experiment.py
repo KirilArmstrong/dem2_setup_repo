@@ -3,10 +3,78 @@
 import logging
 import os
 
+import h5py
 import numpy as np
 import yaml
 
 from src.dem_2_3d_label_free.__globals__ import __datapath__
+
+from src.dem_2_3d_label_free.dem2_common.dem2_calculator import Dem2SystemCalculator
+
+
+class Dem2Results(Dem2SystemCalculator):
+    """IO for sweep data and images (data for single a-scan)."""
+
+    def __init__(
+        self,
+        images: np.ndarray | None = None,
+        settings: dict | None = None,
+        load_from_file: str = "",
+    ):
+        """
+        Experiment data. Inherits from Dem2SystemCalculator.
+
+        :param images: image data, 3D array. Stack of 2D image arrays.
+        :param settings: settings data, config data plus additional settings.
+        :param load_from_file: Load from file.
+        """
+        self._log = logging.getLogger(self.__class__.__name__)
+
+        # self.images: list[images] = [] # Maybe the burst image returns a list of images, check the documentation.
+        self.images = images if images is not None else np.array([])
+        self.settings = settings if settings else {}
+
+        if load_from_file:
+            self.load(load_from_file)
+
+        super().__init__(self.settings)
+
+    def load(self, load_from_file: str):
+        """Load sweep packet from file."""
+        with h5py.File(load_from_file, 'r') as f:
+            # Load the images array
+            self.images = f['images'][:]
+
+            # Reconstruct the settings dictionary
+            self.settings = {}
+            if 'settings' in f:
+                # Iterate over the keys in the "settings" group
+                for key in f['settings'].keys():
+                    # Extract the scalar value using [()]
+                    val = f[f"settings/{key}"][()]
+
+                    # h5py stores strings as bytes, so we decode them back to Python strings
+                    if isinstance(val, bytes):
+                        val = val.decode('utf-8')
+
+                    self.settings[key] = val
+
+    def save(self, filename: str = ""):
+        if not filename:
+            filename = "output.h5"
+
+        if not filename.endswith('.h5'):
+            filename += '.h5'
+
+        with h5py.File(filename, 'w') as f:
+            # Save the 3D numpy array
+            f.create_dataset('images', data=self.images)
+
+            # Iterate through the dictionary and save each item dynamically
+            for key, value in self.settings.items():
+                # This automatically creates a "settings" group (folder)
+                # and places a dataset named after the key inside it.
+                f.create_dataset(f"settings/{key}", data=value)
 
 
 class Dem2SweepPacket:

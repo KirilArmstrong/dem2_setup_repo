@@ -135,6 +135,10 @@ class Dem2Controller:
         # return Dem2SweepPacket
         return packet
 
+    def save(self, save_to_directory_path: str = ""):
+        settings = self._cfg
+        # todo finish this
+
     # Properties
 
     @property
