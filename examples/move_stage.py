@@ -14,7 +14,7 @@ from src.dem_2_3d_label_free.__globals__ import __config__
 CONFIG = __config__  # default config.yml file in ~/config.
 # CONFIG = load_config_file("path to config yml file here")
 
-B_SCAN_PATTERN_FILEPATH = "line_bsp.yml"
+B_SCAN_PATTERN_FILEPATH = "../data/line_bsp.yml"
 
 
 def main():

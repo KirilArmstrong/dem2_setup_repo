@@ -344,7 +344,7 @@ class Dem2Stage:
 
         :return: tuple of the b scan pattern object and current index.
         """
-        return self._b_scan_pattern, self._bsp_current_index
+        return self._b_scan_pattern if self._b_scan_pattern else Dem2BScanPattern(), self._bsp_current_index
 
     @b_scan_pattern.setter
     def b_scan_pattern(self, b_scan_pattern: Dem2BScanPattern):
@@ -361,5 +361,16 @@ class Dem2Stage:
     def get_focus(self):
         """Get current focus position."""
         return self.focus.GetPosition(self._pos_unit)
+
+    @property
+    def settings(self) -> dict:
+        _dict = {}
+        _dict.update(self._cfg)
+        _dict["a-scans"] = self.b_scan_pattern[0].a_scans_b_scan if self.b_scan_pattern[0] else 0
+        if self._state == Dem2State.DISCONNECTED:
+            return _dict
+        _dict["mode"] = self.mode.value
+        _dict["focus_z_pos"] = self.get_focus()
+        return _dict
 
 

@@ -220,3 +220,13 @@ class Dem2Camera(Thread, xiapi.Camera):
         self._t_exp = value
         if self._state != Dem2State.DISCONNECTED:
             self.set_exposure(self._t_exp * 1000)
+
+    @property
+    def settings(self) -> dict:
+        _dict = {}
+        _dict.update(self._cfg)
+        if self._state == Dem2State.DISCONNECTED:
+            return _dict
+        _dict["mode"] = self.mode.value
+        _dict["time_exposure"] = self.t_exp
+        return _dict

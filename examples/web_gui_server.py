@@ -1,4 +1,6 @@
 from concurrent.futures.thread import ThreadPoolExecutor
+from datetime import datetime
+from pathlib import Path
 
 import yaml
 import logging
@@ -8,15 +10,18 @@ from numpy.array_api import zeros
 
 from src.dem_2_3d_label_free.dem2_common.dem2_bscan_pattern import Dem2BScanPattern
 from src.dem_2_3d_label_free.dem2_common.dem2_constants import Dem2State, Dem2LaserMode, Dem2CameraMode
+from src.dem_2_3d_label_free.dem2_common.dem2_sweep_experiment import Dem2Results
 # from werkzeug.utils import secure_filename
 from src.dem_2_3d_label_free.dem2_components.dem2_controller import Dem2Controller  # Assuming controller.py is in the same directory
-from src.dem_2_3d_label_free.__globals__ import __config__
+from src.dem_2_3d_label_free.__globals__ import __config__, __datapath__
 import numpy as np
 from io import BytesIO
 from PIL import Image
 import base64
 
 from src.dem_2_3d_label_free.dem2_devices.dem2_camera import Dem2Camera
+
+DATA_PATH = Path(__datapath__)
 
 default_config = __config__  # default config.yml file in ~/config.
 app = Flask(__name__)
@@ -311,15 +316,21 @@ def get_single_image():
     try:
         # Retrieve the 'ft' parameter from the request
         ft = request.json.get("ft", False)
+        save = request.json.get("save", False)
         gamma = float(request.json.get("gamma", 0.5))
         if gamma < 0 or gamma > 1:
             raise Exception(f"Invalid gamma value: {gamma}. Must be between 0 and 1.")
 
         # Get the image from the controller
         image_array = controller.camera.acquire_single_image()
+
+        if bool(save):
+            results = Dem2Results(image_array, controller.settings, controller._cfg, controller.stage.b_scan_pattern[0])
+            results.save(str(DATA_PATH / f"image_{datetime.now().strftime('%Y-%m-%dT%H-%M-%S')}.h5"))
+
         ft_array = np.zeros(image_array.shape)
 
-        if ft:
+        if bool(ft):
             ft_array = np.fft.fft2(image_array)
             ft_array = np.fft.fftshift(ft_array)
             ft_array = np.abs(ft_array)

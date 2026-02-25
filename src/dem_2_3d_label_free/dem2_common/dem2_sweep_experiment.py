@@ -27,7 +27,7 @@ class Dem2Results(Dem2SystemCalculator):
         """
         Experiment data. Inherits from Dem2SystemCalculator.
 
-        :param images: image data, 3D array. Stack of 2D image arrays.
+        :param images: image data, 3D array. Stack of 2D image arrays. Or single image as 2D array.
         :param settings: settings data, config data plus additional settings.
         :param load_from_file: Load from file.
         """
@@ -50,23 +50,19 @@ class Dem2Results(Dem2SystemCalculator):
     def _load_dict_from_h_file(self, f: h5py.File, dict_name: str) -> dict:
         """
         Load a dictionary from a given h5 file.
-
         :param f: opened h5 file object.
-        :param dict_name: String name of dictionary.
-        :return: dictionary
+        :param dict_name: String name/path of dictionary.
+        :return: The loaded dictionary.
         """
         dictionary = {}
-        if dict_name in f:
-            # Iterate over the keys in the "settings" group
-            for key in f[dict_name].keys():
-                # Extract the scalar value using [()]
-                val = f[f"{dict_name}/{key}"][()]
+        group = f[dict_name]
 
-                # h5py stores strings as bytes, so we decode them back to Python strings
-                if isinstance(val, bytes):
-                    val = val.decode('utf-8')
+        for key in group.keys():
+            if isinstance(group[key], h5py.Group):
+                dictionary[key] = self._load_dict_from_h_file(f, f"{dict_name}/{key}")
+                continue
+            dictionary[key] = group[key][()]
 
-                dictionary[key] = val
         return dictionary
 
     def _save_dict_to_h_file(self, f: h5py.File, dict_name: str, dictionary: dict):
@@ -81,6 +77,9 @@ class Dem2Results(Dem2SystemCalculator):
         for key, value in dictionary.items():
             # This automatically creates a "settings" group (folder)
             # and places a dataset named after the key inside it.
+            if isinstance(value, dict):
+                self._save_dict_to_h_file(f, f"{dict_name}/{key}", value)
+                continue
             f.create_dataset(f"{dict_name}/{key}", data=value)
 
     def load(self, load_from_file: str):
@@ -91,7 +90,8 @@ class Dem2Results(Dem2SystemCalculator):
 
             # Reconstruct the settings dictionary
             self._settings = self._load_dict_from_h_file(f, "settings")
-            self.b_scan_pattern.from_dict(self._load_dict_from_h_file(f, "b_scan_pattern"))
+            _bsp_dict = self._load_dict_from_h_file(f, "b_scan_pattern")
+            self.b_scan_pattern.from_dict(_bsp_dict)
 
     def save(self, filename: str = ""):
         if not filename:

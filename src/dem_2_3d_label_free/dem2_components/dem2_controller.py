@@ -196,3 +196,12 @@ class Dem2Controller:
         # for full field OCT 0.61
         constant = 0.61
         return (constant * (self.laser._wavelength_centre / 1000)) / self.na
+
+    @property
+    def settings(self) -> dict:
+        _dict = {}
+        _dict.update(self._cfg)
+        _dict["stage"] = self.stage.settings
+        _dict["camera"] = self.camera.settings
+        _dict["laser"] = self.laser.settings
+        return _dict

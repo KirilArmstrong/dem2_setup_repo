@@ -10,6 +10,7 @@ camera:
   lateral_size: 12.8 # mm.
   mode: 0 # Default camera mode.
 stage:
+  a-scans: 0
   focus_z_pos: 0.0 # Initial focus z position.
   axis_limit_min: -100000.0
   axis_limit_max: 100000.0

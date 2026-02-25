@@ -260,10 +260,6 @@
                 <!-- Controls -->
                 <div class="flex gap-3 border-t border-slate-800 pt-4">
                     <button id="btn-cam-capture" class="btn-cyber w-32">Capture</button>
-                    <button id="btn-cam-live" class="btn-cyber w-32 relative">
-                        Live
-                        <span id="live-indicator" class="absolute top-1 right-1 w-2 h-2 rounded-full bg-red-500 hidden"></span>
-                    </button>
                     <label class="flex items-center gap-2 cursor-pointer ml-4 select-none">
                         <div class="relative">
                             <input type="checkbox" id="toggle-fft" class="sr-only peer">
@@ -277,6 +273,13 @@
                         </div>
                         <span class="text-xs font-bold text-slate-400 peer-checked:text-fuchsia-400">GAMMA</span>
                     </label>
+                    <label class="flex items-center gap-2 cursor-pointer ml-4 select-none">
+                        <div class="relative">
+                            <input type="checkbox" id="toggle-save" class="sr-only peer">
+                            <div class="w-10 h-5 bg-slate-800 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[4px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-fuchsia-600 shadow-[0_0_10px_rgba(0,0,0,0.5)]"></div>
+                        </div>
+                        <span class="text-xs font-bold text-slate-400 peer-checked:text-fuchsia-400">SAVE</span>
+                    </label>
                 </div>
                 <div class="flex gap-3 border-t border-slate-800 pt-4">
                     <button id="btn-cam-set-integration-time" class="btn-cyber w-16">SET</button>
@@ -286,6 +289,13 @@
                         </div>
                         <span class="text-xs font-bold text-slate-400 peer-checked:text-fuchsia-400">INTEGRATION TIME [ms]</span>
                     </label>
+                </div>
+                <div class="flex gap-3 border-t border-slate-800 pt-4">
+                    
+                    <button id="btn-cam-live" class="btn-cyber w-32 relative">
+                        Live
+                        <span id="live-indicator" class="absolute top-1 right-1 w-2 h-2 rounded-full bg-red-500 hidden"></span>
+                    </button>
                 </div>
             </section>
 

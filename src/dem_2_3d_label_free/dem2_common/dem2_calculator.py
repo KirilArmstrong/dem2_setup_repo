@@ -22,7 +22,7 @@ class Dem2SystemCalculator:
         self.mag = self._cfg["system"]["magnification"]
         self.na = self._cfg["system"]["numerical_aperture"]
         self.cam_width = self._cfg["camera"]["lateral_size"]
-        self.a_scans = self._cfg["system"]["a-scans"]
+        self.a_scans = self._cfg["stage"]["a-scans"]
 
     @property
     def sample_no(self):

@@ -1,0 +1,21 @@
+from pathlib import Path
+
+from src.dem_2_3d_label_free.dem2_common.dem2_helper import setup_directories, setup_root_logger
+from src.dem_2_3d_label_free.__globals__ import __datapath__
+from src.dem_2_3d_label_free.dem2_common.dem2_sweep_experiment import Dem2Results
+
+DATA_PATH = Path(__datapath__)
+
+def main():
+    # Root setup.
+    setup_directories()
+    log = setup_root_logger(__file__)
+    log.info("Test script setup complete.")
+
+    settings = Dem2Results(load_from_file=str(DATA_PATH/"image_2026-02-25T16-22-55.h5"))
+
+    log.info("Done.")
+
+
+if __name__ == "__main__":
+    main()

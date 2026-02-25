@@ -15,7 +15,8 @@ const SYSTEM_STATE = {
     isLive: false,
     integration_time: 0.1,
     bspFileContent: "",
-    fftEnabled: false
+    fftEnabled: false,
+    saveEnabled: false
 };
 
 cameLiveintervalID = 0
@@ -569,6 +570,7 @@ function get_single_image(){
     const imageDisplayElement = document.getElementById('imageDisplay');
     const payload = {
         ft: SYSTEM_STATE.fftEnabled,
+        save: SYSTEM_STATE.saveEnabled,
         gamma: elements.camGammaInput.value
     };
     fetch('/get_single_image', {
@@ -738,6 +740,10 @@ document.getElementById('btn-cam-live').onclick = () => {
 };
 document.getElementById('toggle-fft').onchange = (e) => {
     SYSTEM_STATE.fftEnabled = e.target.checked;
+    updateUI();
+};
+document.getElementById('toggle-save').onchange = (e) => {
+    SYSTEM_STATE.saveEnabled = e.target.checked;
     updateUI();
 };
 

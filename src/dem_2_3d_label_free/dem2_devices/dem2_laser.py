@@ -271,3 +271,15 @@ class Dem2Laser:
                 "total_sweep_time, and in turn sweep_speed, was never set."
             )
         return self._sweep_speed
+
+    @property
+    def settings(self) -> dict:
+        _dict = {}
+        _dict.update(self._cfg)
+        if self._state == Dem2State.DISCONNECTED:
+            return _dict
+        _dict["mode"] = self.mode.value
+        _dict["wavelength"] = self.wavelength
+        _dict["wavelength_min"] = self.wavelength_min
+        _dict["wavelength_max"] = self.wavelength_max
+        return _dict

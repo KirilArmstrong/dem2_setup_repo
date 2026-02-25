@@ -86,31 +86,14 @@ class Dem2BScanPattern:
         :param sp_dict: Source dict.
         """
 
-        def read_values(value: str | list) -> list:
-            """Read from separate file or directly as list."""
-            # It's already a list of values
-            if isinstance(value, list):
-                return value
-
-            _filedir = os.path.split(self.filepath)[0]
-            _filename = os.path.join(_filedir, value)
-
-            # Open and read the values from file
-            with open(_filename, encoding="utf-8") as value_file:
-                values = [float(x) for x in value_file.readline().split(",")]
-                self._log.info(
-                    "Scan pattern 'values' loaded from file '%s'.", _filename
-                )
-                return values
-
         with suppress(KeyError):
             self.description = sp_dict["description"]
             self.a_scans_b_scan = sp_dict["no_of_a_scans"]
 
-            self.x_positions = read_values(value=sp_dict["x_positions"])
-            self.y_positions = read_values(value=sp_dict["y_positions"])
-            self.focus_positions = read_values(value=sp_dict["focus_positions"])
-            self._validate()
+            self.x_positions = sp_dict["x_positions"]
+            self.y_positions = sp_dict["y_positions"]
+            self.focus_positions = sp_dict["focus_positions"]
+            # self._validate()
 
     def from_file(self, filepath: str) -> None:
         """Load Dem2 b-scan pattern from file.
