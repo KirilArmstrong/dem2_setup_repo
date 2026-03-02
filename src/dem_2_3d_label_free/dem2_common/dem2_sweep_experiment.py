@@ -102,7 +102,7 @@ class Dem2Results(Dem2SystemCalculator):
 
         with h5py.File(filename, 'w') as f:
             # Save the 3D numpy array
-            f.create_dataset('images', data=self.images)
+            f.create_dataset('images', data=self.images.astype(np.uint8))
 
             self._save_dict_to_h_file(f, "settings", self._settings)
             self._save_dict_to_h_file(f, "b_scan_pattern", self.b_scan_pattern.as_dict())
