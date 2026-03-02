@@ -315,11 +315,18 @@ def convert_to_base64(image_array: np.ndarray) -> str:
 def get_single_image():
     try:
         # Retrieve the 'ft' parameter from the request
+        if request.json.get("captureLiveFrame", False):
+            controller.capture_next_live_frame = True
+            logging.info(f"Capture LiveFrame: {controller.capture_next_live_frame}")
+            return jsonify({'success': "Next from will be captured."}), 200
         ft = request.json.get("ft", False)
         save = request.json.get("save", False)
         gamma = float(request.json.get("gamma", 0.5))
         if gamma < 0 or gamma > 1:
             raise Exception(f"Invalid gamma value: {gamma}. Must be between 0 and 1.")
+
+        new_time = request.json.get("integration_time", 0.1)
+        controller.camera.t_exp = float(new_time)
 
         # Get the image from the controller
         image_array = controller.camera.acquire_single_image()
@@ -385,32 +392,51 @@ def get_image():
     try:
         # Retrieve the 'ft' parameter from the request
         # ft = request.json.get("ft", False)
+        _dict = {"image": "None",
+                 "ft": "None",
+                 "captured": "None"}
 
         # Get the image from the controller
         if controller.camera.state != Dem2State.RUNNING:
             logger.error("Error getting image: Not running")
             return jsonify({'error': "Error getting image: Not running"}), 500
+
         image_array = controller.camera.get_image(controller.camera.image)
+
         if image_array is None:
-            return jsonify({"image": "None"}), 200
+            return jsonify(_dict), 200
 
-        # Perform FFT if 'ft' is True
-        # if ft:
-        #     image_array = np.fft.fft2(image_array)
-        #     image_array = np.fft.fftshift(image_array)
-        #     image_array = np.abs(image_array)
+        if controller.capture_next_live_frame:
 
-        # Normalize the image array to 0-255
-        # image_array = (
-        #     255
-        #     * (image_array - np.min(image_array))
-        #     / (np.max(image_array) - np.min(image_array))
-        # )
+            _dict["captured"] = convert_to_base64(image_array)
+            ft = request.json.get("ft", False)
+            save = request.json.get("save", False)
+            gamma = float(request.json.get("gamma", 0.5))
+            if gamma < 0 or gamma > 1:
+                raise Exception(f"Invalid gamma value: {gamma}. Must be between 0 and 1.")
+
+            if bool(save):
+                results = Dem2Results(image_array, controller.settings, controller._cfg, controller.stage.b_scan_pattern[0])
+                results.save(str(DATA_PATH / f"image_{datetime.now().strftime('%Y-%m-%dT%H-%M-%S')}.h5"))
+
+            if bool(ft):
+                ft_array = np.zeros(image_array.shape)
+                ft_array = np.fft.fft2(image_array)
+                ft_array = np.fft.fftshift(ft_array)
+                ft_array = np.abs(ft_array)
+                # Gamma Correction
+                ft_array = ft_array ** gamma
+
+                # Encode the image to base64
+                _dict["ft"] = convert_to_base64(ft_array)
+
+            controller.capture_next_live_frame = False
+
 
         # Encode the image to base64
-        image_base64 = convert_to_base64(image_array)
+        _dict["image"] = convert_to_base64(image_array)
 
-        return jsonify({"image": image_base64}), 200
+        return jsonify(_dict), 200
     except Exception as e:
         logger.error(f"Error getting image: {str(e)}")
         return jsonify({'error': str(e)}), 500

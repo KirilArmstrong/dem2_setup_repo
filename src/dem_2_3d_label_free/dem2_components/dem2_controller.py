@@ -61,6 +61,8 @@ class Dem2Controller:
         self.bscan_pattern: Dem2BScanPattern | None = None
         self._buffer = xiapi.Image()
 
+        self.capture_next_live_frame = False
+
     def connect(self):
         """Connect all devices."""
         self._log.info("Connecting to all decides...")

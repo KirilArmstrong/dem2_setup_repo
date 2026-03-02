@@ -53,7 +53,9 @@ const elements = {
     camBtnInit: document.getElementById('btn-cam-init'),
     camBtnDisc: document.getElementById('btn-cam-disc'),
     camImg: document.getElementById('imageDisplay'),
+    camImgCap: document.getElementById('imageCapturedDisplay'),
     camPlaceholder: document.getElementById('cam-feed-placeholder'),
+    camPlaceholderCap: document.getElementById('cam-feed-placeholder-captured'),
     camFftCanvas: document.getElementById('cam-fft-canvas'),
     camFftPlaceholder: document.getElementById('cam-fft-placeholder'),
     camStatusText: document.getElementById('cam-status-text'),
@@ -402,12 +404,16 @@ function set_integration_time(){
 function enableCamView(enable){
     if (enable){
         elements.camImg.classList.remove('hidden');
+        elements.camImgCap.classList.remove('hidden');
         elements.camPlaceholder.classList.add('hidden');
+        elements.camPlaceholderCap.classList.add('hidden');
         elements.camFftCanvas.classList.remove('hidden');
         elements.camFftPlaceholder.classList.add('hidden');
     }else{
         elements.camImg.classList.add('hidden');
+        elements.camImgCap.classList.add('hidden');
         elements.camPlaceholder.classList.remove('hidden');
+        elements.camPlaceholderCap.classList.remove('hidden');
         elements.camFftCanvas.classList.add('hidden');
         elements.camFftPlaceholder.classList.remove('hidden');
     }
@@ -571,7 +577,9 @@ function get_single_image(){
     const payload = {
         ft: SYSTEM_STATE.fftEnabled,
         save: SYSTEM_STATE.saveEnabled,
-        gamma: elements.camGammaInput.value
+        gamma: elements.camGammaInput.value,
+        integration_time: elements.camIntegrationInput.value,
+        captureLiveFrame: SYSTEM_STATE.isLive
     };
     fetch('/get_single_image', {
         method: 'POST',
@@ -586,6 +594,7 @@ function get_single_image(){
             imageDisplayElement.src = `data:image/png;base64,${data.image}`;
             elements.camFftCanvas.src = `data:image/png;base64,${data.ft}`;
             enableCamView(true)
+            get_integration_time()
         }
 //        else {
 //            showNotification(data.error);
@@ -623,11 +632,29 @@ function get_single_image(){
 
 function get_image_from_buffer(){
     const imageDisplayElement = document.getElementById('imageDisplay');
-    fetch('/get_image_from_buffer', { method: 'POST' })
+    const imageCapturedDisplayElement = document.getElementById('imageCapturedDisplay');
+    const payload = {
+        ft: SYSTEM_STATE.fftEnabled,
+        save: SYSTEM_STATE.saveEnabled,
+        gamma: elements.camGammaInput.value,
+    };
+    fetch('/get_image_from_buffer', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(payload) // Convert the payload to a JSON string
+    })
     .then(response => response.json())
     .then(data => {
         if (data.image != "None") {
             imageDisplayElement.src = `data:image/png;base64,${data.image}`;
+        }
+        if (data.captured != "None") {
+            imageCapturedDisplayElement.src = `data:image/png;base64,${data.captured}`;
+        }
+        if (data.ft != "None") {
+            elements.camFftCanvas.src = `data:image/png;base64,${data.ft}`;
         }
 //        else {
 //            showNotification(data.error);

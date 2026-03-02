@@ -242,11 +242,17 @@
 
                 <!-- Viewport -->
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                    <div class="min-h-16 bg-black border border-slate-700 relative flex items-center justify-center overflow-hidden group">
+                    <div class="min-h-16 bg-black md:col-span-2 border border-slate-700 relative flex items-center justify-center overflow-hidden group">
                         <div id="cam-feed-placeholder" class="text-slate-600 text-xs tracking-widest group-hover:text-red-500 transition-colors">NO SIGNAL</div>
                         <!-- Simulated Image -->
                         <img id="imageDisplay" src="" class="hidden w-full object-cover mix-blend-screen" alt="Camera Feed">
                         <div class="absolute top-2 left-2 text-[10px] text-cyan-500 bg-black/50 px-1">SOURCE: XIB64</div>
+                    </div>
+                    <div class="min-h-16 bg-black border border-slate-700 relative flex items-center justify-center overflow-hidden group">
+                        <div id="cam-feed-placeholder-captured" class="text-slate-600 text-xs tracking-widest group-hover:text-red-500 transition-colors">NO SIGNAL</div>
+                        <!-- Simulated Image -->
+                        <img id="imageCapturedDisplay" src="" class="hidden w-full object-cover mix-blend-screen" alt="Captured Image">
+                        <div class="absolute top-2 left-2 text-[10px] text-cyan-500 bg-black/50 px-1">CAPTURE: FRAME</div>
                     </div>
 
                     <div class="min-h-16 bg-black border border-slate-700 relative flex items-center justify-center overflow-hidden group">

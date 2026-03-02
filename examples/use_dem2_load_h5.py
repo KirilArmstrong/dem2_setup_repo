@@ -8,13 +8,15 @@ from src.dem_2_3d_label_free.dem2_common.dem2_sweep_experiment import Dem2Result
 
 DATA_PATH = Path(__datapath__)
 
+IMG= "image_2026-03-02T15-47-10.h5"
+
 def main():
     # Root setup.
     setup_directories()
     log = setup_root_logger(__file__)
     log.info("Test script setup complete.")
 
-    settings = Dem2Results(load_from_file=str(DATA_PATH/"image_2026-02-25T16-22-55.h5"))
+    settings = Dem2Results(load_from_file=str(DATA_PATH/IMG))
 
     log.info(f"Settings: {settings.settings}")
     log.info(f"B Scan Pat: {settings.b_scan_pattern.as_dict()}")
