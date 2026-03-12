@@ -11,8 +11,11 @@ from src.dem_2_3d_label_free.dem2_common.dem2_sweep_experiment import Dem2Result
 
 DATA_PATH = Path(__datapath__)
 
-IMG= "sample_tissue.h5"
+IMG= "usaf_data.h5"
+
 GAMMA = 0.1
+
+SHOW_FT = True
 
 def main():
     # Root setup.
@@ -26,11 +29,17 @@ def main():
     log.info(f"B Scan Pat: {settings.b_scan_pattern.as_dict()}")
     log.info(f"Images shape: {settings.images.shape}")
 
-    img = settings.images if len(settings.images.shape) == 2 else settings.images[0,:,:]
-    ft_img = fftshift(fft2(img))
+    if not SHOW_FT:
+        plt.imshow(settings.images if len(settings.images.shape) == 2 else settings.images[0,:,:])
+        plt.show()
+        log.info("Done.")
+        return
 
-    plt.imshow(np.abs(ft_img)**GAMMA)
-    # plt.imshow(img)
+    ft_img = np.fft.fftshift(np.fft.fft2(
+        settings.images if len(settings.images.shape) == 2 else settings.images[0, :, :]
+    )) #ft and shift to center f image.
+
+    plt.imshow((np.abs(ft_img) ** GAMMA).astype(np.uint8))
     plt.show()
 
     log.info("Done.")
