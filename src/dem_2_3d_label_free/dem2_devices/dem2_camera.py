@@ -84,13 +84,13 @@ class Dem2Camera(Thread, xiapi.Camera):
         #     raise Dem2Errors.CameraError("Number of images must be set to initialize!")
 
         self.set_exposure(self._t_exp * 1000)  # convert ms to us
+        self.set_imgdataformat("XI_MONO8")
 
         match self._mode:
             case Dem2CameraMode.MONO: # Default Load in Mono mode
                 self._log.info("mode: " + str(self._mode))
-                self.set_imgdataformat("XI_MONO8")
             case Dem2CameraMode.FRAME_BURST_EXT_TRIGGER: # Experiment mode
-                self._log.info("mode1: " + str(self._mode))
+                self._log.info("mode: " + str(self._mode))
                 if self.samples_a_scan is None or self.samples_a_scan < 2:
                     raise Dem2Errors.CameraError("Camera must have a specified number of frames for frame burst mode. It must be >1 and not None.")
 
@@ -101,10 +101,9 @@ class Dem2Camera(Thread, xiapi.Camera):
                 self.set_acq_frame_burst_count(self.samples_a_scan)
                 self.set_acq_buffer_size(self.samples_a_scan+1)
                 self.set_buffers_queue_size(self.samples_a_scan+1)
+                self.set_gpi_selector('XI_GPI_PORT2') # Adjust to your actual port
+                self.set_gpi_mode('XI_GPI_TRIGGER')
                 # self.set_imgdataformat("XI_FRM_TRANSPORT_DATA")  # for image burst buffer
-                # self.set_gpi_mode(
-                #     "XI_GPI_TRIGGER"
-                # )  # https://www.ximea.com/support/wiki/apis/XiAPI_Python_Manual#GPIMode
 
                 # self.set_concat_img_count(self.samples_a_scan)
                 # self.enable_concat_img_mode()  # multiple images in one buffer.
