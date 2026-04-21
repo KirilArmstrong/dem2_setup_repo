@@ -13,6 +13,7 @@ const SYSTEM_STATE = {
     },
     vars: [0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00],
     isLive: false,
+    isCaptBurst: false,
     integration_time: 0.1,
     bspFileContent: "",
     fftEnabled: false,
@@ -63,6 +64,7 @@ const elements = {
     camIntegrationInput: document.getElementById("cam-integration-time"),
     camIntegrationSetBtn: document.getElementById("btn-cam-set-integration-time"),
     liveIndicator: document.getElementById('live-indicator'),
+    burstIndicator: document.getElementById('captburst-indicator'),
 
     // Laser
     laserBtnConnect: document.getElementById('btn-laser-connect'),
@@ -442,6 +444,12 @@ function updateUI() {
     } else {
         elements.liveIndicator.classList.add('hidden');
     }
+    // Capture Burst Indicator
+    if(SYSTEM_STATE.isCaptBurst) {
+        elements.burstIndicator.classList.remove('hidden');
+    } else {
+        elements.burstIndicator.classList.add('hidden');
+    }
 
     // 2. Laser Logic
     const laser = SYSTEM_STATE.devices.laser;
@@ -527,6 +535,7 @@ function disconnect(device) {
     };
     stateLoadVisual()
     SYSTEM_STATE.isLive = false;
+    SYSTEM_STATE.isCaptBurst = false;
     fetch('/disconnect', {
         method: 'POST',
         headers: {
@@ -699,6 +708,27 @@ function toggle_live(){
     updateAll()
 }
 
+
+
+function capt_fram_burst(){
+    SYSTEM_STATE.isCaptBurst = false;
+    enableCamView(false)
+    updateAll()
+    fetch('/start_trigger_capturing', {method: 'POST'})
+        .then(response => response.json())
+        .then(data => {
+            if (data.error){
+                console.log.error("Error in toggling camera frame burst: " + data.error)
+                return;
+            }
+            if (data.success.includes("RUNNING")){
+                SYSTEM_STATE.isCaptBurst = true;
+                updateAll()
+            }
+        });
+    updateAll()
+}
+
 function send_bsp(){
     if (!SYSTEM_STATE.bspFileContent) return;
 
@@ -764,6 +794,9 @@ document.getElementById('btn-cam-set-integration-time').onclick = () => {
 };
 document.getElementById('btn-cam-live').onclick = () => {
     toggle_live()
+};
+document.getElementById('btn-cam-captburst').onclick = () => {
+    capt_fram_burst()
 };
 document.getElementById('toggle-fft').onchange = (e) => {
     SYSTEM_STATE.fftEnabled = e.target.checked;

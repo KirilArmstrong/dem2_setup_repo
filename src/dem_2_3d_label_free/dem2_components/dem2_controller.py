@@ -5,6 +5,7 @@ import math
 import os
 import time
 from datetime import datetime, timedelta
+from pathlib import Path
 
 import numpy as np
 
@@ -16,6 +17,7 @@ from src.dem_2_3d_label_free.dem2_common.dem2_sweep_experiment import (
     Dem2SweepPacket,
     Dem2SweepExperiment,
 )
+from src.dem_2_3d_label_free.dem2_components.dem2_capturer import Dem2Capturer
 from src.dem_2_3d_label_free.dem2_devices.dem2_camera import Dem2Camera
 from src.dem_2_3d_label_free.dem2_devices.dem2_laser import Dem2Laser
 from src.dem_2_3d_label_free.dem2_devices.dem2_stage import Dem2Stage
@@ -45,6 +47,8 @@ class Dem2Controller:
             self._cfg["stage"]
         )
         self.camera = Dem2Camera(self._cfg["camera"])
+        self.cam_packet = Dem2SweepPacket(str(Path(__datapath__) / "packet.h5"))
+        self.cam_capturer = Dem2Capturer(self._log, self.camera, self.cam_packet)
         self.laser = Dem2Laser(self._cfg["laser"])
 
         self.camera.samples_a_scan = math.floor(

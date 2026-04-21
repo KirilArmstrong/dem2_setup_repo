@@ -1,19 +1,28 @@
 from logging import Logger
 from threading import Thread
 import xiapi
+from src.dem_2_3d_label_free.dem2_common.dem2_constants import Dem2CameraMode
+from src.dem_2_3d_label_free.dem2_common.dem2_errors import Dem2Errors
 from src.dem_2_3d_label_free.dem2_common.dem2_sweep_experiment import Dem2SweepPacket
+from src.dem_2_3d_label_free.dem2_devices.dem2_camera import Dem2Camera
 
 
 class Dem2Capturer(Thread):
     """Camera frame capturing thread. Streams directly to a Packet."""
 
-    def __init__(self, log: Logger, cam: xiapi.Camera, packet: Dem2SweepPacket):
+    def __init__(self, log: Logger, cam: Dem2Camera, packet: Dem2SweepPacket):
         Thread.__init__(self)
         self._cam = cam
         self._packet = packet
         self._log = log
+        self._break = False
+
+    def end(self):
+        self._break = True
 
     def run(self):
+        if self._cam.mode != Dem2CameraMode.FRAME_BURST_EXT_TRIGGER:
+            raise Dem2Errors.CameraError("Camera must be in frame burst mode to run capturer")
         img = xiapi.Image()
 
         self._log.info("Capturer Thread: Starting acquisition...")
@@ -27,6 +36,7 @@ class Dem2Capturer(Thread):
 
         try:
             while True:
+                if self._break: break
                 try:
                     # Timeout of 500ms acts as our event listener for LOW
                     self._cam.get_image(img, timeout=500)

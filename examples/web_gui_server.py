@@ -10,7 +10,8 @@ from numpy.array_api import zeros
 
 from src.dem_2_3d_label_free.dem2_common.dem2_bscan_pattern import Dem2BScanPattern
 from src.dem_2_3d_label_free.dem2_common.dem2_constants import Dem2State, Dem2LaserMode, Dem2CameraMode
-from src.dem_2_3d_label_free.dem2_common.dem2_sweep_experiment import Dem2Results
+from src.dem_2_3d_label_free.dem2_common.dem2_sweep_experiment import Dem2Results, Dem2SweepPacket
+from src.dem_2_3d_label_free.dem2_components.dem2_capturer import Dem2Capturer
 # from werkzeug.utils import secure_filename
 from src.dem_2_3d_label_free.dem2_components.dem2_controller import Dem2Controller  # Assuming controller.py is in the same directory
 from src.dem_2_3d_label_free.__globals__ import __config__, __datapath__
@@ -386,6 +387,25 @@ def change_stage_b_scan_pattern():
     except Exception as e:
         logger.error(f"Error setting stage b scan pattern: {str(e)}")
         return jsonify({'error': str(e)}), 500
+
+
+@app.route("/start_trigger_capturing", methods=["POST"])
+def start_trigger_capturing():
+        if controller.camera.state != Dem2State.READY:
+            logger.error("Error getting image: Not initialized")
+            return jsonify({'error': "Error getting image: Not initialized"}), 500
+        if controller.camera.mode != Dem2CameraMode.FRAME_BURST_EXT_TRIGGER:
+            logger.error("Error getting image: Not in frame burst mode")
+            return jsonify({'error': "Error getting image: Not in frame burst mode"}), 500
+        if controller.cam_capturer.is_alive():
+            controller.cam_capturer.end()
+            controller.cam_capturer.join()
+        controller.cam_capturer = Dem2Capturer(logger, controller.camera ,Dem2SweepPacket(str(Path(__datapath__) / "image.h5")))
+        controller.cam_capturer.start()
+
+        logger.info("Started waiting for HIGH.")
+        return jsonify("Started waiting for HIGH."), 200
+
 
 @app.route("/get_image_from_buffer", methods=["POST"])
 def get_image():
