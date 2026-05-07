@@ -4,6 +4,7 @@ from pathlib import Path
 
 import numpy as np
 from PIL import Image
+import threading
 from io import BytesIO
 
 from PySide6.QtCore import Qt, QTimer
@@ -91,6 +92,7 @@ class MainWindow(QMainWindow):
         super().__init__()
 
         self.state = SystemState()
+        self._stage_thread = None
         self.setWindowTitle("DEMONSTRATOR_2 // V.0.1")
         self.resize(1400, 900)
 
@@ -483,10 +485,24 @@ class MainWindow(QMainWindow):
             y = float(self.spin_stage_y.value())
             z = float(self.spin_stage_z.value())
 
-        if focus:
-            controller.stage.move_focus(z, relative)
-        else:
-            controller.stage.move_stage(x, y, relative)
+        # If a previous move is still running, optionally ignore or stop it
+        if self._stage_thread is not None and self._stage_thread.is_alive():
+            # Either ignore, or call controller.stage.stop_moving() first
+            # controller.stage.stop_moving()
+            return
+
+        def _run_move():
+            try:
+                if focus:
+                    controller.stage.move_focus(z, relative)
+                else:
+                    controller.stage.move_stage(x, y, relative)
+            finally:
+                # Mark thread as finished
+                self._stage_thread = None
+
+        self._stage_thread = threading.Thread(target=_run_move, daemon=True)
+        self._stage_thread.start()
 
     def toggle_emission(self):
         controller.laser.toggle_emission()
