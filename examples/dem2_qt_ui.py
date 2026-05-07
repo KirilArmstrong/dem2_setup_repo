@@ -93,7 +93,7 @@ class MainWindow(QMainWindow):
 
         self.state = SystemState()
         self._stage_thread = None
-        self.setWindowTitle("DEMONSTRATOR_2 // V.0.1")
+        self.setWindowTitle("DEMONSTRATOR_2 // V.0.2")
         self.resize(1400, 900)
 
         # Main font similar to monospace terminal look
@@ -106,7 +106,7 @@ class MainWindow(QMainWindow):
 
         # Header
         header_layout = QHBoxLayout()
-        title_label = QLabel("DEMONSTRATOR_2 // V.0.1")
+        title_label = QLabel("DEMONSTRATOR_2 // V.0.2")
         title_label.setStyleSheet("color: cyan; font-size: 20pt; font-weight: bold;")
         subtitle_label = QLabel("ELECTRIC BOOGALOO")
         subtitle_label.setStyleSheet("color: #0ea5e9; font-size: 8pt;")
