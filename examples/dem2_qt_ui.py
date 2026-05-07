@@ -146,11 +146,14 @@ class MainWindow(QMainWindow):
         ctrl_layout.addWidget(self.status_table)
 
         # Upper grid: Camera (full width)
+        # Upper grid: Camera (full width)
         cam_group = QGroupBox("XIMEA XIB64 CAMERA")
         cam_group.setStyleSheet("QGroupBox { color: #22c55e; }")
         cam_layout = QVBoxLayout(cam_group)
 
-        # Top status/mode line remains the same
+        # --- ROW 1: ALL CAMERA CONTROLS ---
+
+        # Status + mode + connect/init/disc
         cam_top_layout = QHBoxLayout()
         self.cam_status_label = QLabel("STATUS: DISCONNECTED")
         self.cam_mode_combo = QComboBox()
@@ -166,35 +169,7 @@ class MainWindow(QMainWindow):
         cam_top_layout.addWidget(self.btn_cam_disc)
         cam_layout.addLayout(cam_top_layout)
 
-        # --- NEW: main camera area in 2 columns ---
-        cam_main_layout = QHBoxLayout()
-        cam_layout.addLayout(cam_main_layout)
-
-        # LEFT COLUMN: 3 image frames stacked
-        cam_view_column = QVBoxLayout()
-
-        self.label_cam_live = QLabel("NO SIGNAL")
-        self.label_cam_captured = QLabel("NO SIGNAL")
-        self.label_cam_fft = QLabel("NO DATA")
-
-        for lbl in (self.label_cam_live, self.label_cam_captured, self.label_cam_fft):
-            lbl.setAlignment(Qt.AlignCenter)
-            lbl.setStyleSheet("background-color: black; color: #64748b;")
-            # Fixed width, height flexible
-            lbl.setFixedWidth(640)  # choose any width you like
-            lbl.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Expanding)
-            # Optional: default 16:9 minimum height
-            lbl.setMinimumHeight(int(640 * 9 / 16))
-
-        cam_view_column.addWidget(self.label_cam_live)
-        cam_view_column.addWidget(self.label_cam_captured)
-        cam_view_column.addWidget(self.label_cam_fft)
-
-        cam_main_layout.addLayout(cam_view_column)
-
-        # RIGHT COLUMN: all camera controls stacked
-        cam_ctrl_column = QVBoxLayout()
-
+        # Capture / gamma / FFT / Save
         cam_ctrl1 = QHBoxLayout()
         self.btn_cam_capture = QPushButton("Capture")
         self.chk_fft = QCheckBox("FFT 2D")
@@ -210,7 +185,9 @@ class MainWindow(QMainWindow):
         cam_ctrl1.addSpacing(20)
         cam_ctrl1.addWidget(self.chk_fft)
         cam_ctrl1.addWidget(self.chk_save)
+        cam_layout.addLayout(cam_ctrl1)
 
+        # Integration time
         cam_ctrl2 = QHBoxLayout()
         self.btn_cam_set_int = QPushButton("Set Texp")
         self.int_time_spin = QDoubleSpinBox()
@@ -220,20 +197,38 @@ class MainWindow(QMainWindow):
         cam_ctrl2.addWidget(self.btn_cam_set_int)
         cam_ctrl2.addWidget(QLabel("Integration time [ms]"))
         cam_ctrl2.addWidget(self.int_time_spin)
+        cam_layout.addLayout(cam_ctrl2)
 
+        # Live / Burst
         cam_ctrl3 = QHBoxLayout()
         self.btn_cam_live = QPushButton("Live")
         self.btn_cam_burst = QPushButton("Capt. Burst")
         cam_ctrl3.addWidget(self.btn_cam_live)
         cam_ctrl3.addWidget(self.btn_cam_burst)
+        cam_layout.addLayout(cam_ctrl3)
 
-        # Add control rows to the right column
-        cam_ctrl_column.addLayout(cam_ctrl1)
-        cam_ctrl_column.addLayout(cam_ctrl2)
-        cam_ctrl_column.addLayout(cam_ctrl3)
-        cam_ctrl_column.addStretch()
+        # --- ROW 2: THREE IMAGE VIEWS (3 COLUMNS) ---
 
-        cam_main_layout.addLayout(cam_ctrl_column)
+        images_row_layout = QHBoxLayout()
+
+        # Main live view
+        self.label_cam_live = QLabel("NO SIGNAL")
+        # FFT view
+        self.label_cam_fft = QLabel("NO DATA")
+        # Captured view
+        self.label_cam_captured = QLabel("NO SIGNAL")
+
+        for lbl in (self.label_cam_live, self.label_cam_fft, self.label_cam_captured):
+            lbl.setAlignment(Qt.AlignCenter)
+            lbl.setStyleSheet("background-color: black; color: #64748b;")
+            lbl.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+            lbl.setMinimumSize(200, 150)
+
+        images_row_layout.addWidget(self.label_cam_live)      # main view
+        images_row_layout.addWidget(self.label_cam_fft)       # FT view
+        images_row_layout.addWidget(self.label_cam_captured)  # captured view
+
+        cam_layout.addLayout(images_row_layout)
 
         # Laser
         laser_group = QGroupBox("SWEPT SOURCE")
