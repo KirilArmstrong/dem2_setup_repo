@@ -1,12 +1,10 @@
 import sys
 from datetime import datetime
 from pathlib import Path
-
 import numpy as np
 from PIL import Image
 import threading
 from io import BytesIO
-
 from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QImage, QPixmap, QFont
 from PySide6.QtWidgets import (
@@ -15,7 +13,6 @@ from PySide6.QtWidgets import (
     QSpinBox, QDoubleSpinBox, QComboBox, QMessageBox, QCheckBox, QLineEdit,
     QSizePolicy,
 )
-
 from src.dem_2_3d_label_free.dem2_common.dem2_bscan_pattern import Dem2BScanPattern
 from src.dem_2_3d_label_free.dem2_common.dem2_constants import Dem2State, Dem2LaserMode, Dem2CameraMode
 from src.dem_2_3d_label_free.dem2_common.dem2_helper import setup_root_logger
@@ -23,7 +20,6 @@ from src.dem_2_3d_label_free.dem2_common.dem2_sweep_experiment import Dem2Result
 from src.dem_2_3d_label_free.dem2_components.dem2_capturer import Dem2Capturer
 from src.dem_2_3d_label_free.dem2_components.dem2_controller import Dem2Controller
 from src.dem_2_3d_label_free.__globals__ import __config__, __datapath__
-
 
 DATA_PATH = Path(__datapath__)
 default_config = __config__
@@ -37,7 +33,6 @@ def numpy_to_qpixmap(array: np.ndarray) -> QPixmap:
     # Handle float arrays in [0,1] range
     if array.dtype in (np.float32, np.float64):
         array = (np.clip(array, 0, 1) * 255).astype(np.uint8)
-
     if array.ndim == 2:
         h, w = array.shape
         img = QImage(array.data, w, h, w, QImage.Format_Grayscale8)
@@ -50,6 +45,7 @@ def numpy_to_qpixmap(array: np.ndarray) -> QPixmap:
         raise ValueError(f"Unsupported array shape: {array.shape}")
     return QPixmap.fromImage(img.copy())
 
+
 def normalize_to_255(array: np.ndarray):
     # normalize to 0–255
     array = array - array.min()
@@ -57,28 +53,30 @@ def normalize_to_255(array: np.ndarray):
         array = array / array.max()
     return (array * 255).astype(np.uint8)
 
+
 def compute_fft(image_array: np.ndarray) -> np.ndarray:
     ft_array = np.fft.fft2(image_array)
     ft_array = np.fft.fftshift(ft_array)
     return ft_array
+
 
 def covert_fft_to_img(ft_array: np.ndarray, gamma: float) -> np.ndarray:
     ft_array = np.abs(ft_array)
     ft_array = ft_array ** gamma
     return normalize_to_255(ft_array)
 
+
 def phase_to_hsv(array: np.ndarray) -> np.ndarray:
     """Convert -pi to pi to 0 - 1."""
     from matplotlib.colors import hsv_to_rgb
-
     hue = (np.angle(array) + np.pi) / (2 * np.pi)
     hsv = np.zeros((*array.shape, 3), dtype=np.float32)
     hsv[:, :, 0] = hue
     hsv[:, :, 1] = 1.0
     hsv[:, :, 2] = 1.0
-
     rgb = hsv_to_rgb(hsv)
     return (rgb * 255).astype(np.uint8)
+
 
 def crop_centre_ifft(ft_array: np.ndarray, top_left, bottom_right) -> np.ndarray:
     # make coords even
@@ -93,10 +91,13 @@ def crop_centre_ifft(ft_array: np.ndarray, top_left, bottom_right) -> np.ndarray
         # empty 0 array same size as ft_Array
         ft_centred = np.zeros_like(ft_array)
         # fill roi into center of empty array
-        ft_centred[int(ft_array.shape[0]/2)-int(h/2):int(ft_array.shape[0]/2)+int(h/2), int(ft_array.shape[1]/2)-int(w/2):int(ft_array.shape[1]/2)+int(w/2)] = ft_array[top_left[0]:bottom_right[0], top_left[1]:bottom_right[1]]
+        ft_centred[int(ft_array.shape[0]/2)-int(h/2):int(ft_array.shape[0]/2)+int(h/2),
+                   int(ft_array.shape[1]/2)-int(w/2):int(ft_array.shape[1]/2)+int(w/2)] = \
+            ft_array[top_left[0]:bottom_right[0], top_left[1]:bottom_right[1]]
     ft_unshifted = np.fft.ifftshift(ft_centred)
     img_iffted = np.fft.ifft2(ft_unshifted)
     return img_iffted
+
 
 class SystemState:
     def __init__(self):
@@ -132,21 +133,27 @@ MODES = {
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
-
         self.state = SystemState()
         self._stage_thread = None
         self._last_fft_array = None
-        self.roi_tl_x = 0
-        self.roi_tl_y = 0
-        self.roi_br_x = 0
-        self.roi_br_y = 0
+
+        # Camera ROI (pre-FFT crop)
+        self.cam_roi_tl_x = 0
+        self.cam_roi_tl_y = 0
+        self.cam_roi_br_x = 0
+        self.cam_roi_br_y = 0
+
+        # FFT ROI (for phase calculation)
+        self.fft_roi_tl_x = 0
+        self.fft_roi_tl_y = 0
+        self.fft_roi_br_x = 0
+        self.fft_roi_br_y = 0
+
         self.setWindowTitle("DEMONSTRATOR_2 // V.0.2")
         self.resize(1400, 900)
-
         # Main font similar to monospace terminal look
         mono_font = QFont("Courier New")
         self.setFont(mono_font)
-
         central = QWidget()
         self.setCentralWidget(central)
         main_layout = QVBoxLayout(central)
@@ -157,24 +164,21 @@ class MainWindow(QMainWindow):
         title_label.setStyleSheet("color: cyan; font-size: 20pt; font-weight: bold;")
         subtitle_label = QLabel("Control Panel v0.2")
         subtitle_label.setStyleSheet("color: #0ea5e9; font-size: 8pt;")
-
         left_header = QVBoxLayout()
         left_header.addWidget(title_label)
         left_header.addWidget(subtitle_label)
-
         self.clock_label = QLabel("")
         self.clock_label.setStyleSheet("color: cyan; font-weight: bold;")
         header_layout.addLayout(left_header)
         header_layout.addStretch()
         header_layout.addWidget(self.clock_label)
-
         main_layout.addLayout(header_layout)
 
         # Top: controller master and status table
         ctrl_group = QGroupBox("MASTER CONTROLLER")
+        ctrl_group.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Maximum)
         ctrl_group.setStyleSheet("QGroupBox { color: #22d3ee; }")
         ctrl_layout = QVBoxLayout(ctrl_group)
-
         btn_layout = QHBoxLayout()
         self.btn_ctrl_connect = QPushButton("Connect")
         self.btn_ctrl_init = QPushButton("Initialize")
@@ -182,9 +186,7 @@ class MainWindow(QMainWindow):
         btn_layout.addWidget(self.btn_ctrl_connect)
         btn_layout.addWidget(self.btn_ctrl_init)
         btn_layout.addWidget(self.btn_ctrl_disc)
-
         ctrl_layout.addLayout(btn_layout)
-
         # Status table
         self.status_table = QTableWidget(4, 5)
         self.status_table.setHorizontalHeaderLabels(
@@ -192,16 +194,16 @@ class MainWindow(QMainWindow):
         )
         self.status_table.verticalHeader().setVisible(False)
         self.status_table.setEditTriggers(QTableWidget.NoEditTriggers)
+        self.status_table.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Maximum)
         ctrl_layout.addWidget(self.status_table)
+        ctrl_layout.addStretch()
 
-        # Upper grid: Camera (full width)
         # Upper grid: Camera (full width)
         cam_group = QGroupBox("XIMEA XIB64 CAMERA")
         cam_group.setStyleSheet("QGroupBox { color: #22c55e; }")
         cam_layout = QVBoxLayout(cam_group)
 
         # --- ROW 1: ALL CAMERA CONTROLS ---
-
         # Status + mode + connect/init/disc
         cam_top_layout = QHBoxLayout()
         self.cam_status_label = QLabel("STATUS: DISCONNECTED")
@@ -256,57 +258,73 @@ class MainWindow(QMainWindow):
         cam_ctrl3.addWidget(self.btn_cam_burst)
         cam_layout.addLayout(cam_ctrl3)
 
-        # ROI controls for FFT overlay
+        # Camera ROI controls (pre-FFT crop)
         cam_roi_layout = QHBoxLayout()
-        self.spin_roi_tl_x = QSpinBox()
-        self.spin_roi_tl_y = QSpinBox()
-        self.spin_roi_br_x = QSpinBox()
-        self.spin_roi_br_y = QSpinBox()
-        for s in (self.spin_roi_tl_x, self.spin_roi_tl_y, self.spin_roi_br_x, self.spin_roi_br_y):
+        self.spin_cam_roi_tl_x = QSpinBox()
+        self.spin_cam_roi_tl_y = QSpinBox()
+        self.spin_cam_roi_br_x = QSpinBox()
+        self.spin_cam_roi_br_y = QSpinBox()
+        for s in (self.spin_cam_roi_tl_x, self.spin_cam_roi_tl_y,
+                  self.spin_cam_roi_br_x, self.spin_cam_roi_br_y):
             s.setRange(0, 10000)
-        self.btn_roi_apply = QPushButton("Apply")
-        cam_roi_layout.addWidget(QLabel("TL X"))
-        cam_roi_layout.addWidget(self.spin_roi_tl_x)
-        cam_roi_layout.addWidget(QLabel("TL Y"))
-        cam_roi_layout.addWidget(self.spin_roi_tl_y)
-        cam_roi_layout.addWidget(QLabel("BR X"))
-        cam_roi_layout.addWidget(self.spin_roi_br_x)
-        cam_roi_layout.addWidget(QLabel("BR Y"))
-        cam_roi_layout.addWidget(self.spin_roi_br_y)
-        cam_roi_layout.addWidget(self.btn_roi_apply)
+        self.btn_cam_roi_apply = QPushButton("Apply")
+        cam_roi_layout.addWidget(QLabel("CAM TL X"))
+        cam_roi_layout.addWidget(self.spin_cam_roi_tl_x)
+        cam_roi_layout.addWidget(QLabel("CAM TL Y"))
+        cam_roi_layout.addWidget(self.spin_cam_roi_tl_y)
+        cam_roi_layout.addWidget(QLabel("CAM BR X"))
+        cam_roi_layout.addWidget(self.spin_cam_roi_br_x)
+        cam_roi_layout.addWidget(QLabel("CAM BR Y"))
+        cam_roi_layout.addWidget(self.spin_cam_roi_br_y)
+        cam_roi_layout.addWidget(self.btn_cam_roi_apply)
         cam_layout.addLayout(cam_roi_layout)
 
+        # FFT ROI controls (for phase calculation)
+        fft_roi_layout = QHBoxLayout()
+        self.spin_fft_roi_tl_x = QSpinBox()
+        self.spin_fft_roi_tl_y = QSpinBox()
+        self.spin_fft_roi_br_x = QSpinBox()
+        self.spin_fft_roi_br_y = QSpinBox()
+        for s in (self.spin_fft_roi_tl_x, self.spin_fft_roi_tl_y,
+                  self.spin_fft_roi_br_x, self.spin_fft_roi_br_y):
+            s.setRange(0, 10000)
+        self.btn_fft_roi_apply = QPushButton("Apply")
+        fft_roi_layout.addWidget(QLabel("FFT TL X"))
+        fft_roi_layout.addWidget(self.spin_fft_roi_tl_x)
+        fft_roi_layout.addWidget(QLabel("FFT TL Y"))
+        fft_roi_layout.addWidget(self.spin_fft_roi_tl_y)
+        fft_roi_layout.addWidget(QLabel("FFT BR X"))
+        fft_roi_layout.addWidget(self.spin_fft_roi_br_x)
+        fft_roi_layout.addWidget(QLabel("FFT BR Y"))
+        fft_roi_layout.addWidget(self.spin_fft_roi_br_y)
+        fft_roi_layout.addWidget(self.btn_fft_roi_apply)
+        cam_layout.addLayout(fft_roi_layout)
+
         # --- ROW 2: THREE IMAGE VIEWS (3 COLUMNS) ---
-
         images_row_layout = QHBoxLayout()
-
         # Main live view
         self.label_cam_live = QLabel("NO SIGNAL")
         # FFT view
         self.label_cam_fft = QLabel("NO DATA")
         # Captured view
         self.label_cam_phase = QLabel("NO DATA")
-
         for lbl in (self.label_cam_live, self.label_cam_fft, self.label_cam_phase):
             lbl.setAlignment(Qt.AlignCenter)
             lbl.setStyleSheet("background-color: black; color: #64748b;")
             lbl.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
             lbl.setMinimumSize(200, 150)
-
         images_row_layout.addWidget(self.label_cam_live)      # main view
         images_row_layout.addWidget(self.label_cam_fft)       # FT view
-        images_row_layout.addWidget(self.label_cam_phase)  # captured view
-
+        images_row_layout.addWidget(self.label_cam_phase)     # captured view
         cam_layout.addLayout(images_row_layout)
 
         # Laser
         laser_group = QGroupBox("SWEPT SOURCE")
+        laser_group.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Maximum)
         laser_group.setStyleSheet("QGroupBox { color: #f97316; }")
         laser_layout = QVBoxLayout(laser_group)
-
         self.laser_status_label = QLabel("STATUS: DISCONNECTED")
         laser_layout.addWidget(self.laser_status_label)
-
         top_laser_btns = QHBoxLayout()
         self.btn_laser_connect = QPushButton("Conn.")
         self.btn_laser_init = QPushButton("Init.")
@@ -315,11 +333,9 @@ class MainWindow(QMainWindow):
         top_laser_btns.addWidget(self.btn_laser_init)
         top_laser_btns.addWidget(self.btn_laser_disc)
         laser_layout.addLayout(top_laser_btns)
-
         self.laser_mode_combo = QComboBox()
         self.laser_mode_combo.addItems(["CW", "Single", "Cont."])
         laser_layout.addWidget(self.laser_mode_combo)
-
         # Laser numeric controls
         grid_laser = QGridLayout()
         self.spin_laser_cw = QDoubleSpinBox()
@@ -328,14 +344,11 @@ class MainWindow(QMainWindow):
         self.spin_laser_sweep = QDoubleSpinBox()
         self.spin_laser_sweep_speed = QDoubleSpinBox()
         self.spin_laser_sweep_speed.setReadOnly(True)
-
         for s in (self.spin_laser_cw, self.spin_laser_min, self.spin_laser_max):
             s.setRange(800, 900)
             s.setDecimals(1)
-
         self.spin_laser_sweep.setRange(0.1, 100.0)
         self.spin_laser_sweep.setDecimals(2)
-
         grid_laser.addWidget(QLabel("CW λ [nm]"), 0, 0)
         grid_laser.addWidget(self.spin_laser_cw, 0, 1)
         grid_laser.addWidget(QLabel("Min λ"), 1, 0)
@@ -347,22 +360,21 @@ class MainWindow(QMainWindow):
         grid_laser.addWidget(QLabel("Sweep Speed"), 4, 0)
         grid_laser.addWidget(self.spin_laser_sweep_speed, 4, 1)
         laser_layout.addLayout(grid_laser)
-
         btns_laser_onoff = QHBoxLayout()
         self.btn_laser_on = QPushButton("EMISSION ON")
         self.btn_laser_off = QPushButton("OFF")
         btns_laser_onoff.addWidget(self.btn_laser_on)
         btns_laser_onoff.addWidget(self.btn_laser_off)
         laser_layout.addLayout(btns_laser_onoff)
+        laser_layout.addStretch()
 
         # Stage
         stage_group = QGroupBox("MICROSCOPE STAGE")
+        stage_group.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Maximum)
         stage_group.setStyleSheet("QGroupBox { color: #22c55e; }")
         stage_layout = QVBoxLayout(stage_group)
-
         self.stage_status_label = QLabel("STATUS: DISCONNECTED")
         stage_layout.addWidget(self.stage_status_label)
-
         top_stage_btns = QHBoxLayout()
         self.btn_stage_connect = QPushButton("Conn.")
         self.btn_stage_init = QPushButton("Init.")
@@ -373,11 +385,9 @@ class MainWindow(QMainWindow):
         top_stage_btns.addWidget(self.btn_stage_calib)
         top_stage_btns.addWidget(self.btn_stage_disc)
         stage_layout.addLayout(top_stage_btns)
-
         self.stage_mode_combo = QComboBox()
         self.stage_mode_combo.addItems(["Manual", "Pattern"])
         stage_layout.addWidget(self.stage_mode_combo)
-
         # Manual controls
         grid_stage = QGridLayout()
         self.spin_stage_x = QDoubleSpinBox()
@@ -396,44 +406,38 @@ class MainWindow(QMainWindow):
         ):
             s.setDecimals(3)
             s.setRange(-100000, 100000)
-
         self.btn_stage_set_xy = QPushButton("SET XY")
         self.btn_stage_move_xy = QPushButton("MOVE ΔXY")
         self.btn_stage_focus_set = QPushButton("SET Z")
         self.btn_stage_focus_move = QPushButton("MOVE ΔZ")
         self.btn_stage_estop = QPushButton("EMERGENCY STOP")
         self.btn_stage_estop.setStyleSheet("background-color: #dc2626; color: white;")
-
         grid_stage.addWidget(QLabel("X"), 0, 0)
         grid_stage.addWidget(self.spin_stage_x, 0, 1)
         grid_stage.addWidget(QLabel("Y"), 1, 0)
         grid_stage.addWidget(self.spin_stage_y, 1, 1)
         grid_stage.addWidget(self.btn_stage_set_xy, 0, 2, 2, 1)
-
         grid_stage.addWidget(QLabel("ΔX"), 2, 0)
         grid_stage.addWidget(self.spin_stage_dx, 2, 1)
         grid_stage.addWidget(QLabel("ΔY"), 3, 0)
         grid_stage.addWidget(self.spin_stage_dy, 3, 1)
         grid_stage.addWidget(self.btn_stage_move_xy, 2, 2, 2, 1)
-
         grid_stage.addWidget(QLabel("Z"), 4, 0)
         grid_stage.addWidget(self.spin_stage_z, 4, 1)
         grid_stage.addWidget(self.btn_stage_focus_set, 4, 2)
-
         grid_stage.addWidget(QLabel("ΔZ"), 5, 0)
         grid_stage.addWidget(self.spin_stage_dz, 5, 1)
         grid_stage.addWidget(self.btn_stage_focus_move, 5, 2)
-
         stage_layout.addLayout(grid_stage)
         stage_layout.addWidget(self.btn_stage_estop)
+        stage_layout.addStretch()
 
         # --- TOP ROW: controller + laser + stage in one row ---
         top_row_layout = QHBoxLayout()
-        top_row_layout.addWidget(ctrl_group)
-        top_row_layout.addWidget(laser_group)
-        top_row_layout.addWidget(stage_group)
+        top_row_layout.addWidget(ctrl_group, 0, Qt.AlignTop)
+        top_row_layout.addWidget(laser_group, 0, Qt.AlignTop)
+        top_row_layout.addWidget(stage_group, 0, Qt.AlignTop)
         main_layout.addLayout(top_row_layout)
-
         main_layout.addWidget(cam_group)
 
         # Wire signals
@@ -452,7 +456,6 @@ class MainWindow(QMainWindow):
     # ------------------------------------------------------------------
     # Endpoint-equivalent helpers (formerly Flask routes)
     # ------------------------------------------------------------------
-
     def get_states(self):
         return {
             "controller": controller.state.value,
@@ -551,13 +554,9 @@ class MainWindow(QMainWindow):
             x = float(self.spin_stage_x.value())
             y = float(self.spin_stage_y.value())
             z = float(self.spin_stage_z.value())
-
         # If a previous move is still running, optionally ignore or stop it
         if self._stage_thread is not None and self._stage_thread.is_alive():
-            # Either ignore, or call controller.stage.stop_moving() first
-            # controller.stage.stop_moving()
             return
-
         def _run_move():
             try:
                 if focus:
@@ -565,9 +564,7 @@ class MainWindow(QMainWindow):
                 else:
                     controller.stage.move_stage(x, y, relative)
             finally:
-                # Mark thread as finished
                 self._stage_thread = None
-
         self._stage_thread = threading.Thread(target=_run_move, daemon=True)
         self._stage_thread.start()
 
@@ -600,18 +597,15 @@ class MainWindow(QMainWindow):
     # ------------------------------------------------------------------
     # UI / State handling
     # ------------------------------------------------------------------
-
     def _connect_signals(self):
         # controller
         self.btn_ctrl_connect.clicked.connect(lambda: self._with_wait(self._connect_controller))
         self.btn_ctrl_init.clicked.connect(lambda: self._with_wait(self._init_controller))
         self.btn_ctrl_disc.clicked.connect(lambda: self._with_wait(self._disc_controller))
-
         # camera
         self.btn_cam_connect.clicked.connect(lambda: self._with_wait(self._connect_camera))
         self.btn_cam_init.clicked.connect(lambda: self._with_wait(self._init_camera))
         self.btn_cam_disc.clicked.connect(lambda: self._with_wait(self._disc_camera))
-
         self.cam_mode_combo.currentIndexChanged.connect(
             lambda idx: self._with_wait(lambda: self.set_mode("camera", idx))
         )
@@ -621,10 +615,10 @@ class MainWindow(QMainWindow):
         self.btn_cam_burst.clicked.connect(lambda: self._with_wait(self._start_burst))
         self.chk_fft.stateChanged.connect(self._update_flags)
         self.chk_save.stateChanged.connect(self._update_flags)
-
-        # ROI
-        self.btn_roi_apply.clicked.connect(self._apply_roi)
-
+        # Camera ROI
+        self.btn_cam_roi_apply.clicked.connect(self._apply_cam_roi)
+        # FFT ROI
+        self.btn_fft_roi_apply.clicked.connect(self._apply_fft_roi)
         # laser
         self.btn_laser_connect.clicked.connect(lambda: self._with_wait(self._connect_laser))
         self.btn_laser_init.clicked.connect(lambda: self._with_wait(self._init_laser))
@@ -637,7 +631,6 @@ class MainWindow(QMainWindow):
         self.spin_laser_sweep.valueChanged.connect(self._update_sweep_speed)
         self.btn_laser_on.clicked.connect(lambda: self._with_wait(self._toggle_emission_clicked))
         self.btn_laser_off.clicked.connect(lambda: self._with_wait(self._toggle_emission_clicked))
-
         # stage
         self.btn_stage_connect.clicked.connect(lambda: self._with_wait(self._connect_stage))
         self.btn_stage_init.clicked.connect(lambda: self._with_wait(self._init_stage))
@@ -662,7 +655,6 @@ class MainWindow(QMainWindow):
 
     def _with_wait(self, func):
         try:
-            # simple "WAITING" visualization
             for dev in self.state.devices.values():
                 dev["status"] = 99
             self._update_ui()
@@ -693,7 +685,6 @@ class MainWindow(QMainWindow):
                 self.state.devices[key]["mode"] = value
 
     def _update_properties(self):
-        # could render to extra labels if needed
         _ = self.get_properties()
 
     def _update_laser_properties(self):
@@ -742,22 +733,18 @@ class MainWindow(QMainWindow):
                 mode_list = MODES.get(dev["id"], [])
                 if 0 <= dev["mode"] < len(mode_list):
                     mode_str = mode_list[dev["mode"]]
-
             self.status_table.setItem(row_idx, 0, QTableWidgetItem(dev["name"]))
             self.status_table.setItem(row_idx, 1, QTableWidgetItem(str(code)))
             self.status_table.setItem(row_idx, 2, QTableWidgetItem(label))
             self.status_table.setItem(row_idx, 3, QTableWidgetItem(mode_str))
-
             indicator = QTableWidgetItem("●")
             indicator.setForeground(Qt.red if color == "red" else Qt.white)
             self.status_table.setItem(row_idx, 4, indicator)
-
         # controller buttons
         ctrl_status = self.state.devices["controller"]["status"]
         self.btn_ctrl_connect.setEnabled(ctrl_status == 0)
         self.btn_ctrl_disc.setEnabled(ctrl_status not in (0, 99))
         self.btn_ctrl_init.setEnabled(ctrl_status == 1)
-
         # camera
         cam = self.state.devices["camera"]
         label, color = STATUS_MAP.get(cam["status"], STATUS_MAP[99])
@@ -766,7 +753,6 @@ class MainWindow(QMainWindow):
         self.btn_cam_disc.setEnabled(cam["status"] not in (0, 99))
         self.btn_cam_init.setEnabled(cam["status"] == 1)
         self.cam_mode_combo.setCurrentIndex(cam["mode"])
-
         # laser
         laser = self.state.devices["laser"]
         label, _ = STATUS_MAP.get(laser["status"], STATUS_MAP[99])
@@ -775,7 +761,6 @@ class MainWindow(QMainWindow):
         self.btn_laser_disc.setEnabled(laser["status"] not in (0, 99))
         self.btn_laser_init.setEnabled(laser["status"] == 1)
         self.laser_mode_combo.setCurrentIndex(laser["mode"])
-
         is_cw = laser["mode"] == 0
         self.spin_laser_cw.setEnabled(is_cw)
         self.spin_laser_min.setEnabled(not is_cw)
@@ -784,7 +769,6 @@ class MainWindow(QMainWindow):
         self.btn_laser_on.setEnabled(laser["status"] == 3)
         self.btn_laser_off.setEnabled(laser["status"] == 4)
         self.laser_mode_combo.setEnabled(laser["status"] <= 1)
-
         # stage
         stage = self.state.devices["stage"]
         label, _ = STATUS_MAP.get(stage["status"], STATUS_MAP[99])
@@ -797,12 +781,10 @@ class MainWindow(QMainWindow):
     # ------------------------------------------------------------------
     # Actions (mirror JS functions)
     # ------------------------------------------------------------------
-
     def _connect_controller(self):
         self.connect_device("controller")
 
     def _init_controller(self):
-        # show warning about objective
         reply = QMessageBox.question(
             self,
             "Remove Objective",
@@ -865,10 +847,54 @@ class MainWindow(QMainWindow):
         if not 0.0 <= gamma <= 1.0:
             raise ValueError("Gamma must be between 0 and 1")
         controller.camera.t_exp = float(self.int_time_spin.value())
-
         image_array = controller.camera.acquire_single_image()
         if image_array is None:
             return
+
+        # Normalise to uint8 for display / ROI drawing
+        if image_array.dtype in (np.float32, np.float64):
+            display_arr = (np.clip(image_array, 0, 1) * 255).astype(np.uint8)
+        else:
+            display_arr = image_array.astype(np.uint8)
+
+        h, w = display_arr.shape[:2]
+
+        # Update Camera ROI bounds based on this frame
+        for s in (self.spin_cam_roi_tl_x, self.spin_cam_roi_br_x):
+            s.setMaximum(max(0, w - 1))
+        for s in (self.spin_cam_roi_tl_y, self.spin_cam_roi_br_y):
+            s.setMaximum(max(0, h - 1))
+
+        # Clamp camera ROI to image bounds (exclusive BR semantics)
+        cx1 = max(0, min(self.cam_roi_tl_x, w - 1))
+        cy1 = max(0, min(self.cam_roi_tl_y, h - 1))
+        cx2 = max(0, min(self.cam_roi_br_x, w - 1))
+        cy2 = max(0, min(self.cam_roi_br_y, h - 1))
+        cx2 = max(cx1, cx2)
+        cy2 = max(cy1, cy2)
+        has_cam_roi = (cx2 > cx1) and (cy2 > cy1)
+
+        # Build RGB display image and draw camera ROI if active
+        if display_arr.ndim == 2:
+            display_rgb = np.stack([display_arr, display_arr, display_arr], axis=-1)
+        else:
+            display_rgb = np.ascontiguousarray(display_arr)
+
+        if has_cam_roi:
+            thickness = 2
+            color = [255, 0, 0]
+            display_rgb[cy1:min(cy1 + thickness, cy2 + 1), cx1:cx2 + 1] = color
+            display_rgb[max(cy2 - thickness + 1, cy1):cy2 + 1, cx1:cx2 + 1] = color
+            display_rgb[cy1:cy2 + 1, cx1:min(cx1 + thickness, cx2 + 1)] = color
+            display_rgb[cy1:cy2 + 1, max(cx2 - thickness + 1, cx1):cx2 + 1] = color
+
+        qpix = numpy_to_qpixmap(display_rgb)
+        self.label_cam_live.setPixmap(
+            qpix.scaled(self.label_cam_live.size(), Qt.KeepAspectRatio, Qt.SmoothTransformation)
+        )
+
+        # Crop to camera ROI for FFT processing (exclusive BR, no zero-padding)
+        proc_array = display_arr[cy1:cy2, cx1:cx2] if has_cam_roi else display_arr
 
         if self.state.saveEnabled:
             results = Dem2Results(
@@ -879,16 +905,12 @@ class MainWindow(QMainWindow):
             )
             results.save(str(DATA_PATH / f"image_{datetime.now().strftime('%Y-%m-%dT%H-%M-%S')}.h5"))
 
-        qpix = numpy_to_qpixmap(image_array.astype(np.uint8))
-        self.label_cam_live.setPixmap(qpix.scaled(self.label_cam_live.size(), Qt.KeepAspectRatio, Qt.SmoothTransformation))
-
         if self.state.fftEnabled:
-            ft_arr = compute_fft(image_array)
+            ft_arr = compute_fft(proc_array)
             self._last_fft_array = covert_fft_to_img(ft_arr, gamma)
             self._update_phase_display(ft_arr)
             self._update_fft_display_with_roi()
 
-        # update integration time display
         self._update_integration_time()
 
     def _get_image_from_buffer(self):
@@ -898,15 +920,51 @@ class MainWindow(QMainWindow):
         if image_array is None:
             return
 
-        qpix = numpy_to_qpixmap(image_array.astype(np.uint8))
-        self.label_cam_live.setPixmap(qpix.scaled(self.label_cam_live.size(), Qt.KeepAspectRatio, Qt.SmoothTransformation))
+        if image_array.dtype in (np.float32, np.float64):
+            display_arr = (np.clip(image_array, 0, 1) * 255).astype(np.uint8)
+        else:
+            display_arr = image_array.astype(np.uint8)
+
+        h, w = display_arr.shape[:2]
+
+        for s in (self.spin_cam_roi_tl_x, self.spin_cam_roi_br_x):
+            s.setMaximum(max(0, w - 1))
+        for s in (self.spin_cam_roi_tl_y, self.spin_cam_roi_br_y):
+            s.setMaximum(max(0, h - 1))
+
+        cx1 = max(0, min(self.cam_roi_tl_x, w - 1))
+        cy1 = max(0, min(self.cam_roi_tl_y, h - 1))
+        cx2 = max(0, min(self.cam_roi_br_x, w - 1))
+        cy2 = max(0, min(self.cam_roi_br_y, h - 1))
+        cx2 = max(cx1, cx2)
+        cy2 = max(cy1, cy2)
+        has_cam_roi = (cx2 > cx1) and (cy2 > cy1)
+
+        if display_arr.ndim == 2:
+            display_rgb = np.stack([display_arr, display_arr, display_arr], axis=-1)
+        else:
+            display_rgb = np.ascontiguousarray(display_arr)
+
+        if has_cam_roi:
+            thickness = 2
+            color = [255, 0, 0]
+            display_rgb[cy1:min(cy1 + thickness, cy2 + 1), cx1:cx2 + 1] = color
+            display_rgb[max(cy2 - thickness + 1, cy1):cy2 + 1, cx1:cx2 + 1] = color
+            display_rgb[cy1:cy2 + 1, cx1:min(cx1 + thickness, cx2 + 1)] = color
+            display_rgb[cy1:cy2 + 1, max(cx2 - thickness + 1, cx1):cx2 + 1] = color
+
+        qpix = numpy_to_qpixmap(display_rgb)
+        self.label_cam_live.setPixmap(
+            qpix.scaled(self.label_cam_live.size(), Qt.KeepAspectRatio, Qt.SmoothTransformation)
+        )
+
+        proc_array = display_arr[cy1:cy2, cx1:cx2] if has_cam_roi else display_arr
 
         if self.state.isLive:
-            # Optional: capture one frame on demand like Flask version with capture_next_live_frame
             pass
 
         if self.state.fftEnabled:
-            ft_arr = compute_fft(image_array)
+            ft_arr = compute_fft(proc_array)
             self._last_fft_array = covert_fft_to_img(ft_arr, float(self.gamma_spin.value()))
             self._update_phase_display(ft_arr)
             self._update_fft_display_with_roi()
@@ -918,7 +976,7 @@ class MainWindow(QMainWindow):
         state_str = self.toggle_live()
         self.state.isLive = "RUNNING" in state_str
         if self.state.isLive:
-            self.live_timer.start(1000)
+            self.live_timer.start(100)
         else:
             self.live_timer.stop()
 
@@ -930,25 +988,37 @@ class MainWindow(QMainWindow):
         controller.camera.t_exp = float(self.int_time_spin.value())
         self._update_integration_time()
 
-    def _apply_roi(self):
-        self.roi_tl_x = self.spin_roi_tl_x.value()
-        self.roi_tl_y = self.spin_roi_tl_y.value()
-        self.roi_br_x = self.spin_roi_br_x.value()
-        self.roi_br_y = self.spin_roi_br_y.value()
+    def _apply_cam_roi(self):
+        self.cam_roi_tl_x = self.spin_cam_roi_tl_x.value()
+        self.cam_roi_tl_y = self.spin_cam_roi_tl_y.value()
+        self.cam_roi_br_x = self.spin_cam_roi_br_x.value()
+        self.cam_roi_br_y = self.spin_cam_roi_br_y.value()
+
+    def _apply_fft_roi(self):
+        self.fft_roi_tl_x = self.spin_fft_roi_tl_x.value()
+        self.fft_roi_tl_y = self.spin_fft_roi_tl_y.value()
+        self.fft_roi_br_x = self.spin_fft_roi_br_x.value()
+        self.fft_roi_br_y = self.spin_fft_roi_br_y.value()
         self._update_fft_display_with_roi()
 
     def _update_phase_display(self, ft_arr: np.ndarray):
-            ifft_arr = crop_centre_ifft(ft_arr, (self.roi_tl_x,self.roi_tl_y), (self.roi_br_x,self.roi_br_y))
-            phase_hsv = phase_to_hsv(ifft_arr)  # RGB image with HSV coloring
+        fh, fw = ft_arr.shape[:2]
+        # Clamp FFT ROI to the actual FFT array bounds
+        x1 = max(0, min(self.fft_roi_tl_x, self.fft_roi_br_x, fw - 1))
+        y1 = max(0, min(self.fft_roi_tl_y, self.fft_roi_br_y, fh - 1))
+        x2 = max(0, min(max(self.fft_roi_tl_x, self.fft_roi_br_x), fw - 1))
+        y2 = max(0, min(max(self.fft_roi_tl_y, self.fft_roi_br_y), fh - 1))
 
-            qpix_phase = numpy_to_qpixmap(phase_hsv)
-            self.label_cam_phase.setPixmap(
-                qpix_phase.scaled(
-                    self.label_cam_phase.size(),
-                    Qt.KeepAspectRatio,
-                    Qt.SmoothTransformation
-                )
+        ifft_arr = crop_centre_ifft(ft_arr, (x1, y1), (x2, y2))
+        phase_hsv = phase_to_hsv(ifft_arr)
+        qpix_phase = numpy_to_qpixmap(phase_hsv)
+        self.label_cam_phase.setPixmap(
+            qpix_phase.scaled(
+                self.label_cam_phase.size(),
+                Qt.KeepAspectRatio,
+                Qt.SmoothTransformation
             )
+        )
 
     def _update_fft_display_with_roi(self):
         if self._last_fft_array is None:
@@ -956,36 +1026,28 @@ class MainWindow(QMainWindow):
         ft_arr = self._last_fft_array.copy()
         h, w = ft_arr.shape
 
-        # Keep spinboxes bounded to current image size
-        self.spin_roi_tl_x.setMaximum(max(0, w - 1))
-        self.spin_roi_tl_y.setMaximum(max(0, h - 1))
-        self.spin_roi_br_x.setMaximum(max(0, w - 1))
-        self.spin_roi_br_y.setMaximum(max(0, h - 1))
+        # Keep FFT ROI spinboxes bounded to current FFT image size
+        self.spin_fft_roi_tl_x.setMaximum(max(0, w - 1))
+        self.spin_fft_roi_tl_y.setMaximum(max(0, h - 1))
+        self.spin_fft_roi_br_x.setMaximum(max(0, w - 1))
+        self.spin_fft_roi_br_y.setMaximum(max(0, h - 1))
 
-        x1 = max(0, min(self.roi_tl_x, self.roi_br_x, w - 1))
-        y1 = max(0, min(self.roi_tl_y, self.roi_br_y, h - 1))
-        x2 = max(0, min(max(self.roi_tl_x, self.roi_br_x), w - 1))
-        y2 = max(0, min(max(self.roi_tl_y, self.roi_br_y), h - 1))
-
+        x1 = max(0, min(self.fft_roi_tl_x, self.fft_roi_br_x, w - 1))
+        y1 = max(0, min(self.fft_roi_tl_y, self.fft_roi_br_y, h - 1))
+        x2 = max(0, min(max(self.fft_roi_tl_x, self.fft_roi_br_x), w - 1))
+        y2 = max(0, min(max(self.fft_roi_tl_y, self.fft_roi_br_y), h - 1))
         if x2 <= x1 or y2 <= y1:
             qpix = numpy_to_qpixmap(ft_arr)
             self.label_cam_fft.setPixmap(
                 qpix.scaled(self.label_cam_fft.size(), Qt.KeepAspectRatio, Qt.SmoothTransformation)
             )
             return
-
         rgb = np.stack([ft_arr, ft_arr, ft_arr], axis=-1)
-
         thickness = 2
-        # Top edge
         rgb[y1:min(y1 + thickness, y2 + 1), x1:x2 + 1] = [255, 0, 0]
-        # Bottom edge
         rgb[max(y2 - thickness + 1, y1):y2 + 1, x1:x2 + 1] = [255, 0, 0]
-        # Left edge
         rgb[y1:y2 + 1, x1:min(x1 + thickness, x2 + 1)] = [255, 0, 0]
-        # Right edge
         rgb[y1:y2 + 1, max(x2 - thickness + 1, x1):x2 + 1] = [255, 0, 0]
-
         qpix = numpy_to_qpixmap(rgb)
         self.label_cam_fft.setPixmap(
             qpix.scaled(self.label_cam_fft.size(), Qt.KeepAspectRatio, Qt.SmoothTransformation)
