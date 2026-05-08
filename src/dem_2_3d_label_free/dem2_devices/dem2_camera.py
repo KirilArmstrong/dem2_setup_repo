@@ -1,6 +1,7 @@
 """Camera control script."""
 
 import logging
+import time
 from concurrent.futures.thread import ThreadPoolExecutor
 from threading import Thread
 
@@ -145,7 +146,8 @@ class Dem2Camera(Thread, xiapi.Camera):
         """Acquire single image and return it.
         :returns: Image as numpy array."""
         self.start_acquisition()
-        self.set_exposure(self._t_exp * 1000)
+        # self.set_exposure(self._t_exp * 1000)
+        time.sleep((self._t_exp/1000)+0.1)
         data = self.get_image(self.image)
         self._append_to_buffer(data)
         self._log.info("Acquired single Image.")

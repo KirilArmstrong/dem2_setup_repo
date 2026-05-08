@@ -19,6 +19,7 @@ from PySide6.QtWidgets import (
 
 from src.dem_2_3d_label_free.dem2_common.dem2_bscan_pattern import Dem2BScanPattern
 from src.dem_2_3d_label_free.dem2_common.dem2_constants import Dem2State, Dem2LaserMode, Dem2CameraMode
+from src.dem_2_3d_label_free.dem2_common.dem2_helper import setup_root_logger
 from src.dem_2_3d_label_free.dem2_common.dem2_sweep_experiment import Dem2Results, Dem2SweepPacket
 from src.dem_2_3d_label_free.dem2_components.dem2_capturer import Dem2Capturer
 from src.dem_2_3d_label_free.dem2_components.dem2_controller import Dem2Controller
@@ -867,6 +868,7 @@ class MainWindow(QMainWindow):
 
 
 def main():
+    setup_root_logger(__name__)
     app = QApplication(sys.argv)
     w = MainWindow()
     w.show()
