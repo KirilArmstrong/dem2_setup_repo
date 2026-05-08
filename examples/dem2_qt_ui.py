@@ -16,7 +16,6 @@ from PySide6.QtWidgets import (
     QSizePolicy,
 )
 
-
 from src.dem_2_3d_label_free.dem2_common.dem2_bscan_pattern import Dem2BScanPattern
 from src.dem_2_3d_label_free.dem2_common.dem2_constants import Dem2State, Dem2LaserMode, Dem2CameraMode
 from src.dem_2_3d_label_free.dem2_common.dem2_helper import setup_root_logger
@@ -34,28 +33,70 @@ controller = Dem2Controller(default_config)
 
 
 def numpy_to_qpixmap(array: np.ndarray) -> QPixmap:
-    """Convert 2D/3D np.uint8 array to QPixmap."""
+    """Convert 2D/3D np.uint8 or float [0,1] array to QPixmap."""
+    # Handle float arrays in [0,1] range
+    if array.dtype in (np.float32, np.float64):
+        array = (np.clip(array, 0, 1) * 255).astype(np.uint8)
+
     if array.ndim == 2:
         h, w = array.shape
         img = QImage(array.data, w, h, w, QImage.Format_Grayscale8)
-    else:
+    elif array.ndim == 3 and array.shape[2] == 3:
         h, w, c = array.shape
+        # RGB image - ensure contiguous for QImage
+        array = np.ascontiguousarray(array)
         img = QImage(array.data, w, h, w * c, QImage.Format_RGB888)
+    else:
+        raise ValueError(f"Unsupported array shape: {array.shape}")
     return QPixmap.fromImage(img.copy())
 
+def normalize_to_255(array: np.ndarray):
+    # normalize to 0–255
+    array = array - array.min()
+    if array.max() > 0:
+        array = array / array.max()
+    return (array * 255).astype(np.uint8)
 
-def compute_fft_image(image_array: np.ndarray, gamma: float) -> np.ndarray:
+def compute_fft(image_array: np.ndarray) -> np.ndarray:
     ft_array = np.fft.fft2(image_array)
     ft_array = np.fft.fftshift(ft_array)
-    ft_array = np.abs(ft_array)
-    ft_array = ft_array ** gamma
-    # normalize to 0–255
-    ft_array = ft_array - ft_array.min()
-    if ft_array.max() > 0:
-        ft_array = ft_array / ft_array.max()
-    ft_array = (ft_array * 255).astype(np.uint8)
     return ft_array
 
+def covert_fft_to_img(ft_array: np.ndarray, gamma: float) -> np.ndarray:
+    ft_array = np.abs(ft_array)
+    ft_array = ft_array ** gamma
+    return normalize_to_255(ft_array)
+
+def phase_to_hsv(array: np.ndarray) -> np.ndarray:
+    """Convert -pi to pi to 0 - 1."""
+    from matplotlib.colors import hsv_to_rgb
+
+    hue = (np.angle(array) + np.pi) / (2 * np.pi)
+    hsv = np.zeros((*array.shape, 3), dtype=np.float32)
+    hsv[:, :, 0] = hue
+    hsv[:, :, 1] = 1.0
+    hsv[:, :, 2] = 1.0
+
+    rgb = hsv_to_rgb(hsv)
+    return (rgb * 255).astype(np.uint8)
+
+def crop_centre_ifft(ft_array: np.ndarray, top_left, bottom_right) -> np.ndarray:
+    # make coords even
+    top_left = tuple(x - (x % 2) for x in top_left)
+    bottom_right = tuple(x - (x % 2) for x in bottom_right)
+    # get height and width
+    h = (bottom_right[0] - top_left[0])
+    w = (bottom_right[1] - top_left[1])
+    if h == 0 or w == 0:
+        ft_centred = ft_array
+    else:
+        # empty 0 array same size as ft_Array
+        ft_centred = np.zeros_like(ft_array)
+        # fill roi into center of empty array
+        ft_centred[int(ft_array.shape[0]/2)-int(h/2):int(ft_array.shape[0]/2)+int(h/2), int(ft_array.shape[1]/2)-int(w/2):int(ft_array.shape[1]/2)+int(w/2)] = ft_array[top_left[0]:bottom_right[0], top_left[1]:bottom_right[1]]
+    ft_unshifted = np.fft.ifftshift(ft_centred)
+    img_iffted = np.fft.ifft2(ft_unshifted)
+    return img_iffted
 
 class SystemState:
     def __init__(self):
@@ -94,6 +135,11 @@ class MainWindow(QMainWindow):
 
         self.state = SystemState()
         self._stage_thread = None
+        self._last_fft_array = None
+        self.roi_tl_x = 0
+        self.roi_tl_y = 0
+        self.roi_br_x = 0
+        self.roi_br_y = 0
         self.setWindowTitle("DEMONSTRATOR_2 // V.0.2")
         self.resize(1400, 900)
 
@@ -107,9 +153,9 @@ class MainWindow(QMainWindow):
 
         # Header
         header_layout = QHBoxLayout()
-        title_label = QLabel("DEMONSTRATOR_2 // V.0.2")
+        title_label = QLabel("DEMONSTRATOR 2")
         title_label.setStyleSheet("color: cyan; font-size: 20pt; font-weight: bold;")
-        subtitle_label = QLabel("ELECTRIC BOOGALOO")
+        subtitle_label = QLabel("Control Panel v0.2")
         subtitle_label.setStyleSheet("color: #0ea5e9; font-size: 8pt;")
 
         left_header = QVBoxLayout()
@@ -210,6 +256,26 @@ class MainWindow(QMainWindow):
         cam_ctrl3.addWidget(self.btn_cam_burst)
         cam_layout.addLayout(cam_ctrl3)
 
+        # ROI controls for FFT overlay
+        cam_roi_layout = QHBoxLayout()
+        self.spin_roi_tl_x = QSpinBox()
+        self.spin_roi_tl_y = QSpinBox()
+        self.spin_roi_br_x = QSpinBox()
+        self.spin_roi_br_y = QSpinBox()
+        for s in (self.spin_roi_tl_x, self.spin_roi_tl_y, self.spin_roi_br_x, self.spin_roi_br_y):
+            s.setRange(0, 10000)
+        self.btn_roi_apply = QPushButton("Apply")
+        cam_roi_layout.addWidget(QLabel("TL X"))
+        cam_roi_layout.addWidget(self.spin_roi_tl_x)
+        cam_roi_layout.addWidget(QLabel("TL Y"))
+        cam_roi_layout.addWidget(self.spin_roi_tl_y)
+        cam_roi_layout.addWidget(QLabel("BR X"))
+        cam_roi_layout.addWidget(self.spin_roi_br_x)
+        cam_roi_layout.addWidget(QLabel("BR Y"))
+        cam_roi_layout.addWidget(self.spin_roi_br_y)
+        cam_roi_layout.addWidget(self.btn_roi_apply)
+        cam_layout.addLayout(cam_roi_layout)
+
         # --- ROW 2: THREE IMAGE VIEWS (3 COLUMNS) ---
 
         images_row_layout = QHBoxLayout()
@@ -219,9 +285,9 @@ class MainWindow(QMainWindow):
         # FFT view
         self.label_cam_fft = QLabel("NO DATA")
         # Captured view
-        self.label_cam_captured = QLabel("NO SIGNAL")
+        self.label_cam_phase = QLabel("NO DATA")
 
-        for lbl in (self.label_cam_live, self.label_cam_fft, self.label_cam_captured):
+        for lbl in (self.label_cam_live, self.label_cam_fft, self.label_cam_phase):
             lbl.setAlignment(Qt.AlignCenter)
             lbl.setStyleSheet("background-color: black; color: #64748b;")
             lbl.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
@@ -229,7 +295,7 @@ class MainWindow(QMainWindow):
 
         images_row_layout.addWidget(self.label_cam_live)      # main view
         images_row_layout.addWidget(self.label_cam_fft)       # FT view
-        images_row_layout.addWidget(self.label_cam_captured)  # captured view
+        images_row_layout.addWidget(self.label_cam_phase)  # captured view
 
         cam_layout.addLayout(images_row_layout)
 
@@ -556,6 +622,9 @@ class MainWindow(QMainWindow):
         self.chk_fft.stateChanged.connect(self._update_flags)
         self.chk_save.stateChanged.connect(self._update_flags)
 
+        # ROI
+        self.btn_roi_apply.clicked.connect(self._apply_roi)
+
         # laser
         self.btn_laser_connect.clicked.connect(lambda: self._with_wait(self._connect_laser))
         self.btn_laser_init.clicked.connect(lambda: self._with_wait(self._init_laser))
@@ -814,11 +883,10 @@ class MainWindow(QMainWindow):
         self.label_cam_live.setPixmap(qpix.scaled(self.label_cam_live.size(), Qt.KeepAspectRatio, Qt.SmoothTransformation))
 
         if self.state.fftEnabled:
-            ft_arr = compute_fft_image(image_array, gamma)
-            qpix_ft = numpy_to_qpixmap(ft_arr)
-            self.label_cam_fft.setPixmap(
-                qpix_ft.scaled(self.label_cam_fft.size(), Qt.KeepAspectRatio, Qt.SmoothTransformation)
-            )
+            ft_arr = compute_fft(image_array)
+            self._last_fft_array = covert_fft_to_img(ft_arr, gamma)
+            self._update_phase_display(ft_arr)
+            self._update_fft_display_with_roi()
 
         # update integration time display
         self._update_integration_time()
@@ -838,11 +906,10 @@ class MainWindow(QMainWindow):
             pass
 
         if self.state.fftEnabled:
-            ft_arr = compute_fft_image(image_array, float(self.gamma_spin.value()))
-            qpix_ft = numpy_to_qpixmap(ft_arr)
-            self.label_cam_fft.setPixmap(
-                qpix_ft.scaled(self.label_cam_fft.size(), Qt.KeepAspectRatio, Qt.SmoothTransformation)
-            )
+            ft_arr = compute_fft(image_array)
+            self._last_fft_array = covert_fft_to_img(ft_arr, float(self.gamma_spin.value()))
+            self._update_phase_display(ft_arr)
+            self._update_fft_display_with_roi()
 
     def _toggle_emission_clicked(self):
         self.toggle_emission()
@@ -862,6 +929,67 @@ class MainWindow(QMainWindow):
     def _set_integration_time(self):
         controller.camera.t_exp = float(self.int_time_spin.value())
         self._update_integration_time()
+
+    def _apply_roi(self):
+        self.roi_tl_x = self.spin_roi_tl_x.value()
+        self.roi_tl_y = self.spin_roi_tl_y.value()
+        self.roi_br_x = self.spin_roi_br_x.value()
+        self.roi_br_y = self.spin_roi_br_y.value()
+        self._update_fft_display_with_roi()
+
+    def _update_phase_display(self, ft_arr: np.ndarray):
+            ifft_arr = crop_centre_ifft(ft_arr, (self.roi_tl_x,self.roi_tl_y), (self.roi_br_x,self.roi_br_y))
+            phase_hsv = phase_to_hsv(ifft_arr)  # RGB image with HSV coloring
+
+            qpix_phase = numpy_to_qpixmap(phase_hsv)
+            self.label_cam_phase.setPixmap(
+                qpix_phase.scaled(
+                    self.label_cam_phase.size(),
+                    Qt.KeepAspectRatio,
+                    Qt.SmoothTransformation
+                )
+            )
+
+    def _update_fft_display_with_roi(self):
+        if self._last_fft_array is None:
+            return
+        ft_arr = self._last_fft_array.copy()
+        h, w = ft_arr.shape
+
+        # Keep spinboxes bounded to current image size
+        self.spin_roi_tl_x.setMaximum(max(0, w - 1))
+        self.spin_roi_tl_y.setMaximum(max(0, h - 1))
+        self.spin_roi_br_x.setMaximum(max(0, w - 1))
+        self.spin_roi_br_y.setMaximum(max(0, h - 1))
+
+        x1 = max(0, min(self.roi_tl_x, self.roi_br_x, w - 1))
+        y1 = max(0, min(self.roi_tl_y, self.roi_br_y, h - 1))
+        x2 = max(0, min(max(self.roi_tl_x, self.roi_br_x), w - 1))
+        y2 = max(0, min(max(self.roi_tl_y, self.roi_br_y), h - 1))
+
+        if x2 <= x1 or y2 <= y1:
+            qpix = numpy_to_qpixmap(ft_arr)
+            self.label_cam_fft.setPixmap(
+                qpix.scaled(self.label_cam_fft.size(), Qt.KeepAspectRatio, Qt.SmoothTransformation)
+            )
+            return
+
+        rgb = np.stack([ft_arr, ft_arr, ft_arr], axis=-1)
+
+        thickness = 2
+        # Top edge
+        rgb[y1:min(y1 + thickness, y2 + 1), x1:x2 + 1] = [255, 0, 0]
+        # Bottom edge
+        rgb[max(y2 - thickness + 1, y1):y2 + 1, x1:x2 + 1] = [255, 0, 0]
+        # Left edge
+        rgb[y1:y2 + 1, x1:min(x1 + thickness, x2 + 1)] = [255, 0, 0]
+        # Right edge
+        rgb[y1:y2 + 1, max(x2 - thickness + 1, x1):x2 + 1] = [255, 0, 0]
+
+        qpix = numpy_to_qpixmap(rgb)
+        self.label_cam_fft.setPixmap(
+            qpix.scaled(self.label_cam_fft.size(), Qt.KeepAspectRatio, Qt.SmoothTransformation)
+        )
 
     def _update_clock(self):
         self.clock_label.setText(datetime.now().strftime("%H:%M:%S"))
