@@ -11,7 +11,7 @@ from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QLabel, QPushButton, QVBoxLayout,
     QHBoxLayout, QGridLayout, QGroupBox, QTableWidget, QTableWidgetItem,
     QSpinBox, QDoubleSpinBox, QComboBox, QMessageBox, QCheckBox, QLineEdit,
-    QSizePolicy,
+    QSizePolicy,QTabWidget,
 )
 from src.dem_2_3d_label_free.dem2_common.dem2_bscan_pattern import Dem2BScanPattern
 from src.dem_2_3d_label_free.dem2_common.dem2_constants import Dem2State, Dem2LaserMode, Dem2CameraMode
@@ -186,6 +186,7 @@ class MainWindow(QMainWindow):
         btn_layout.addWidget(self.btn_ctrl_connect)
         btn_layout.addWidget(self.btn_ctrl_init)
         btn_layout.addWidget(self.btn_ctrl_disc)
+        btn_layout.addStretch()
         ctrl_layout.addLayout(btn_layout)
         # Status table
         self.status_table = QTableWidget(4, 5)
@@ -199,106 +200,11 @@ class MainWindow(QMainWindow):
         ctrl_layout.addStretch()
 
         # Upper grid: Camera (full width)
-        cam_group = QGroupBox("XIMEA XIB64 CAMERA")
+        cam_group = QGroupBox("CAMERA FEEDS")
         cam_group.setStyleSheet("QGroupBox { color: #22c55e; }")
         cam_layout = QVBoxLayout(cam_group)
 
-        # --- ROW 1: ALL CAMERA CONTROLS ---
-        # Status + mode + connect/init/disc
-        cam_top_layout = QHBoxLayout()
-        self.cam_status_label = QLabel("STATUS: DISCONNECTED")
-        self.cam_mode_combo = QComboBox()
-        self.cam_mode_combo.addItems(["Mono", "Frame Burst"])
-        self.btn_cam_connect = QPushButton("Conn.")
-        self.btn_cam_init = QPushButton("Init.")
-        self.btn_cam_disc = QPushButton("Disc.")
-        cam_top_layout.addWidget(self.cam_status_label)
-        cam_top_layout.addStretch()
-        cam_top_layout.addWidget(self.cam_mode_combo)
-        cam_top_layout.addWidget(self.btn_cam_connect)
-        cam_top_layout.addWidget(self.btn_cam_init)
-        cam_top_layout.addWidget(self.btn_cam_disc)
-        cam_layout.addLayout(cam_top_layout)
 
-        # Capture / gamma / FFT / Save
-        cam_ctrl1 = QHBoxLayout()
-        self.btn_cam_capture = QPushButton("Capture")
-        self.chk_fft = QCheckBox("FFT 2D")
-        self.chk_save = QCheckBox("Save")
-        self.gamma_spin = QDoubleSpinBox()
-        self.gamma_spin.setRange(0.0, 1.0)
-        self.gamma_spin.setSingleStep(0.1)
-        self.gamma_spin.setValue(0.3)
-        cam_ctrl1.addWidget(self.btn_cam_capture)
-        cam_ctrl1.addSpacing(20)
-        cam_ctrl1.addWidget(QLabel("Gamma"))
-        cam_ctrl1.addWidget(self.gamma_spin)
-        cam_ctrl1.addSpacing(20)
-        cam_ctrl1.addWidget(self.chk_fft)
-        cam_ctrl1.addWidget(self.chk_save)
-        cam_layout.addLayout(cam_ctrl1)
-
-        # Integration time
-        cam_ctrl2 = QHBoxLayout()
-        self.btn_cam_set_int = QPushButton("Set Texp")
-        self.int_time_spin = QDoubleSpinBox()
-        self.int_time_spin.setRange(0.1, 1000.0)
-        self.int_time_spin.setSingleStep(0.01)
-        self.int_time_spin.setValue(0.1)
-        cam_ctrl2.addWidget(self.btn_cam_set_int)
-        cam_ctrl2.addWidget(QLabel("Integration time [ms]"))
-        cam_ctrl2.addWidget(self.int_time_spin)
-        cam_layout.addLayout(cam_ctrl2)
-
-        # Live / Burst
-        cam_ctrl3 = QHBoxLayout()
-        self.btn_cam_live = QPushButton("Live")
-        self.btn_cam_burst = QPushButton("Capt. Burst")
-        cam_ctrl3.addWidget(self.btn_cam_live)
-        cam_ctrl3.addWidget(self.btn_cam_burst)
-        cam_layout.addLayout(cam_ctrl3)
-
-        # Camera ROI controls (pre-FFT crop)
-        cam_roi_layout = QHBoxLayout()
-        self.spin_cam_roi_tl_x = QSpinBox()
-        self.spin_cam_roi_tl_y = QSpinBox()
-        self.spin_cam_roi_br_x = QSpinBox()
-        self.spin_cam_roi_br_y = QSpinBox()
-        for s in (self.spin_cam_roi_tl_x, self.spin_cam_roi_tl_y,
-                  self.spin_cam_roi_br_x, self.spin_cam_roi_br_y):
-            s.setRange(0, 10000)
-        self.btn_cam_roi_apply = QPushButton("Apply")
-        cam_roi_layout.addWidget(QLabel("CAM TL X"))
-        cam_roi_layout.addWidget(self.spin_cam_roi_tl_x)
-        cam_roi_layout.addWidget(QLabel("CAM TL Y"))
-        cam_roi_layout.addWidget(self.spin_cam_roi_tl_y)
-        cam_roi_layout.addWidget(QLabel("CAM BR X"))
-        cam_roi_layout.addWidget(self.spin_cam_roi_br_x)
-        cam_roi_layout.addWidget(QLabel("CAM BR Y"))
-        cam_roi_layout.addWidget(self.spin_cam_roi_br_y)
-        cam_roi_layout.addWidget(self.btn_cam_roi_apply)
-        cam_layout.addLayout(cam_roi_layout)
-
-        # FFT ROI controls (for phase calculation)
-        fft_roi_layout = QHBoxLayout()
-        self.spin_fft_roi_tl_x = QSpinBox()
-        self.spin_fft_roi_tl_y = QSpinBox()
-        self.spin_fft_roi_br_x = QSpinBox()
-        self.spin_fft_roi_br_y = QSpinBox()
-        for s in (self.spin_fft_roi_tl_x, self.spin_fft_roi_tl_y,
-                  self.spin_fft_roi_br_x, self.spin_fft_roi_br_y):
-            s.setRange(0, 10000)
-        self.btn_fft_roi_apply = QPushButton("Apply")
-        fft_roi_layout.addWidget(QLabel("FFT TL X"))
-        fft_roi_layout.addWidget(self.spin_fft_roi_tl_x)
-        fft_roi_layout.addWidget(QLabel("FFT TL Y"))
-        fft_roi_layout.addWidget(self.spin_fft_roi_tl_y)
-        fft_roi_layout.addWidget(QLabel("FFT BR X"))
-        fft_roi_layout.addWidget(self.spin_fft_roi_br_x)
-        fft_roi_layout.addWidget(QLabel("FFT BR Y"))
-        fft_roi_layout.addWidget(self.spin_fft_roi_br_y)
-        fft_roi_layout.addWidget(self.btn_fft_roi_apply)
-        cam_layout.addLayout(fft_roi_layout)
 
         # --- ROW 2: THREE IMAGE VIEWS (3 COLUMNS) ---
         images_row_layout = QHBoxLayout()
@@ -317,6 +223,111 @@ class MainWindow(QMainWindow):
         images_row_layout.addWidget(self.label_cam_fft)       # FT view
         images_row_layout.addWidget(self.label_cam_phase)     # captured view
         cam_layout.addLayout(images_row_layout)
+
+        # Cam control
+        camctrl_group = QGroupBox("CAMERA CTRL")
+        camctrl_group.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Maximum)
+        camctrl_group.setStyleSheet("QGroupBox { color: #22c55e; }")
+        # --- ROW 1: ALL CAMERA CONTROLS ---
+        # Status + mode + connect/init/disc
+        camctrl_layout = QVBoxLayout(camctrl_group)
+        self.cam_status_label = QLabel("STATUS: DISCONNECTED")
+        self.cam_mode_combo = QComboBox()
+        self.cam_mode_combo.addItems(["Mono", "Frame Burst"])
+        self.btn_cam_connect = QPushButton("Conn.")
+        self.btn_cam_init = QPushButton("Init.")
+        self.btn_cam_disc = QPushButton("Disc.")
+        camctrl_layout.addWidget(self.cam_status_label)
+        top_camctrl_btns = QHBoxLayout()
+        top_camctrl_btns.addWidget(self.btn_cam_connect)
+        top_camctrl_btns.addWidget(self.btn_cam_init)
+        top_camctrl_btns.addWidget(self.btn_cam_disc)
+        camctrl_layout.addLayout(top_camctrl_btns)
+        camctrl_layout.addWidget(self.cam_mode_combo)
+        # Capture / gamma / FFT / Save
+        grid_camctrl = QGridLayout()
+        self.btn_cam_capture = QPushButton("Capture")
+        self.chk_fft = QCheckBox("FFT 2D")
+        self.chk_save = QCheckBox("Save")
+        self.gamma_spin = QDoubleSpinBox()
+        self.gamma_spin.setRange(0.0, 1.0)
+        self.gamma_spin.setSingleStep(0.1)
+        self.gamma_spin.setValue(0.3)
+        self.btn_cam_live = QPushButton("Live")
+        self.btn_cam_burst = QPushButton("Capt. Burst")
+        self.btn_cam_set_int = QPushButton("Set Texp")
+        self.int_time_spin = QDoubleSpinBox()
+        self.int_time_spin.setRange(0.1, 1000.0)
+        self.int_time_spin.setSingleStep(0.01)
+        self.int_time_spin.setValue(0.1)
+        grid_camctrl.addWidget(QLabel("Int. time [ms]"), 2, 0)
+        grid_camctrl.addWidget(self.int_time_spin, 2, 1)
+        grid_camctrl.addWidget(self.btn_cam_set_int,2,2)
+        grid_camctrl.addWidget(QLabel("Gamma"), 3, 0)
+        grid_camctrl.addWidget(self.gamma_spin, 3,1)
+        grid_camctrl.addWidget(self.chk_fft, 1, 0)
+        grid_camctrl.addWidget(self.chk_save, 1,1)
+        grid_camctrl.addWidget(self.btn_cam_capture, 0, 0)
+        grid_camctrl.addWidget(self.btn_cam_live, 0, 1)
+        grid_camctrl.addWidget(self.btn_cam_burst, 0, 2)
+        grid_camctrl_roi = QGridLayout()
+        # Camera ROI controls (pre-FFT crop)
+        self.spin_cam_roi_tl_x = QSpinBox()
+        self.spin_cam_roi_tl_y = QSpinBox()
+        self.spin_cam_roi_br_x = QSpinBox()
+        self.spin_cam_roi_br_y = QSpinBox()
+        for s in (self.spin_cam_roi_tl_x, self.spin_cam_roi_tl_y,
+                  self.spin_cam_roi_br_x, self.spin_cam_roi_br_y):
+            s.setRange(0, 10000)
+        self.btn_cam_roi_apply = QPushButton("Apply")
+        grid_camctrl_roi.addWidget(QLabel("CAM TL X"), 0, 0)
+        grid_camctrl_roi.addWidget(self.spin_cam_roi_tl_x, 0 ,1)
+        grid_camctrl_roi.addWidget(QLabel("CAM TL Y"), 1, 0)
+        grid_camctrl_roi.addWidget(self.spin_cam_roi_tl_y, 1, 1)
+        grid_camctrl_roi.addWidget(QLabel("CAM BR X"), 2, 0)
+        grid_camctrl_roi.addWidget(self.spin_cam_roi_br_x, 2, 1)
+        grid_camctrl_roi.addWidget(QLabel("CAM BR Y"), 3, 0)
+        grid_camctrl_roi.addWidget(self.spin_cam_roi_br_y, 3, 1)
+        grid_camctrl_roi.addWidget(self.btn_cam_roi_apply, 4, 1)
+        # FFT ROI controls (for phase calculation)
+        self.spin_fft_roi_tl_x = QSpinBox()
+        self.spin_fft_roi_tl_y = QSpinBox()
+        self.spin_fft_roi_br_x = QSpinBox()
+        self.spin_fft_roi_br_y = QSpinBox()
+        for s in (
+            self.spin_fft_roi_tl_x,
+            self.spin_fft_roi_tl_y,
+            self.spin_fft_roi_br_x,
+            self.spin_fft_roi_br_y,
+        ):
+            s.setRange(0, 10000)
+        self.btn_fft_roi_apply = QPushButton("Apply")
+        grid_camctrl_roi.addWidget(QLabel("FFT TL X"), 0, 2)
+        grid_camctrl_roi.addWidget(self.spin_fft_roi_tl_x, 0, 3)
+        grid_camctrl_roi.addWidget(QLabel("FFT TL Y"), 1, 2)
+        grid_camctrl_roi.addWidget(self.spin_fft_roi_tl_y, 1, 3)
+        grid_camctrl_roi.addWidget(QLabel("FFT BR X"), 2, 2)
+        grid_camctrl_roi.addWidget(self.spin_fft_roi_br_x, 2, 3)
+        grid_camctrl_roi.addWidget(QLabel("FFT BR Y"), 3, 2)
+        grid_camctrl_roi.addWidget(self.spin_fft_roi_br_y, 3, 3)
+        grid_camctrl_roi.addWidget(self.btn_fft_roi_apply, 4, 3)
+
+        # --- Tabs for camera controls and ROIs ---
+        tabs_camctrl = QTabWidget()
+
+        # Control tab
+        control_widget = QWidget()
+        control_layout = QVBoxLayout(control_widget)
+        control_layout.addLayout(grid_camctrl)
+        tabs_camctrl.addTab(control_widget, "Control")
+
+        # ROIs tab
+        rois_widget = QWidget()
+        rois_layout = QVBoxLayout(rois_widget)
+        rois_layout.addLayout(grid_camctrl_roi)
+        tabs_camctrl.addTab(rois_widget, "ROIs")
+
+        camctrl_layout.addWidget(tabs_camctrl)
 
         # Laser
         laser_group = QGroupBox("SWEPT SOURCE")
@@ -435,6 +446,7 @@ class MainWindow(QMainWindow):
         # --- TOP ROW: controller + laser + stage in one row ---
         top_row_layout = QHBoxLayout()
         top_row_layout.addWidget(ctrl_group, 0, Qt.AlignTop)
+        top_row_layout.addWidget(camctrl_group, 0, Qt.AlignTop)
         top_row_layout.addWidget(laser_group, 0, Qt.AlignTop)
         top_row_layout.addWidget(stage_group, 0, Qt.AlignTop)
         main_layout.addLayout(top_row_layout)
