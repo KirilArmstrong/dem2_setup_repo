@@ -1,19 +1,23 @@
+import logging
 import sys
 from datetime import datetime
 from pathlib import Path
-import numpy as np
-from PIL import Image
 import threading
-from io import BytesIO
-from PySide6.QtCore import Qt, QTimer
+
+import numpy as np
+from PIL import Image  # noqa: F401 (kept as in original)
+from io import BytesIO  # noqa: F401 (kept as in original)
+
+from PySide6.QtCore import Qt, QTimer, QThread, QObject, Signal
 from PySide6.QtGui import QImage, QPixmap, QFont
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QLabel, QPushButton, QVBoxLayout,
     QHBoxLayout, QGridLayout, QGroupBox, QTableWidget, QTableWidgetItem,
     QSpinBox, QDoubleSpinBox, QComboBox, QMessageBox, QCheckBox, QLineEdit,
-    QSizePolicy,QTabWidget,
+    QSizePolicy, QTabWidget,
 )
-from src.dem_2_3d_label_free.dem2_common.dem2_bscan_pattern import Dem2BScanPattern
+
+from src.dem_2_3d_label_free.dem2_common.dem2_bscan_pattern import Dem2BScanPattern  # noqa: F401
 from src.dem_2_3d_label_free.dem2_common.dem2_constants import Dem2State, Dem2LaserMode, Dem2CameraMode
 from src.dem_2_3d_label_free.dem2_common.dem2_helper import setup_root_logger
 from src.dem_2_3d_label_free.dem2_common.dem2_sweep_experiment import Dem2Results, Dem2SweepPacket
@@ -91,8 +95,8 @@ def crop_centre_ifft(ft_array: np.ndarray, top_left, bottom_right) -> np.ndarray
         # empty 0 array same size as ft_Array
         ft_centred = np.zeros_like(ft_array)
         # fill roi into center of empty array
-        ft_centred[int(ft_array.shape[0]/2)-int(h/2):int(ft_array.shape[0]/2)+int(h/2),
-                   int(ft_array.shape[1]/2)-int(w/2):int(ft_array.shape[1]/2)+int(w/2)] = \
+        ft_centred[int(ft_array.shape[0] / 2) - int(h / 2):int(ft_array.shape[0] / 2) + int(h / 2),
+                   int(ft_array.shape[1] / 2) - int(w / 2):int(ft_array.shape[1] / 2) + int(w / 2)] = \
             ft_array[top_left[0]:bottom_right[0], top_left[1]:bottom_right[1]]
     ft_unshifted = np.fft.ifftshift(ft_centred)
     img_iffted = np.fft.ifft2(ft_unshifted)
@@ -130,11 +134,136 @@ MODES = {
 }
 
 
+class ProcessingWorker(QObject):
+    """
+    Worker that acquires frames from the camera and performs FFT/iFFT/phase
+    computation off the GUI thread. Emits numpy arrays ready for display.
+    """
+    frame_ready = Signal(object, object, object)  # display_rgb, fft_img_u8, phase_rgb
+
+    def __init__(self, controller, parent=None):
+        super().__init__(parent)
+        self.controller = controller
+
+        self._active = True       # overall loop flag
+        self._running = False     # live flag
+        self._fft_enabled = False
+        self._gamma = 0.3
+
+        # ROIs: (tl_x, tl_y, br_x, br_y)
+        self._cam_roi = (0, 0, 0, 0)
+        self._fft_roi = (0, 0, 0, 0)
+
+    def stop(self):
+        self._active = False
+
+    def set_running(self, running: bool):
+        self._running = running
+
+    def set_fft_enabled(self, enabled: bool):
+        self._fft_enabled = enabled
+
+    def set_gamma(self, gamma: float):
+        self._gamma = float(gamma)
+
+    def set_cam_roi(self, tl_x: int, tl_y: int, br_x: int, br_y: int):
+        self._cam_roi = (int(tl_x), int(tl_y), int(br_x), int(br_y))
+
+    def set_fft_roi(self, tl_x: int, tl_y: int, br_x: int, br_y: int):
+        self._fft_roi = (int(tl_x), int(tl_y), int(br_x), int(br_y))
+
+    def run(self):
+        while self._active:
+            if not self._running:
+                QThread.msleep(50)
+                continue
+
+            if self.controller.camera.state != Dem2State.RUNNING:
+                QThread.msleep(20)
+                continue
+
+            image_array = self.controller.camera.get_image(self.controller.camera.image)
+            if image_array is None:
+                continue
+
+            # Normalize to uint8 for display / ROI drawing
+            if image_array.dtype in (np.float32, np.float64):
+                display_arr = (np.clip(image_array, 0, 1) * 255).astype(np.uint8)
+            else:
+                display_arr = image_array.astype(np.uint8)
+
+            h, w = display_arr.shape[:2]
+
+            # Camera ROI (clamped independently of GUI spin max)
+            tl_x, tl_y, br_x, br_y = self._cam_roi
+            cx1 = max(0, min(tl_x, w - 1))
+            cy1 = max(0, min(tl_y, h - 1))
+            cx2 = max(0, min(br_x, w - 1))
+            cy2 = max(0, min(br_y, h - 1))
+            cx2 = max(cx1, cx2)
+            cy2 = max(cy1, cy2)
+            has_cam_roi = (cx2 > cx1) and (cy2 > cy1)
+
+            # Build RGB display image and draw camera ROI if active
+            if display_arr.ndim == 2:
+                display_rgb = np.stack([display_arr, display_arr, display_arr], axis=-1)
+            else:
+                display_rgb = np.ascontiguousarray(display_arr)
+
+            if has_cam_roi:
+                thickness = 2
+                color = [255, 0, 0]
+                display_rgb[cy1:min(cy1 + thickness, cy2 + 1), cx1:cx2 + 1] = color
+                display_rgb[max(cy2 - thickness + 1, cy1):cy2 + 1, cx1:cx2 + 1] = color
+                display_rgb[cy1:cy2 + 1, cx1:min(cx1 + thickness, cx2 + 1)] = color
+                display_rgb[cy1:cy2 + 1, max(cx2 - thickness + 1, cx1):cx2 + 1] = color
+
+            # Crop to camera ROI for FFT processing
+            proc_array = display_arr[cy1:cy2, cx1:cx2] if has_cam_roi else display_arr
+
+            fft_img = None
+            phase_rgb = None
+
+            if self._fft_enabled and proc_array.size > 0:
+                # Full FFT/iFFT/phase every frame (as requested)
+                ft_arr = compute_fft(proc_array)
+                fft_img_u8 = covert_fft_to_img(ft_arr, self._gamma)
+
+                fh, fw = ft_arr.shape[:2]
+                # FFT ROI (for phase calculation and rectangle overlay)
+                f_tl_x, f_tl_y, f_br_x, f_br_y = self._fft_roi
+                x1 = max(0, min(f_tl_x, f_br_x, fw - 1))
+                y1 = max(0, min(f_tl_y, f_br_y, fh - 1))
+                x2 = max(0, min(max(f_tl_x, f_br_x), fw - 1))
+                y2 = max(0, min(max(f_tl_y, f_br_y), fh - 1))
+
+                # Phase image via IFFT of centred crop
+                ifft_arr = crop_centre_ifft(ft_arr, (x1, y1), (x2, y2))
+                phase_rgb = phase_to_hsv(ifft_arr)
+
+                # FFT display with ROI rectangle
+                rgb_fft = np.stack([fft_img_u8, fft_img_u8, fft_img_u8], axis=-1)
+                if x2 > x1 and y2 > y1:
+                    thickness = 2
+                    rgb_fft[y1:min(y1 + thickness, y2 + 1), x1:x2 + 1] = [255, 0, 0]
+                    rgb_fft[max(y2 - thickness + 1, y1):y2 + 1, x1:x2 + 1] = [255, 0, 0]
+                    rgb_fft[y1:y2 + 1, x1:min(x1 + thickness, x2 + 1)] = [255, 0, 0]
+                    rgb_fft[y1:y2 + 1, max(x2 - thickness + 1, x1):x2 + 1] = [255, 0, 0]
+                fft_img = rgb_fft
+            else:
+                fft_img = None
+                phase_rgb = None
+
+            self.frame_ready.emit(display_rgb, fft_img, phase_rgb)
+
+
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
+        self._log = logging.getLogger(self.__class__.__name__)
         self.state = SystemState()
         self._stage_thread = None
+        self._stage_generation = 0
         self._last_fft_array = None
 
         # Camera ROI (pre-FFT crop)
@@ -148,6 +277,14 @@ class MainWindow(QMainWindow):
         self.fft_roi_tl_y = 0
         self.fft_roi_br_x = 0
         self.fft_roi_br_y = 0
+
+        # Worker thread for live acquisition + processing
+        self.proc_thread = QThread(self)
+        self.proc_worker = ProcessingWorker(controller)
+        self.proc_worker.moveToThread(self.proc_thread)
+        self.proc_thread.started.connect(self.proc_worker.run)
+        self.proc_worker.frame_ready.connect(self._update_from_worker)
+        self.proc_thread.start()
 
         self.setWindowTitle("DEMONSTRATOR_2 // V.0.2")
         self.resize(1400, 900)
@@ -203,8 +340,6 @@ class MainWindow(QMainWindow):
         cam_group = QGroupBox("CAMERA FEEDS")
         cam_group.setStyleSheet("QGroupBox { color: #22c55e; }")
         cam_layout = QVBoxLayout(cam_group)
-
-
 
         # --- ROW 2: THREE IMAGE VIEWS (3 COLUMNS) ---
         images_row_layout = QHBoxLayout()
@@ -262,11 +397,11 @@ class MainWindow(QMainWindow):
         self.int_time_spin.setValue(0.1)
         grid_camctrl.addWidget(QLabel("Int. time [ms]"), 2, 0)
         grid_camctrl.addWidget(self.int_time_spin, 2, 1)
-        grid_camctrl.addWidget(self.btn_cam_set_int,2,2)
+        grid_camctrl.addWidget(self.btn_cam_set_int, 2, 2)
         grid_camctrl.addWidget(QLabel("Gamma"), 3, 0)
-        grid_camctrl.addWidget(self.gamma_spin, 3,1)
+        grid_camctrl.addWidget(self.gamma_spin, 3, 1)
         grid_camctrl.addWidget(self.chk_fft, 1, 0)
-        grid_camctrl.addWidget(self.chk_save, 1,1)
+        grid_camctrl.addWidget(self.chk_save, 1, 1)
         grid_camctrl.addWidget(self.btn_cam_capture, 0, 0)
         grid_camctrl.addWidget(self.btn_cam_live, 0, 1)
         grid_camctrl.addWidget(self.btn_cam_burst, 0, 2)
@@ -281,7 +416,7 @@ class MainWindow(QMainWindow):
             s.setRange(0, 10000)
         self.btn_cam_roi_apply = QPushButton("Apply")
         grid_camctrl_roi.addWidget(QLabel("CAM TL X"), 0, 0)
-        grid_camctrl_roi.addWidget(self.spin_cam_roi_tl_x, 0 ,1)
+        grid_camctrl_roi.addWidget(self.spin_cam_roi_tl_x, 0, 1)
         grid_camctrl_roi.addWidget(QLabel("CAM TL Y"), 1, 0)
         grid_camctrl_roi.addWidget(self.spin_cam_roi_tl_y, 1, 1)
         grid_camctrl_roi.addWidget(QLabel("CAM BR X"), 2, 0)
@@ -455,12 +590,10 @@ class MainWindow(QMainWindow):
         # Wire signals
         self._connect_signals()
 
-        # Timers: clock + live camera
+        # Timers: clock
         self.clock_timer = QTimer(self)
         self.clock_timer.timeout.connect(self._update_clock)
         self.clock_timer.start(1000)
-        self.live_timer = QTimer(self)
-        self.live_timer.timeout.connect(self._get_image_from_buffer)
 
         # Initial state update
         self.update_all()
@@ -569,14 +702,24 @@ class MainWindow(QMainWindow):
         # If a previous move is still running, optionally ignore or stop it
         if self._stage_thread is not None and self._stage_thread.is_alive():
             return
+
+        self._stage_generation += 1
+        gen = self._stage_generation
+
         def _run_move():
             try:
                 if focus:
                     controller.stage.move_focus(z, relative)
                 else:
                     controller.stage.move_stage(x, y, relative)
+            except Exception as exc:
+                # In a real app you should emit a Signal to show this in the GUI
+                self._log.error(f"[Stage Error] Generation {gen}: {exc}")
             finally:
-                self._stage_thread = None
+                # Only clear the thread reference if we are the most recent generation
+                if self._stage_generation == gen:
+                    self._stage_thread = None
+
         self._stage_thread = threading.Thread(target=_run_move, daemon=True)
         self._stage_thread.start()
 
@@ -606,6 +749,14 @@ class MainWindow(QMainWindow):
         controller.laser.kill_emission()
         controller.stage.stop_moving()
 
+        # Invalidate the old generation so its finally-block can't wipe out a future thread
+        self._stage_generation += 1
+
+        # Give the old move a moment to die cleanly, then force-unlock the GUI
+        if self._stage_thread is not None:
+            self._stage_thread.join(timeout=2.0)
+        self._stage_thread = None
+
     # ------------------------------------------------------------------
     # UI / State handling
     # ------------------------------------------------------------------
@@ -631,6 +782,8 @@ class MainWindow(QMainWindow):
         self.btn_cam_roi_apply.clicked.connect(self._apply_cam_roi)
         # FFT ROI
         self.btn_fft_roi_apply.clicked.connect(self._apply_fft_roi)
+        # gamma to worker
+        self.gamma_spin.valueChanged.connect(self._update_worker_gamma)
         # laser
         self.btn_laser_connect.clicked.connect(lambda: self._with_wait(self._connect_laser))
         self.btn_laser_init.clicked.connect(lambda: self._with_wait(self._init_laser))
@@ -732,6 +885,9 @@ class MainWindow(QMainWindow):
     def _update_flags(self):
         self.state.fftEnabled = self.chk_fft.isChecked()
         self.state.saveEnabled = self.chk_save.isChecked()
+        # propagate FFT flag to worker
+        if self.proc_worker is not None:
+            self.proc_worker.set_fft_enabled(self.state.fftEnabled)
 
     def _update_ui(self):
         # status table
@@ -810,7 +966,8 @@ class MainWindow(QMainWindow):
     def _disc_controller(self):
         self.state.isLive = False
         self.state.isCaptBurst = False
-        self.live_timer.stop()
+        if self.proc_worker is not None:
+            self.proc_worker.set_running(False)
         self.disconnect_device("controller")
 
     def _connect_camera(self):
@@ -822,7 +979,8 @@ class MainWindow(QMainWindow):
     def _disc_camera(self):
         self.state.isLive = False
         self.state.isCaptBurst = False
-        self.live_timer.stop()
+        if self.proc_worker is not None:
+            self.proc_worker.set_running(False)
         self.disconnect_device("camera")
 
     def _connect_laser(self):
@@ -925,72 +1083,17 @@ class MainWindow(QMainWindow):
 
         self._update_integration_time()
 
-    def _get_image_from_buffer(self):
-        if controller.camera.state != Dem2State.RUNNING:
-            return
-        image_array = controller.camera.get_image(controller.camera.image)
-        if image_array is None:
-            return
-
-        if image_array.dtype in (np.float32, np.float64):
-            display_arr = (np.clip(image_array, 0, 1) * 255).astype(np.uint8)
-        else:
-            display_arr = image_array.astype(np.uint8)
-
-        h, w = display_arr.shape[:2]
-
-        for s in (self.spin_cam_roi_tl_x, self.spin_cam_roi_br_x):
-            s.setMaximum(max(0, w - 1))
-        for s in (self.spin_cam_roi_tl_y, self.spin_cam_roi_br_y):
-            s.setMaximum(max(0, h - 1))
-
-        cx1 = max(0, min(self.cam_roi_tl_x, w - 1))
-        cy1 = max(0, min(self.cam_roi_tl_y, h - 1))
-        cx2 = max(0, min(self.cam_roi_br_x, w - 1))
-        cy2 = max(0, min(self.cam_roi_br_y, h - 1))
-        cx2 = max(cx1, cx2)
-        cy2 = max(cy1, cy2)
-        has_cam_roi = (cx2 > cx1) and (cy2 > cy1)
-
-        if display_arr.ndim == 2:
-            display_rgb = np.stack([display_arr, display_arr, display_arr], axis=-1)
-        else:
-            display_rgb = np.ascontiguousarray(display_arr)
-
-        if has_cam_roi:
-            thickness = 2
-            color = [255, 0, 0]
-            display_rgb[cy1:min(cy1 + thickness, cy2 + 1), cx1:cx2 + 1] = color
-            display_rgb[max(cy2 - thickness + 1, cy1):cy2 + 1, cx1:cx2 + 1] = color
-            display_rgb[cy1:cy2 + 1, cx1:min(cx1 + thickness, cx2 + 1)] = color
-            display_rgb[cy1:cy2 + 1, max(cx2 - thickness + 1, cx1):cx2 + 1] = color
-
-        qpix = numpy_to_qpixmap(display_rgb)
-        self.label_cam_live.setPixmap(
-            qpix.scaled(self.label_cam_live.size(), Qt.KeepAspectRatio, Qt.SmoothTransformation)
-        )
-
-        proc_array = display_arr[cy1:cy2, cx1:cx2] if has_cam_roi else display_arr
-
-        if self.state.isLive:
-            pass
-
-        if self.state.fftEnabled:
-            ft_arr = compute_fft(proc_array)
-            self._last_fft_array = covert_fft_to_img(ft_arr, float(self.gamma_spin.value()))
-            self._update_phase_display(ft_arr)
-            self._update_fft_display_with_roi()
-
     def _toggle_emission_clicked(self):
         self.toggle_emission()
 
     def _toggle_live_clicked(self):
         state_str = self.toggle_live()
         self.state.isLive = "RUNNING" in state_str
-        if self.state.isLive:
-            self.live_timer.start(100)
-        else:
-            self.live_timer.stop()
+        if self.proc_worker is not None:
+            self.proc_worker.set_running(self.state.isLive)
+            # ensure worker uses current gamma and FFT flag
+            self.proc_worker.set_gamma(float(self.gamma_spin.value()))
+            self.proc_worker.set_fft_enabled(self.state.fftEnabled)
 
     def _start_burst(self):
         self.start_trigger_capturing()
@@ -1005,12 +1108,27 @@ class MainWindow(QMainWindow):
         self.cam_roi_tl_y = self.spin_cam_roi_tl_y.value()
         self.cam_roi_br_x = self.spin_cam_roi_br_x.value()
         self.cam_roi_br_y = self.spin_cam_roi_br_y.value()
+        if self.proc_worker is not None:
+            self.proc_worker.set_cam_roi(
+                self.cam_roi_tl_x,
+                self.cam_roi_tl_y,
+                self.cam_roi_br_x,
+                self.cam_roi_br_y,
+            )
 
     def _apply_fft_roi(self):
         self.fft_roi_tl_x = self.spin_fft_roi_tl_x.value()
         self.fft_roi_tl_y = self.spin_fft_roi_tl_y.value()
         self.fft_roi_br_x = self.spin_fft_roi_br_x.value()
         self.fft_roi_br_y = self.spin_fft_roi_br_y.value()
+        if self.proc_worker is not None:
+            self.proc_worker.set_fft_roi(
+                self.fft_roi_tl_x,
+                self.fft_roi_tl_y,
+                self.fft_roi_br_x,
+                self.fft_roi_br_y,
+            )
+        # For single-capture path, still update the FFT overlay
         self._update_fft_display_with_roi()
 
     def _update_phase_display(self, ft_arr: np.ndarray):
@@ -1065,8 +1183,42 @@ class MainWindow(QMainWindow):
             qpix.scaled(self.label_cam_fft.size(), Qt.KeepAspectRatio, Qt.SmoothTransformation)
         )
 
+    def _update_from_worker(self, display_rgb, fft_img, phase_rgb):
+        # Called in GUI thread via signal from worker
+        if display_rgb is not None:
+            qpix_live = numpy_to_qpixmap(display_rgb)
+            self.label_cam_live.setPixmap(
+                qpix_live.scaled(self.label_cam_live.size(), Qt.KeepAspectRatio, Qt.SmoothTransformation)
+            )
+        if fft_img is not None:
+            qpix_fft = numpy_to_qpixmap(fft_img)
+            self.label_cam_fft.setPixmap(
+                qpix_fft.scaled(self.label_cam_fft.size(), Qt.KeepAspectRatio, Qt.SmoothTransformation)
+            )
+        if phase_rgb is not None:
+            qpix_phase = numpy_to_qpixmap(phase_rgb)
+            self.label_cam_phase.setPixmap(
+                qpix_phase.scaled(self.label_cam_phase.size(), Qt.KeepAspectRatio, Qt.SmoothTransformation)
+            )
+
+    def _update_worker_gamma(self, val):
+        if self.proc_worker is not None:
+            self.proc_worker.set_gamma(float(val))
+
     def _update_clock(self):
         self.clock_label.setText(datetime.now().strftime("%H:%M:%S"))
+
+    def closeEvent(self, event):
+        # Cleanly stop worker thread
+        try:
+            if self.proc_worker is not None:
+                self.proc_worker.set_running(False)
+                self.proc_worker.stop()
+            if self.proc_thread is not None:
+                self.proc_thread.quit()
+                self.proc_thread.wait()
+        finally:
+            super().closeEvent(event)
 
 
 def main():
