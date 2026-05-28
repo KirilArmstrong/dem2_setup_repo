@@ -739,7 +739,6 @@ class MainWindow(QMainWindow):
             controller.cam_capturer.end()
             controller.cam_capturer.join()
         controller.cam_capturer = Dem2Capturer(
-            None,
             controller.camera,
             Dem2SweepPacket(str(DATA_PATH / "image.h5")),
         )

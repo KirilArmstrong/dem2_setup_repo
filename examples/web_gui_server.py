@@ -1,3 +1,4 @@
+import time
 from concurrent.futures.thread import ThreadPoolExecutor
 from datetime import datetime
 from pathlib import Path
@@ -6,7 +7,7 @@ import yaml
 import logging
 import os
 from flask import Flask, render_template, jsonify, request, flash
-from numpy.array_api import zeros
+# from numpy.array_api import zeros
 
 from src.dem_2_3d_label_free.dem2_common.dem2_bscan_pattern import Dem2BScanPattern
 from src.dem_2_3d_label_free.dem2_common.dem2_constants import Dem2State, Dem2LaserMode, Dem2CameraMode
@@ -327,7 +328,7 @@ def get_single_image():
             raise Exception(f"Invalid gamma value: {gamma}. Must be between 0 and 1.")
 
         new_time = request.json.get("integration_time", 0.1)
-        controller.camera.t_exp = float(new_time)
+        # controller.camera.t_exp = float(new_time)
 
         # Get the image from the controller
         image_array = controller.camera.acquire_single_image()
@@ -520,4 +521,8 @@ def toggle_emission():
 
 
 if __name__ == '__main__':
+    st = "="*60 + "\nThe Web UI is deprecated. Please use the QT GUI.\n" + "="*60
+    logger.warning(st)
+    logger.info("Running server in 20s...")
+    time.sleep(20)
     app.run(debug=True)

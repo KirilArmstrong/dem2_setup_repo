@@ -95,24 +95,13 @@ class Dem2Camera(Thread, xiapi.Camera):
                 if self.samples_a_scan is None or self.samples_a_scan < 2:
                     raise Dem2Errors.CameraError("Camera must have a specified number of frames for frame burst mode. It must be >1 and not None.")
 
-                # self._log.info(self.get_trigger_source())
-
                 self.set_gpi_selector('XI_GPI_PORT2') # Adjust to your actual port
                 self.set_gpi_mode('XI_GPI_TRIGGER')
-                self.set_trigger_source("XI_TRG_EDGE_RISING")  # trigger when laser rises
+                self.set_trigger_source("XI_TRG_EDGE_FALLING")  # trigger when laser rises
                 self.set_trigger_selector(
                     "XI_TRG_SEL_FRAME_BURST_START"
                 )  # while pulse high, it continuously exposes.
                 self.set_acq_frame_burst_count(self.samples_a_scan)
-                # self.set_acq_buffer_size(self.samples_a_scan+1)
-                # self._log.info(4)
-                # self.set_buffers_queue_size(self.samples_a_scan+1)
-                # self._log.info(5)
-                # self.set_imgdataformat("XI_FRM_TRANSPORT_DATA")  # for image burst buffer
-
-                # self.set_concat_img_count(self.samples_a_scan)
-                # self.enable_concat_img_mode()  # multiple images in one buffer.
-                # self._buffer_offset = self.get_concat_img_transport_img_offset()
         self._state = Dem2State.READY
         self._log.info("Initialized the Camera.")
 

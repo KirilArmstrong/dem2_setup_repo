@@ -57,7 +57,7 @@ class Dem2Laser:
         else:
             self.kill_emission()
             self.send_command("MT")
-            self.send_command("MO")
+            # self.send_command("MO")
             self.send_command("MB")
         if self._serial_connection and self._serial_connection.is_open:
             self._serial_connection.close()

@@ -1,4 +1,4 @@
-from logging import Logger
+import logging
 from threading import Thread
 import xiapi
 from src.dem_2_3d_label_free.dem2_common.dem2_constants import Dem2CameraMode
@@ -10,11 +10,11 @@ from src.dem_2_3d_label_free.dem2_devices.dem2_camera import Dem2Camera
 class Dem2Capturer(Thread):
     """Camera frame capturing thread. Streams directly to a Packet."""
 
-    def __init__(self, log: Logger, cam: Dem2Camera, packet: Dem2SweepPacket):
+    def __init__(self, cam: Dem2Camera, packet: Dem2SweepPacket):
         Thread.__init__(self)
         self._cam = cam
         self._packet = packet
-        self._log = log
+        self._log = logging.getLogger(self.__class__.__name__)
         self._break = False
 
     def end(self):
@@ -32,7 +32,7 @@ class Dem2Capturer(Thread):
 
         # Prepare the packet (creates the file and readies the dataset)
         self._packet.start_capture()
-        self._log.info("Capturer Thread: Waiting for external signal to go HIGH...")
+        self._log.info("Capturer Thread: Waiting for external trigger...")
 
         try:
             while True:
@@ -42,7 +42,7 @@ class Dem2Capturer(Thread):
                     self._cam.get_image(img, timeout=500)
 
                     if not is_capturing:
-                        self._log.info("Capturer Thread: Signal is HIGH! Receiving frames...")
+                        self._log.info("Capturer Thread: Triggered. Receiving frames...")
                         is_capturing = True
 
                     # Feed frame view directly to HDF5 appender
@@ -51,7 +51,7 @@ class Dem2Capturer(Thread):
                 except xiapi.Xi_error as err:
                     if err.status == 10:  # Timeout / XI_TIMEOUT
                         if is_capturing:
-                            self._log.info("Capturer Thread: Signal went LOW. Burst complete.")
+                            self._log.info("Capturer Thread: Burst complete.")
                             break  # Exits the infinite loop, allowing thread to die cleanly
                         else:
                             # Still waiting for signal to go HIGH for the first time

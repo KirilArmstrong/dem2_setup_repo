@@ -304,7 +304,8 @@ class Dem2Stage:
         # call stop
         self.stage.Stop()
         self._state = Dem2State.READY
-        self._log.info("stage stopped at: ", self.get_position())
+        pos = self.get_position()
+        self._log.info(f"stage stopped at: {pos[0]}, {pos[1]}" )
 
     def move_along_scan_pattern(self):
         """Move to the next index of the scan pattern."""

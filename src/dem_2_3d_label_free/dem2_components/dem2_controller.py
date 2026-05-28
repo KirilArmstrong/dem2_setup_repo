@@ -48,7 +48,7 @@ class Dem2Controller:
         )
         self.camera = Dem2Camera(self._cfg["camera"])
         self.cam_packet = Dem2SweepPacket(str(Path(__datapath__) / "packet.h5"))
-        self.cam_capturer = Dem2Capturer(self._log, self.camera, self.cam_packet)
+        self.cam_capturer = Dem2Capturer(self.camera, self.cam_packet)
         self.laser = Dem2Laser(self._cfg["laser"])
 
         self.camera.samples_a_scan = math.floor(
