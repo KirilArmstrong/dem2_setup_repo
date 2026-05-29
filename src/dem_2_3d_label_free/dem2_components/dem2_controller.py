@@ -51,6 +51,13 @@ class Dem2Controller:
         self.cam_capturer = Dem2Capturer(self.camera, self.cam_packet)
         self.laser = Dem2Laser(self._cfg["laser"])
 
+        self.bscan_pattern: Dem2BScanPattern | None = None
+        self._buffer = xiapi.Image()
+
+        self.capture_next_live_frame = False
+
+    def update_burst_properties(self):
+
         self.camera.samples_a_scan = math.floor(
             (
                 (2 * np.pi / self.laser._wavelength_min)
@@ -61,11 +68,6 @@ class Dem2Controller:
         self.laser.total_sweep_time = (
             self.camera.t_frame / 1000
         ) * self.camera.samples_a_scan
-
-        self.bscan_pattern: Dem2BScanPattern | None = None
-        self._buffer = xiapi.Image()
-
-        self.capture_next_live_frame = False
 
     def connect(self):
         """Connect all devices."""

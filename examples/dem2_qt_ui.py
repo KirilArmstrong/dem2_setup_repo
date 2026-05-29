@@ -689,6 +689,7 @@ class MainWindow(QMainWindow):
         controller.laser.wavelength_max = float(self.spin_laser_max.value())
         controller.laser.wavelength_min = float(self.spin_laser_min.value())
         controller.laser.total_sweep_time = float(self.spin_laser_sweep.value())
+        controller.update_burst_properties()
 
     def set_stage_properties(self, relative: bool, focus: bool):
         if relative:
@@ -974,6 +975,7 @@ class MainWindow(QMainWindow):
 
     def _init_camera(self):
         self.initialize_device("camera")
+        controller.update_burst_properties()
 
     def _disc_camera(self):
         self.state.isLive = False
@@ -1100,6 +1102,7 @@ class MainWindow(QMainWindow):
 
     def _set_integration_time(self):
         controller.camera.t_exp = float(self.int_time_spin.value())
+        controller.update_burst_properties()
         self._update_integration_time()
 
     def _apply_cam_roi(self):
