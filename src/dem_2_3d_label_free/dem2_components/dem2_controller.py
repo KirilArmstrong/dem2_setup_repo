@@ -56,18 +56,28 @@ class Dem2Controller:
 
         self.capture_next_live_frame = False
 
-    def update_burst_properties(self):
+    def update_burst_properties(self, inverse=False):
 
-        self.camera.samples_a_scan = math.floor(
-            (
-                (2 * np.pi / self.laser._wavelength_min)
-                - (2 * np.pi / self.laser._wavelength_max)
+        if not inverse:
+            self.camera.samples_a_scan = math.floor(
+                (
+                    (2 * np.pi / self.laser._wavelength_min)
+                    - (2 * np.pi / self.laser._wavelength_max)
+                )
+                / (np.pi / (self.z_max * 1000))
             )
-            / (np.pi / (self.z_max * 1000))
-        )
-        self.laser.total_sweep_time = (
-            self.camera.t_frame / 1000
-        ) * self.camera.samples_a_scan
+            self.laser.total_sweep_time = (
+                self.camera.t_frame / 1000
+            ) * self.camera.samples_a_scan
+        else:
+            self.camera.samples_a_scan = self.laser.total_sweep_time / (
+                self.camera.t_frame / 1000
+            )
+            self.z_max = np.pi*self.camera.samples_a_scan/ (1000*(
+                    (2 * np.pi / self.laser._wavelength_min)
+                    - (2 * np.pi / self.laser._wavelength_max)
+                ))
+            self.update_burst_properties()
 
     def connect(self):
         """Connect all devices."""

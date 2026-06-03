@@ -81,8 +81,8 @@ class Dem2Camera(Thread, xiapi.Camera):
         self._log.info("Initialising the Camera in mode: " + str(self._mode) + "...")
         if self._state != Dem2State.CONNECTED:
             raise Dem2Errors.CameraError("Must be connected to initialize!")
-        # if self.samples_a_scan is None:
-        #     raise Dem2Errors.CameraError("Number of images must be set to initialize!")
+        if self.samples_a_scan is None:
+            raise Dem2Errors.CameraError("Number of images must be set to initialize!")
 
         self.set_exposure(self._t_exp * 1000)  # convert ms to us
         self.set_imgdataformat("XI_MONO8")

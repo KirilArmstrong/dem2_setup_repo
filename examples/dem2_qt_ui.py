@@ -3,11 +3,9 @@ import sys
 from datetime import datetime
 from pathlib import Path
 import threading
-
 import numpy as np
 from PIL import Image  # noqa: F401 (kept as in original)
 from io import BytesIO  # noqa: F401 (kept as in original)
-
 from PySide6.QtCore import Qt, QTimer, QThread, QObject, Signal
 from PySide6.QtGui import QImage, QPixmap, QFont
 from PySide6.QtWidgets import (
@@ -16,7 +14,6 @@ from PySide6.QtWidgets import (
     QSpinBox, QDoubleSpinBox, QComboBox, QMessageBox, QCheckBox, QLineEdit,
     QSizePolicy, QTabWidget,
 )
-
 from src.dem_2_3d_label_free.dem2_common.dem2_bscan_pattern import Dem2BScanPattern  # noqa: F401
 from src.dem_2_3d_label_free.dem2_common.dem2_constants import Dem2State, Dem2LaserMode, Dem2CameraMode
 from src.dem_2_3d_label_free.dem2_common.dem2_helper import setup_root_logger
@@ -83,21 +80,37 @@ def phase_to_hsv(array: np.ndarray) -> np.ndarray:
 
 
 def crop_centre_ifft(ft_array: np.ndarray, top_left, bottom_right) -> np.ndarray:
-    # make coords even
-    top_left = tuple(x - (x % 2) for x in top_left)
-    bottom_right = tuple(x - (x % 2) for x in bottom_right)
-    # get height and width
-    h = (bottom_right[0] - top_left[0])
-    w = (bottom_right[1] - top_left[1])
-    if h == 0 or w == 0:
+    """
+    Extract ft_array[top_left:bottom_right], place it in the centre of a
+    zero-padded array of the same size as ft_array, then ifftshift + ifft2.
+    top_left and bottom_right are (x, y) i.e. (column, row).
+    """
+    x1, y1 = top_left
+    x2, y2 = bottom_right
+
+    # Make coords even (round down) so centre alignment is unambiguous
+    x1 = x1 - (x1 % 2)
+    y1 = y1 - (y1 % 2)
+    x2 = x2 - (x2 % 2)
+    y2 = y2 - (y2 % 2)
+
+    w = x2 - x1  # width  (cols)
+    h = y2 - y1  # height (rows)
+
+    if h <= 0 or w <= 0:
         ft_centred = ft_array
     else:
-        # empty 0 array same size as ft_Array
         ft_centred = np.zeros_like(ft_array)
-        # fill roi into center of empty array
-        ft_centred[int(ft_array.shape[0] / 2) - int(h / 2):int(ft_array.shape[0] / 2) + int(h / 2),
-                   int(ft_array.shape[1] / 2) - int(w / 2):int(ft_array.shape[1] / 2) + int(w / 2)] = \
-            ft_array[top_left[0]:bottom_right[0], top_left[1]:bottom_right[1]]
+        ch = ft_array.shape[0] // 2
+        cw = ft_array.shape[1] // 2
+
+        row_start = ch - h // 2
+        col_start = cw - w // 2
+
+        # Target slice exactly matches source shape (h, w)
+        ft_centred[row_start:row_start + h, col_start:col_start + w] = \
+            ft_array[y1:y2, x1:x2]
+
     ft_unshifted = np.fft.ifftshift(ft_centred)
     img_iffted = np.fft.ifft2(ft_unshifted)
     return img_iffted
@@ -140,18 +153,19 @@ class ProcessingWorker(QObject):
     computation off the GUI thread. Emits numpy arrays ready for display.
     """
     frame_ready = Signal(object, object, object)  # display_rgb, fft_img_u8, phase_rgb
+    fft_roi_moved = Signal(int, int)              # new cx, cy
 
     def __init__(self, controller, parent=None):
         super().__init__(parent)
         self.controller = controller
-
         self._active = True       # overall loop flag
         self._running = False     # live flag
         self._fft_enabled = False
+        self._fft_track = False
         self._gamma = 0.3
-
         # ROIs: (tl_x, tl_y, br_x, br_y)
         self._cam_roi = (0, 0, 0, 0)
+        # FFT ROI now stored as (cx, cy, width, height)
         self._fft_roi = (0, 0, 0, 0)
 
     def stop(self):
@@ -163,37 +177,35 @@ class ProcessingWorker(QObject):
     def set_fft_enabled(self, enabled: bool):
         self._fft_enabled = enabled
 
+    def set_fft_tracking(self, enabled: bool):
+        self._fft_track = bool(enabled)
+
     def set_gamma(self, gamma: float):
         self._gamma = float(gamma)
 
     def set_cam_roi(self, tl_x: int, tl_y: int, br_x: int, br_y: int):
         self._cam_roi = (int(tl_x), int(tl_y), int(br_x), int(br_y))
 
-    def set_fft_roi(self, tl_x: int, tl_y: int, br_x: int, br_y: int):
-        self._fft_roi = (int(tl_x), int(tl_y), int(br_x), int(br_y))
+    def set_fft_roi(self, cx: int, cy: int, w: int, h: int):
+        self._fft_roi = (int(cx), int(cy), int(w), int(h))
 
     def run(self):
         while self._active:
             if not self._running:
                 QThread.msleep(50)
                 continue
-
             if self.controller.camera.state != Dem2State.RUNNING:
                 QThread.msleep(20)
                 continue
-
             image_array = self.controller.camera.get_image(self.controller.camera.image)
             if image_array is None:
                 continue
-
             # Normalize to uint8 for display / ROI drawing
             if image_array.dtype in (np.float32, np.float64):
                 display_arr = (np.clip(image_array, 0, 1) * 255).astype(np.uint8)
             else:
                 display_arr = image_array.astype(np.uint8)
-
             h, w = display_arr.shape[:2]
-
             # Camera ROI (clamped independently of GUI spin max)
             tl_x, tl_y, br_x, br_y = self._cam_roi
             cx1 = max(0, min(tl_x, w - 1))
@@ -203,13 +215,11 @@ class ProcessingWorker(QObject):
             cx2 = max(cx1, cx2)
             cy2 = max(cy1, cy2)
             has_cam_roi = (cx2 > cx1) and (cy2 > cy1)
-
             # Build RGB display image and draw camera ROI if active
             if display_arr.ndim == 2:
                 display_rgb = np.stack([display_arr, display_arr, display_arr], axis=-1)
             else:
                 display_rgb = np.ascontiguousarray(display_arr)
-
             if has_cam_roi:
                 thickness = 2
                 color = [255, 0, 0]
@@ -217,43 +227,82 @@ class ProcessingWorker(QObject):
                 display_rgb[max(cy2 - thickness + 1, cy1):cy2 + 1, cx1:cx2 + 1] = color
                 display_rgb[cy1:cy2 + 1, cx1:min(cx1 + thickness, cx2 + 1)] = color
                 display_rgb[cy1:cy2 + 1, max(cx2 - thickness + 1, cx1):cx2 + 1] = color
-
             # Crop to camera ROI for FFT processing
             proc_array = display_arr[cy1:cy2, cx1:cx2] if has_cam_roi else display_arr
-
             fft_img = None
             phase_rgb = None
-
             if self._fft_enabled and proc_array.size > 0:
-                # Full FFT/iFFT/phase every frame (as requested)
+                # Full FFT/iFFT/phase every frame
                 ft_arr = compute_fft(proc_array)
                 fft_img_u8 = covert_fft_to_img(ft_arr, self._gamma)
-
                 fh, fw = ft_arr.shape[:2]
-                # FFT ROI (for phase calculation and rectangle overlay)
-                f_tl_x, f_tl_y, f_br_x, f_br_y = self._fft_roi
-                x1 = max(0, min(f_tl_x, f_br_x, fw - 1))
-                y1 = max(0, min(f_tl_y, f_br_y, fh - 1))
-                x2 = max(0, min(max(f_tl_x, f_br_x), fw - 1))
-                y2 = max(0, min(max(f_tl_y, f_br_y), fh - 1))
+
+                # --- FFT ROI handling ---
+                cx, cy, roi_w, roi_h = self._fft_roi
+
+                # Initial TL/BR (clamped) defining the search window
+                x1 = cx - roi_w // 2
+                y1 = cy - roi_h // 2
+                x2 = x1 + roi_w
+                y2 = y1 + roi_h
+                x1 = max(0, min(x1, fw - 1))
+                y1 = max(0, min(y1, fh - 1))
+                x2 = max(0, min(x2, fw - 1))
+                y2 = max(0, min(y2, fh - 1))
+                x2 = max(x1, x2)
+                y2 = max(y1, y2)
+
+                # TRACKING: find brightest spot inside current ROI
+                if self._fft_track and (x2 > x1) and (y2 > y1):
+                    roi_slice = ft_arr[y1:y2, x1:x2]
+                    if roi_slice.size > 0:
+                        mag = np.abs(roi_slice)
+                        max_val = mag.max()
+                        ys, xs = np.where(mag == max_val)
+                        cx = int(round(xs.mean())) + x1
+                        cy = int(round(ys.mean())) + y1
+                        self._fft_roi = (cx, cy, roi_w, roi_h)
+                        self.fft_roi_moved.emit(cx, cy)
+
+                # Final TL/BR using (possibly tracked) centre
+                x1 = cx - roi_w // 2
+                y1 = cy - roi_h // 2
+                x2 = x1 + roi_w
+                y2 = y1 + roi_h
+                x1 = max(0, min(x1, fw - 1))
+                y1 = max(0, min(y1, fh - 1))
+                x2 = max(0, min(x2, fw - 1))
+                y2 = max(0, min(y2, fh - 1))
+                x2 = max(x1, x2)
+                y2 = max(y1, y2)
 
                 # Phase image via IFFT of centred crop
                 ifft_arr = crop_centre_ifft(ft_arr, (x1, y1), (x2, y2))
                 phase_rgb = phase_to_hsv(ifft_arr)
 
-                # FFT display with ROI rectangle
+                # FFT display with ROI rectangle and centre cross
                 rgb_fft = np.stack([fft_img_u8, fft_img_u8, fft_img_u8], axis=-1)
                 if x2 > x1 and y2 > y1:
-                    thickness = 2
-                    rgb_fft[y1:min(y1 + thickness, y2 + 1), x1:x2 + 1] = [255, 0, 0]
-                    rgb_fft[max(y2 - thickness + 1, y1):y2 + 1, x1:x2 + 1] = [255, 0, 0]
-                    rgb_fft[y1:y2 + 1, x1:min(x1 + thickness, x2 + 1)] = [255, 0, 0]
-                    rgb_fft[y1:y2 + 1, max(x2 - thickness + 1, x1):x2 + 1] = [255, 0, 0]
+                    th = 2
+                    rgb_fft[y1:min(y1 + th, y2), x1:x2] = [255, 0, 0]
+                    rgb_fft[max(y2 - th, y1):y2, x1:x2] = [255, 0, 0]
+                    rgb_fft[y1:y2, x1:min(x1 + th, x2)] = [255, 0, 0]
+                    rgb_fft[y1:y2, max(x2 - th, x1):x2] = [255, 0, 0]
+
+                    # Red cross at centre
+                    arm = max(5, min(roi_w, roi_h) // 4) if roi_w > 0 and roi_h > 0 else 10
+                    cx_c = max(0, min(cx, fw - 1))
+                    cy_c = max(0, min(cy, fh - 1))
+                    x_start = max(0, cx_c - arm)
+                    x_end = min(fw, cx_c + arm + 1)
+                    y_start = max(0, cy_c - arm)
+                    y_end = min(fh, cy_c + arm + 1)
+                    rgb_fft[cy_c, x_start:x_end] = [255, 0, 0]
+                    rgb_fft[y_start:y_end, cx_c] = [255, 0, 0]
                 fft_img = rgb_fft
             else:
                 fft_img = None
                 phase_rgb = None
-
             self.frame_ready.emit(display_rgb, fft_img, phase_rgb)
 
 
@@ -265,27 +314,24 @@ class MainWindow(QMainWindow):
         self._stage_thread = None
         self._stage_generation = 0
         self._last_fft_array = None
-
-        # Camera ROI (pre-FFT crop)
+        # Camera ROI (pre-FFT crop) – kept as TL / BR
         self.cam_roi_tl_x = 0
         self.cam_roi_tl_y = 0
         self.cam_roi_br_x = 0
         self.cam_roi_br_y = 0
-
-        # FFT ROI (for phase calculation)
-        self.fft_roi_tl_x = 0
-        self.fft_roi_tl_y = 0
-        self.fft_roi_br_x = 0
-        self.fft_roi_br_y = 0
-
+        # FFT ROI (for phase calculation) – now centre + width/height
+        self.fft_roi_cx = 0
+        self.fft_roi_cy = 0
+        self.fft_roi_w = 0
+        self.fft_roi_h = 0
         # Worker thread for live acquisition + processing
         self.proc_thread = QThread(self)
         self.proc_worker = ProcessingWorker(controller)
         self.proc_worker.moveToThread(self.proc_thread)
         self.proc_thread.started.connect(self.proc_worker.run)
         self.proc_worker.frame_ready.connect(self._update_from_worker)
+        self.proc_worker.fft_roi_moved.connect(self._on_fft_roi_moved)
         self.proc_thread.start()
-
         self.setWindowTitle("DEMONSTRATOR_2 // V.0.2")
         self.resize(1400, 900)
         # Main font similar to monospace terminal look
@@ -294,7 +340,6 @@ class MainWindow(QMainWindow):
         central = QWidget()
         self.setCentralWidget(central)
         main_layout = QVBoxLayout(central)
-
         # Header
         header_layout = QHBoxLayout()
         title_label = QLabel("DEMONSTRATOR 2")
@@ -310,7 +355,6 @@ class MainWindow(QMainWindow):
         header_layout.addStretch()
         header_layout.addWidget(self.clock_label)
         main_layout.addLayout(header_layout)
-
         # Top: controller master and status table
         ctrl_group = QGroupBox("MASTER CONTROLLER")
         ctrl_group.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Maximum)
@@ -335,12 +379,10 @@ class MainWindow(QMainWindow):
         self.status_table.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Maximum)
         ctrl_layout.addWidget(self.status_table)
         ctrl_layout.addStretch()
-
         # Upper grid: Camera (full width)
         cam_group = QGroupBox("CAMERA FEEDS")
         cam_group.setStyleSheet("QGroupBox { color: #22c55e; }")
         cam_layout = QVBoxLayout(cam_group)
-
         # --- ROW 2: THREE IMAGE VIEWS (3 COLUMNS) ---
         images_row_layout = QHBoxLayout()
         # Main live view
@@ -358,7 +400,6 @@ class MainWindow(QMainWindow):
         images_row_layout.addWidget(self.label_cam_fft)       # FT view
         images_row_layout.addWidget(self.label_cam_phase)     # captured view
         cam_layout.addLayout(images_row_layout)
-
         # Cam control
         camctrl_group = QGroupBox("CAMERA CTRL")
         camctrl_group.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Maximum)
@@ -385,6 +426,7 @@ class MainWindow(QMainWindow):
         self.chk_fft = QCheckBox("FFT 2D")
         self.chk_save = QCheckBox("Save")
         self.gamma_spin = QDoubleSpinBox()
+        self.frames = QLabel("1")
         self.gamma_spin.setRange(0.0, 1.0)
         self.gamma_spin.setSingleStep(0.1)
         self.gamma_spin.setValue(0.3)
@@ -400,6 +442,7 @@ class MainWindow(QMainWindow):
         grid_camctrl.addWidget(self.btn_cam_set_int, 2, 2)
         grid_camctrl.addWidget(QLabel("Gamma"), 3, 0)
         grid_camctrl.addWidget(self.gamma_spin, 3, 1)
+        grid_camctrl.addWidget(self.frames, 3, 2)
         grid_camctrl.addWidget(self.chk_fft, 1, 0)
         grid_camctrl.addWidget(self.chk_save, 1, 1)
         grid_camctrl.addWidget(self.btn_cam_capture, 0, 0)
@@ -423,47 +466,46 @@ class MainWindow(QMainWindow):
         grid_camctrl_roi.addWidget(self.spin_cam_roi_br_x, 2, 1)
         grid_camctrl_roi.addWidget(QLabel("CAM BR Y"), 3, 0)
         grid_camctrl_roi.addWidget(self.spin_cam_roi_br_y, 3, 1)
-        grid_camctrl_roi.addWidget(self.btn_cam_roi_apply, 4, 1)
-        # FFT ROI controls (for phase calculation)
-        self.spin_fft_roi_tl_x = QSpinBox()
-        self.spin_fft_roi_tl_y = QSpinBox()
-        self.spin_fft_roi_br_x = QSpinBox()
-        self.spin_fft_roi_br_y = QSpinBox()
+        # FFT ROI controls (for phase calculation) – now centre + width/height
+        self.spin_fft_roi_cx = QSpinBox()
+        self.spin_fft_roi_cy = QSpinBox()
+        self.spin_fft_roi_w = QSpinBox()
+        self.spin_fft_roi_h = QSpinBox()
         for s in (
-            self.spin_fft_roi_tl_x,
-            self.spin_fft_roi_tl_y,
-            self.spin_fft_roi_br_x,
-            self.spin_fft_roi_br_y,
+            self.spin_fft_roi_cx,
+            self.spin_fft_roi_cy,
+            self.spin_fft_roi_w,
+            self.spin_fft_roi_h,
         ):
             s.setRange(0, 10000)
         self.btn_fft_roi_apply = QPushButton("Apply")
-        grid_camctrl_roi.addWidget(QLabel("FFT TL X"), 0, 2)
-        grid_camctrl_roi.addWidget(self.spin_fft_roi_tl_x, 0, 3)
-        grid_camctrl_roi.addWidget(QLabel("FFT TL Y"), 1, 2)
-        grid_camctrl_roi.addWidget(self.spin_fft_roi_tl_y, 1, 3)
-        grid_camctrl_roi.addWidget(QLabel("FFT BR X"), 2, 2)
-        grid_camctrl_roi.addWidget(self.spin_fft_roi_br_x, 2, 3)
-        grid_camctrl_roi.addWidget(QLabel("FFT BR Y"), 3, 2)
-        grid_camctrl_roi.addWidget(self.spin_fft_roi_br_y, 3, 3)
-        grid_camctrl_roi.addWidget(self.btn_fft_roi_apply, 4, 3)
-
+        grid_camctrl_roi.addWidget(QLabel("FFT Cen X"), 0, 2)
+        grid_camctrl_roi.addWidget(self.spin_fft_roi_cx, 0, 3)
+        grid_camctrl_roi.addWidget(QLabel("FFT Cen Y"), 1, 2)
+        grid_camctrl_roi.addWidget(self.spin_fft_roi_cy, 1, 3)
+        grid_camctrl_roi.addWidget(QLabel("FFT Width"), 2, 2)
+        grid_camctrl_roi.addWidget(self.spin_fft_roi_w, 2, 3)
+        grid_camctrl_roi.addWidget(QLabel("FFT Height"), 3, 2)
+        grid_camctrl_roi.addWidget(self.spin_fft_roi_h, 3, 3)
+        # Tracking checkbox under FFT Height
+        self.chk_fft_track = QCheckBox("Track")
+        grid_camctrl_roi.addWidget(self.chk_fft_track, 4, 3)
+        # Apply buttons on row 5
+        grid_camctrl_roi.addWidget(self.btn_cam_roi_apply, 5, 1)
+        grid_camctrl_roi.addWidget(self.btn_fft_roi_apply, 5, 3)
         # --- Tabs for camera controls and ROIs ---
         tabs_camctrl = QTabWidget()
-
         # Control tab
         control_widget = QWidget()
         control_layout = QVBoxLayout(control_widget)
         control_layout.addLayout(grid_camctrl)
         tabs_camctrl.addTab(control_widget, "Control")
-
         # ROIs tab
         rois_widget = QWidget()
         rois_layout = QVBoxLayout(rois_widget)
         rois_layout.addLayout(grid_camctrl_roi)
         tabs_camctrl.addTab(rois_widget, "ROIs")
-
         camctrl_layout.addWidget(tabs_camctrl)
-
         # Laser
         laser_group = QGroupBox("SWEPT SOURCE")
         laser_group.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Maximum)
@@ -513,7 +555,6 @@ class MainWindow(QMainWindow):
         btns_laser_onoff.addWidget(self.btn_laser_off)
         laser_layout.addLayout(btns_laser_onoff)
         laser_layout.addStretch()
-
         # Stage
         stage_group = QGroupBox("MICROSCOPE STAGE")
         stage_group.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Maximum)
@@ -577,7 +618,6 @@ class MainWindow(QMainWindow):
         stage_layout.addLayout(grid_stage)
         stage_layout.addWidget(self.btn_stage_estop)
         stage_layout.addStretch()
-
         # --- TOP ROW: controller + laser + stage in one row ---
         top_row_layout = QHBoxLayout()
         top_row_layout.addWidget(ctrl_group, 0, Qt.AlignTop)
@@ -586,15 +626,12 @@ class MainWindow(QMainWindow):
         top_row_layout.addWidget(stage_group, 0, Qt.AlignTop)
         main_layout.addLayout(top_row_layout)
         main_layout.addWidget(cam_group)
-
         # Wire signals
         self._connect_signals()
-
         # Timers: clock
         self.clock_timer = QTimer(self)
         self.clock_timer.timeout.connect(self._update_clock)
         self.clock_timer.start(1000)
-
         # Initial state update
         self.update_all()
 
@@ -689,7 +726,8 @@ class MainWindow(QMainWindow):
         controller.laser.wavelength_max = float(self.spin_laser_max.value())
         controller.laser.wavelength_min = float(self.spin_laser_min.value())
         controller.laser.total_sweep_time = float(self.spin_laser_sweep.value())
-        controller.update_burst_properties()
+        controller.update_burst_properties(True)
+        self._update_frames()
 
     def set_stage_properties(self, relative: bool, focus: bool):
         if relative:
@@ -703,10 +741,8 @@ class MainWindow(QMainWindow):
         # If a previous move is still running, optionally ignore or stop it
         if self._stage_thread is not None and self._stage_thread.is_alive():
             return
-
         self._stage_generation += 1
         gen = self._stage_generation
-
         def _run_move():
             try:
                 if focus:
@@ -720,7 +756,6 @@ class MainWindow(QMainWindow):
                 # Only clear the thread reference if we are the most recent generation
                 if self._stage_generation == gen:
                     self._stage_thread = None
-
         self._stage_thread = threading.Thread(target=_run_move, daemon=True)
         self._stage_thread.start()
 
@@ -748,10 +783,8 @@ class MainWindow(QMainWindow):
     def emergency_stop(self):
         controller.laser.kill_emission()
         controller.stage.stop_moving()
-
         # Invalidate the old generation so its finally-block can't wipe out a future thread
         self._stage_generation += 1
-
         # Give the old move a moment to die cleanly, then force-unlock the GUI
         if self._stage_thread is not None:
             self._stage_thread.join(timeout=2.0)
@@ -782,6 +815,8 @@ class MainWindow(QMainWindow):
         self.btn_cam_roi_apply.clicked.connect(self._apply_cam_roi)
         # FFT ROI
         self.btn_fft_roi_apply.clicked.connect(self._apply_fft_roi)
+        # FFT tracking
+        self.chk_fft_track.stateChanged.connect(self._update_fft_tracking)
         # gamma to worker
         self.gamma_spin.valueChanged.connect(self._update_worker_gamma)
         # laser
@@ -836,6 +871,7 @@ class MainWindow(QMainWindow):
         self._update_laser_properties()
         self._update_stage_properties()
         self._update_integration_time()
+        self._update_frames()
         self._update_ui()
 
     def _update_states(self):
@@ -850,7 +886,7 @@ class MainWindow(QMainWindow):
                 self.state.devices[key]["mode"] = value
 
     def _update_properties(self):
-        _ = self.get_properties()
+         _= self.get_properties()
 
     def _update_laser_properties(self):
         if self.state.devices["laser"]["status"] == 0:
@@ -874,6 +910,9 @@ class MainWindow(QMainWindow):
         self.state.integration_time = controller.camera.t_exp
         self.int_time_spin.setValue(self.state.integration_time)
 
+    def _update_frames(self):
+        self.frames.setText(str(controller.camera.samples_a_scan))
+
     def _update_sweep_speed(self):
         dt = self.spin_laser_sweep.value()
         if dt <= 0:
@@ -888,6 +927,17 @@ class MainWindow(QMainWindow):
         # propagate FFT flag to worker
         if self.proc_worker is not None:
             self.proc_worker.set_fft_enabled(self.state.fftEnabled)
+
+    def _update_fft_tracking(self):
+        if self.proc_worker is not None:
+            self.proc_worker.set_fft_tracking(self.chk_fft_track.isChecked())
+
+    def _on_fft_roi_moved(self, cx: int, cy: int):
+        """Slot for worker tracking updates."""
+        self.fft_roi_cx = cx
+        self.fft_roi_cy = cy
+        self.spin_fft_roi_cx.setValue(cx)
+        self.spin_fft_roi_cy.setValue(cy)
 
     def _update_ui(self):
         # status table
@@ -923,7 +973,7 @@ class MainWindow(QMainWindow):
         self.cam_mode_combo.setCurrentIndex(cam["mode"])
         # laser
         laser = self.state.devices["laser"]
-        label, _ = STATUS_MAP.get(laser["status"], STATUS_MAP[99])
+        label, _= STATUS_MAP.get(laser["status"], STATUS_MAP[99])
         self.laser_status_label.setText(f"STATUS: {label}")
         self.btn_laser_connect.setEnabled(laser["status"] == 0)
         self.btn_laser_disc.setEnabled(laser["status"] not in (0, 99))
@@ -939,7 +989,7 @@ class MainWindow(QMainWindow):
         self.laser_mode_combo.setEnabled(laser["status"] <= 1)
         # stage
         stage = self.state.devices["stage"]
-        label, _ = STATUS_MAP.get(stage["status"], STATUS_MAP[99])
+        label, _= STATUS_MAP.get(stage["status"], STATUS_MAP[99])
         self.stage_status_label.setText(f"STATUS: {label}")
         self.btn_stage_connect.setEnabled(stage["status"] == 0)
         self.btn_stage_disc.setEnabled(stage["status"] not in (0, 99))
@@ -1021,21 +1071,17 @@ class MainWindow(QMainWindow):
         image_array = controller.camera.acquire_single_image()
         if image_array is None:
             return
-
         # Normalise to uint8 for display / ROI drawing
         if image_array.dtype in (np.float32, np.float64):
             display_arr = (np.clip(image_array, 0, 1) * 255).astype(np.uint8)
         else:
             display_arr = image_array.astype(np.uint8)
-
         h, w = display_arr.shape[:2]
-
         # Update Camera ROI bounds based on this frame
         for s in (self.spin_cam_roi_tl_x, self.spin_cam_roi_br_x):
             s.setMaximum(max(0, w - 1))
         for s in (self.spin_cam_roi_tl_y, self.spin_cam_roi_br_y):
             s.setMaximum(max(0, h - 1))
-
         # Clamp camera ROI to image bounds (exclusive BR semantics)
         cx1 = max(0, min(self.cam_roi_tl_x, w - 1))
         cy1 = max(0, min(self.cam_roi_tl_y, h - 1))
@@ -1044,13 +1090,11 @@ class MainWindow(QMainWindow):
         cx2 = max(cx1, cx2)
         cy2 = max(cy1, cy2)
         has_cam_roi = (cx2 > cx1) and (cy2 > cy1)
-
         # Build RGB display image and draw camera ROI if active
         if display_arr.ndim == 2:
             display_rgb = np.stack([display_arr, display_arr, display_arr], axis=-1)
         else:
             display_rgb = np.ascontiguousarray(display_arr)
-
         if has_cam_roi:
             thickness = 2
             color = [255, 0, 0]
@@ -1058,15 +1102,12 @@ class MainWindow(QMainWindow):
             display_rgb[max(cy2 - thickness + 1, cy1):cy2 + 1, cx1:cx2 + 1] = color
             display_rgb[cy1:cy2 + 1, cx1:min(cx1 + thickness, cx2 + 1)] = color
             display_rgb[cy1:cy2 + 1, max(cx2 - thickness + 1, cx1):cx2 + 1] = color
-
         qpix = numpy_to_qpixmap(display_rgb)
         self.label_cam_live.setPixmap(
             qpix.scaled(self.label_cam_live.size(), Qt.KeepAspectRatio, Qt.SmoothTransformation)
         )
-
         # Crop to camera ROI for FFT processing (exclusive BR, no zero-padding)
         proc_array = display_arr[cy1:cy2, cx1:cx2] if has_cam_roi else display_arr
-
         if self.state.saveEnabled:
             results = Dem2Results(
                 image_array,
@@ -1075,13 +1116,11 @@ class MainWindow(QMainWindow):
                 controller.stage.b_scan_pattern[0],
             )
             results.save(str(DATA_PATH / f"image_{datetime.now().strftime('%Y-%m-%dT%H-%M-%S')}.h5"))
-
         if self.state.fftEnabled:
             ft_arr = compute_fft(proc_array)
             self._last_fft_array = covert_fft_to_img(ft_arr, gamma)
             self._update_phase_display(ft_arr)
             self._update_fft_display_with_roi()
-
         self._update_integration_time()
 
     def _toggle_emission_clicked(self):
@@ -1119,27 +1158,59 @@ class MainWindow(QMainWindow):
             )
 
     def _apply_fft_roi(self):
-        self.fft_roi_tl_x = self.spin_fft_roi_tl_x.value()
-        self.fft_roi_tl_y = self.spin_fft_roi_tl_y.value()
-        self.fft_roi_br_x = self.spin_fft_roi_br_x.value()
-        self.fft_roi_br_y = self.spin_fft_roi_br_y.value()
+        self.fft_roi_cx = self.spin_fft_roi_cx.value()
+        self.fft_roi_cy = self.spin_fft_roi_cy.value()
+        self.fft_roi_w = self.spin_fft_roi_w.value()
+        self.fft_roi_h = self.spin_fft_roi_h.value()
         if self.proc_worker is not None:
             self.proc_worker.set_fft_roi(
-                self.fft_roi_tl_x,
-                self.fft_roi_tl_y,
-                self.fft_roi_br_x,
-                self.fft_roi_br_y,
+                self.fft_roi_cx,
+                self.fft_roi_cy,
+                self.fft_roi_w,
+                self.fft_roi_h,
             )
         # For single-capture path, still update the FFT overlay
         self._update_fft_display_with_roi()
 
     def _update_phase_display(self, ft_arr: np.ndarray):
         fh, fw = ft_arr.shape[:2]
-        # Clamp FFT ROI to the actual FFT array bounds
-        x1 = max(0, min(self.fft_roi_tl_x, self.fft_roi_br_x, fw - 1))
-        y1 = max(0, min(self.fft_roi_tl_y, self.fft_roi_br_y, fh - 1))
-        x2 = max(0, min(max(self.fft_roi_tl_x, self.fft_roi_br_x), fw - 1))
-        y2 = max(0, min(max(self.fft_roi_tl_y, self.fft_roi_br_y), fh - 1))
+        # Compute TL/BR from centre + width/height
+        cx, cy, w, h = self.fft_roi_cx, self.fft_roi_cy, self.fft_roi_w, self.fft_roi_h
+        x1 = cx - w // 2
+        y1 = cy - h // 2
+        x2 = x1 + w
+        y2 = y1 + h
+        # Clamp
+        x1 = max(0, min(x1, fw - 1))
+        y1 = max(0, min(y1, fh - 1))
+        x2 = max(0, min(x2, fw - 1))
+        y2 = max(0, min(y2, fh - 1))
+        x2 = max(x1, x2)
+        y2 = max(y1, y2)
+
+        # Tracking on single capture
+        if self.chk_fft_track.isChecked() and (x2 > x1) and (y2 > y1):
+            roi_slice = ft_arr[y1:y2, x1:x2]
+            if roi_slice.size > 0:
+                mag = np.abs(roi_slice)
+                max_val = mag.max()
+                ys, xs = np.where(mag == max_val)
+                self.fft_roi_cx = int(round(xs.mean())) + x1
+                self.fft_roi_cy = int(round(ys.mean())) + y1
+                # Update GUI
+                self.spin_fft_roi_cx.setValue(self.fft_roi_cx)
+                self.spin_fft_roi_cy.setValue(self.fft_roi_cy)
+                # Recompute TL/BR with tracked centre
+                x1 = self.fft_roi_cx - w // 2
+                y1 = self.fft_roi_cy - h // 2
+                x2 = x1 + w
+                y2 = y1 + h
+                x1 = max(0, min(x1, fw - 1))
+                y1 = max(0, min(y1, fh - 1))
+                x2 = max(0, min(x2, fw - 1))
+                y2 = max(0, min(y2, fh - 1))
+                x2 = max(x1, x2)
+                y2 = max(y1, y2)
 
         ifft_arr = crop_centre_ifft(ft_arr, (x1, y1), (x2, y2))
         phase_hsv = phase_to_hsv(ifft_arr)
@@ -1156,30 +1227,40 @@ class MainWindow(QMainWindow):
         if self._last_fft_array is None:
             return
         ft_arr = self._last_fft_array.copy()
-        h, w = ft_arr.shape
-
+        fh, fw = ft_arr.shape
         # Keep FFT ROI spinboxes bounded to current FFT image size
-        self.spin_fft_roi_tl_x.setMaximum(max(0, w - 1))
-        self.spin_fft_roi_tl_y.setMaximum(max(0, h - 1))
-        self.spin_fft_roi_br_x.setMaximum(max(0, w - 1))
-        self.spin_fft_roi_br_y.setMaximum(max(0, h - 1))
-
-        x1 = max(0, min(self.fft_roi_tl_x, self.fft_roi_br_x, w - 1))
-        y1 = max(0, min(self.fft_roi_tl_y, self.fft_roi_br_y, h - 1))
-        x2 = max(0, min(max(self.fft_roi_tl_x, self.fft_roi_br_x), w - 1))
-        y2 = max(0, min(max(self.fft_roi_tl_y, self.fft_roi_br_y), h - 1))
-        if x2 <= x1 or y2 <= y1:
-            qpix = numpy_to_qpixmap(ft_arr)
-            self.label_cam_fft.setPixmap(
-                qpix.scaled(self.label_cam_fft.size(), Qt.KeepAspectRatio, Qt.SmoothTransformation)
-            )
-            return
+        self.spin_fft_roi_cx.setMaximum(max(0, fw - 1))
+        self.spin_fft_roi_cy.setMaximum(max(0, fh - 1))
+        self.spin_fft_roi_w.setMaximum(max(0, fw))
+        self.spin_fft_roi_h.setMaximum(max(0, fh))
+        cx, cy, roi_w, roi_h = self.fft_roi_cx, self.fft_roi_cy, self.fft_roi_w, self.fft_roi_h
+        x1 = cx - roi_w // 2
+        y1 = cy - roi_h // 2
+        x2 = x1 + roi_w
+        y2 = y1 + roi_h
+        x1 = max(0, min(x1, fw - 1))
+        y1 = max(0, min(y1, fh - 1))
+        x2 = max(0, min(x2, fw - 1))
+        y2 = max(0, min(y2, fh - 1))
+        x2 = max(x1, x2)
+        y2 = max(y1, y2)
         rgb = np.stack([ft_arr, ft_arr, ft_arr], axis=-1)
-        thickness = 2
-        rgb[y1:min(y1 + thickness, y2 + 1), x1:x2 + 1] = [255, 0, 0]
-        rgb[max(y2 - thickness + 1, y1):y2 + 1, x1:x2 + 1] = [255, 0, 0]
-        rgb[y1:y2 + 1, x1:min(x1 + thickness, x2 + 1)] = [255, 0, 0]
-        rgb[y1:y2 + 1, max(x2 - thickness + 1, x1):x2 + 1] = [255, 0, 0]
+        if x2 > x1 and y2 > y1:
+            th = 2
+            rgb[y1:min(y1 + th, y2), x1:x2] = [255, 0, 0]
+            rgb[max(y2 - th, y1):y2, x1:x2] = [255, 0, 0]
+            rgb[y1:y2, x1:min(x1 + th, x2)] = [255, 0, 0]
+            rgb[y1:y2, max(x2 - th, x1):x2] = [255, 0, 0]
+            # Red cross at centre
+            arm = max(5, min(roi_w, roi_h) // 4) if roi_w > 0 and roi_h > 0 else 10
+            cx_c = max(0, min(cx, fw - 1))
+            cy_c = max(0, min(cy, fh - 1))
+            x_start = max(0, cx_c - arm)
+            x_end = min(fw, cx_c + arm + 1)
+            y_start = max(0, cy_c - arm)
+            y_end = min(fh, cy_c + arm + 1)
+            rgb[cy_c, x_start:x_end] = [255, 0, 0]
+            rgb[y_start:y_end, cx_c] = [255, 0, 0]
         qpix = numpy_to_qpixmap(rgb)
         self.label_cam_fft.setPixmap(
             qpix.scaled(self.label_cam_fft.size(), Qt.KeepAspectRatio, Qt.SmoothTransformation)
