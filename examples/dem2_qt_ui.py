@@ -914,12 +914,11 @@ class MainWindow(QMainWindow):
         self.frames.setText(str(controller.camera.samples_a_scan))
 
     def _update_sweep_speed(self):
-        dt = self.spin_laser_sweep.value()
-        if dt <= 0:
-            self.spin_laser_sweep_speed.setValue(0.0)
-            return
-        speed = (self.spin_laser_max.value() - self.spin_laser_min.value()) / dt
-        self.spin_laser_sweep_speed.setValue(speed)
+        controller.laser.wavelength_min = self.spin_laser_min.value()
+        controller.laser.wavelength_max = self.spin_laser_max.value()
+        controller.update_burst_properties()
+        self.spin_laser_sweep_speed.setValue(controller.laser.sweep_speed)
+        self.spin_laser_sweep.setValue(controller.laser.total_sweep_time)
 
     def _update_flags(self):
         self.state.fftEnabled = self.chk_fft.isChecked()

@@ -11,6 +11,7 @@ import numpy as np
 
 import xiapi
 from src.dem_2_3d_label_free.dem2_common.dem2_bscan_pattern import Dem2BScanPattern
+from src.dem_2_3d_label_free.dem2_common.dem2_calculator import Dem2SystemCalculator
 from src.dem_2_3d_label_free.dem2_common.dem2_constants import Dem2State
 from src.dem_2_3d_label_free.dem2_common.dem2_errors import Dem2Errors
 from src.dem_2_3d_label_free.dem2_common.dem2_sweep_experiment import (
@@ -42,6 +43,8 @@ class Dem2Controller:
         self.mag = self._cfg["system"]["magnification"]
         self.na = self._cfg["system"]["numerical_aperture"]
 
+        self.calculator = Dem2SystemCalculator()
+
         # Device setup
         self.stage = Dem2Stage(
             self._cfg["stage"]
@@ -50,34 +53,22 @@ class Dem2Controller:
         self.cam_packet = Dem2SweepPacket(str(Path(__datapath__) / "packet.h5"))
         self.cam_capturer = Dem2Capturer(self.camera, self.cam_packet)
         self.laser = Dem2Laser(self._cfg["laser"])
+        self.update_burst_properties()
 
         self.bscan_pattern: Dem2BScanPattern | None = None
         self._buffer = xiapi.Image()
 
         self.capture_next_live_frame = False
 
-    def update_burst_properties(self, inverse=False):
-
-        if not inverse:
-            self.camera.samples_a_scan = math.floor(
-                (
-                    (2 * np.pi / self.laser._wavelength_min)
-                    - (2 * np.pi / self.laser._wavelength_max)
-                )
-                / (np.pi / (self.z_max * 1000))
+    def update_burst_properties(self):
+        self.camera.samples_a_scan = self.calculator.sample_no(
+                self.laser.wavelength_min, self.laser.wavelength_max, self.z_max
             )
-            self.laser.total_sweep_time = (
-                self.camera.t_frame / 1000
-            ) * self.camera.samples_a_scan
-        else:
-            self.camera.samples_a_scan = self.laser.total_sweep_time / (
-                self.camera.t_frame / 1000
-            )
-            self.z_max = np.pi*self.camera.samples_a_scan/ (1000*(
-                    (2 * np.pi / self.laser._wavelength_min)
-                    - (2 * np.pi / self.laser._wavelength_max)
-                ))
-            self.update_burst_properties()
+        self.laser.total_sweep_time = self.calculator.total_time(
+            self.camera.t_exp,
+            self.camera.samples_a_scan,
+            self.camera.t_read,
+        )
 
     def connect(self):
         """Connect all devices."""

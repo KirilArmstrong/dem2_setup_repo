@@ -99,9 +99,9 @@ class Dem2Camera(Thread, xiapi.Camera):
                 self.set_gpi_mode('XI_GPI_TRIGGER')
                 self.set_trigger_source("XI_TRG_EDGE_FALLING")  # trigger when laser rises
                 self.set_trigger_selector(
-                    "XI_TRG_SEL_FRAME_BURST_START"
+                    "XI_TRG_SEL_FRAME_BURST_ACTIVE"
                 )  # while pulse high, it continuously exposes.
-                self.set_acq_frame_burst_count(self.samples_a_scan)
+                # self.set_acq_frame_burst_count(self.samples_a_scan)
         self._state = Dem2State.READY
         self._log.info("Initialized the Camera.")
 

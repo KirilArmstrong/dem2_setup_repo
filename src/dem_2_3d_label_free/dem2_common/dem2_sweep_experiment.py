@@ -17,45 +17,45 @@ class Dem2SweepPacket:
         self._log = logging.getLogger(self.__class__.__name__)
         self.filepath = filepath
         
-        self._h5f = None
-        self._dataset = None
+        self._h5_file = None
+        self._data = None
         self._frame_count = 0
 
     def start_capture(self):
         """Prepares the HDF5 file to receive streaming frames."""
         os.makedirs(os.path.dirname(self.filepath), exist_ok=True)
-        self._h5f = h5py.File(self.filepath, 'w')
-        self._dataset = None
+        self._h5_file = h5py.File(self.filepath, 'w')
+        self._data = None
         self._frame_count = 0
 
     def append_frame(self, frame_data: np.ndarray):
         """Appends a single frame to the open HDF5 dataset on the fly."""
-        if self._h5f is None:
+        if self._h5_file is None:
             raise RuntimeError("Packet is not open. Call start_capture() first.")
 
-        if self._dataset is None:
+        if self._data is None:
             h, w = frame_data.shape
             # Initialize resizable dataset on the first frame
-            self._dataset = self._h5f.create_dataset(
+            self._data = self._h5_file.create_dataset(
                 "images",
                 shape=(1, h, w),
                 maxshape=(None, h, w),
                 dtype=frame_data.dtype,
                 chunks=(1, h, w)
             )
-            self._dataset[0] = frame_data
+            self._data[0] = frame_data
         else:
             # Expand dataset and write new frame
-            self._dataset.resize((self._frame_count + 1, self._dataset.shape[1], self._dataset.shape[2]))
-            self._dataset[self._frame_count] = frame_data
+            self._data.resize((self._frame_count + 1, self._data.shape[1], self._data.shape[2]))
+            self._data[self._frame_count] = frame_data
             
         self._frame_count += 1
 
     def stop_capture(self):
         """Safely closes the file after capture is complete."""
-        if self._h5f is not None:
-            self._h5f.close()
-            self._h5f = None
+        if self._h5_file is not None:
+            self._h5_file.close()
+            self._h5_file = None
             self._log.info("Saved %d frames to %s", self._frame_count, self.filepath)
 
     def __getitem__(self, key):
