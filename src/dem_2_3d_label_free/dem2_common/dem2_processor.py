@@ -44,11 +44,9 @@ class Dem2Processor:
             if ndim == 3 and len(key) == 2:
                 key = (1,) + key
 
-            # 2D dataset, 3D key: error
+            # 2D dataset, 3D key -> drop the first index, use remaining 2
             if ndim == 2 and len(key) == 3:
-                raise IndexError(
-                    f"3 indices given for 2D dataset of shape {dset.shape}"
-                )
+                key = key[1:]
 
             # Optional: enforce correct number of indices
             if len(key) > ndim:
@@ -76,7 +74,7 @@ class Dem2Processor:
         Convert a `tif` or `tiff` file to a `h5` file, and load that h5 file.
         :param path: Path to alternate file.
         """
-        p = str(path if str(path)!="." else self.path)
+        p = str(path if str(path) != "." else self.path)
         if not os.path.exists(p):
             raise FileNotFoundError(f"TIFF file not found: {p}")
         base_name, extension = os.path.splitext(p)
@@ -131,15 +129,17 @@ class Dem2Processor:
         # Base attributes
         attrs = attributes if attributes is not None else self._attributes
 
-        path = path if str(path)!="." else self.path
+        path = path if str(path) != "." else self.path
         ds_name = dataset_name if dataset_name else self.dataset
 
         with h5py.File(str(path), "a") as f:
             if array is not None:
-                attrs.update({
-                    "shape": array.shape,
-                    "dtype": str(array.dtype),
-                })
+                attrs.update(
+                    {
+                        "shape": array.shape,
+                        "dtype": str(array.dtype),
+                    }
+                )
                 # (Re)create or create dataset with compression
                 if ds_name in f:
                     # Optional: decide whether to delete/overwrite or raise
@@ -171,7 +171,7 @@ class Dem2Processor:
         :param new_name: New dataset name.
         :param path: Path to other h5 file if not using current loaded one. This won't load it, use load() first.
         """
-        h5_path = path if str(path)!="." else self.path
+        h5_path = path if str(path) != "." else self.path
         with h5py.File(str(h5_path), "r+") as f:
             if dataset not in f:
                 raise KeyError(f"Dataset '{dataset}' not found in file '{h5_path}'.")
@@ -217,7 +217,7 @@ class Dem2Processor:
         """
         Crop out a feature in an array and zero pad it to the input array size.
         :param array: Input array.
-        :param centre: Centre coordinate tuple.
+        :param centre: (y, x) Centre coordinate tuple.
         :param width: Width of cropped roi.
         :param height: Height of cropped roi.
         :return: Zero padded cropped array sized same as input array.
@@ -250,20 +250,23 @@ class Dem2Processor:
         array: np.ndarray | None = None,
         roi: tuple[slice, slice] | None = None,
         dataset: str | None = None,
+        z_slice: int = 1,
         plot: bool = True,
     ) -> np.ndarray:
         """
         Reconstruct the object field from a hologram and plot it.
-        :param centre: Centre point of 1st order.
+        :param centre: (y, x) Centre point of 1st order.
         :param width: semi-major axis length. (rectangle width)
         :param height: semi-minor axis length. (rectangle height)
-        :param array: Array to reconstruct. Optional, will use loaded dataset.
+        :param array: Array to reconstruct. Optional, will use loaded dataset. 3d supported with z_slice.
         :param roi: ROI to reconstruct. Optional, will default to whole image.
         :param dataset: Dataset to reconstruct. Optional, will use loaded dataset.
         :param plot: Plot everything and show figures.
+        :param z_slice: Which z index to use, i.e. image in image stack.
         :return: Reconstructed array (size of roi if provided.)
         """
-        arr = array if array is not None else self[:, :]
+        arr = array if array is not None else self[z_slice, :, :]
+        arr = arr if arr.ndim == 2 else arr[z_slice,:,:] # support for inputting 3d arrays.
         for name, value in (
             ("centre", centre),
             ("width", width),
@@ -316,10 +319,12 @@ class Dem2Processor:
         plt.title(title)
         plt.axis("off")
 
-    def plot_ft(self,
+    def plot_ft(
+        self,
         full_array: np.ndarray | None = None,
         roi: tuple[slice, slice] | None = None,
-        dataset: str | None = None,):
+        dataset: str | None = None,
+    ):
         """
         Plot the fft of an array.
         :param full_array: Array to fft. Optional, will use loaded dataset.
