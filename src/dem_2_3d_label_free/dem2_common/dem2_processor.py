@@ -5,12 +5,17 @@ from pathlib import Path
 import os
 from PIL import Image
 from matplotlib import pyplot as plt
+from numpy.linalg import lstsq
+from scipy.ndimage import center_of_mass, label
 
 from src.dem_2_3d_label_free.__globals__ import __datapath__
 
 import h5py
 import numpy as np
 import scipy
+
+
+from src.dem_2_3d_label_free.dem2_common.dem2_helper import zernike_noll
 
 
 class Dem2Processor:
@@ -200,7 +205,7 @@ class Dem2Processor:
         """
         Fourier transform an roi of an array.
         :param array: Full array.
-        :param roi: Roi to FFT. Optional.
+        :param roi: (y,x) Roi to FFT. Optional.
         :param dataset: Dataset to use from loaded h5 file. Optional, will default to loaded dataset.
         :return: FFTed array (size of roi if provided.)
         """
@@ -266,7 +271,9 @@ class Dem2Processor:
         :return: Reconstructed array (size of roi if provided.)
         """
         arr = array if array is not None else self[z_slice, :, :]
-        arr = arr if arr.ndim == 2 else arr[z_slice,:,:] # support for inputting 3d arrays.
+        arr = (
+            arr if arr.ndim == 2 else arr[z_slice, :, :]
+        )  # support for inputting 3d arrays.
         for name, value in (
             ("centre", centre),
             ("width", width),
@@ -310,7 +317,8 @@ class Dem2Processor:
         if cmap == "hsv":
             array = np.angle(array)
         elif np.issubdtype(array.dtype, np.complexfloating):
-            array = (array * array.conj()).real
+            # array = (array * array.conj()).real
+            array = abs(array)
             if gamma is not None:
                 array = array**gamma
         plt.imshow(array, cmap=cmap)
@@ -328,12 +336,234 @@ class Dem2Processor:
         """
         Plot the fft of an array.
         :param full_array: Array to fft. Optional, will use loaded dataset.
-        :param roi: Roi of the array. Optional, will use the whole array.
+        :param roi: (y,x) Roi of the array. Optional, will use the whole array.
         :param dataset: Dataset to use. Optional, will use loaded dataset.
         """
         ft_arr = self.ft(full_array, roi, dataset)
         self._prep_plot(ft_arr, "FFTed Image", gamma=0.05)
         plt.show()
+
+    def estimate_ellipse_from_fft(self,
+        fft_img, center_guess, gamma=0.05, roi_half_size=700, thresh_factor=0.5
+    ):
+        """
+        Parameters
+        ----------
+        fft_img : np.ndarray (2D, complex or real)
+            FFTed array (off-axis holography spectrum).
+        center_guess : tuple (cy, cx)
+            Approximate center (in pixel coordinates) of the signal lobe in k-space.
+        gamma : float
+            Gamma exponent (use 0.05 to match your acquisition).
+        roi_half_size : int
+            Half-size of the square ROI extracted around center_guess.
+        thresh_factor : float in (0, 1)
+            Factor between inside/outside means used for threshold.
+
+        Returns
+        -------
+        center : tuple of int
+            (center_y, center_x) in full-image coordinates.
+        width : int
+            Ellipse width (major-axis bounding box, in pixels).
+        height : int
+            Ellipse height (minor-axis bounding box, in pixels).
+        """
+
+        # magnitude + gamma
+        mag = np.abs(fft_img).astype(np.float64)
+        mag_gamma = mag**gamma
+
+        H, W = mag_gamma.shape
+        cy0, cx0 = center_guess
+
+        # ROI bounds
+        y1 = max(0, cy0 - roi_half_size)
+        y2 = min(H, cy0 + roi_half_size)
+        x1 = max(0, cx0 - roi_half_size)
+        x2 = min(W, cx0 + roi_half_size)
+
+        roi = mag_gamma[y1:y2, x1:x2]
+
+        # Rough “inside vs outside” statistics using a circular mask
+        yy, xx = np.mgrid[0 : roi.shape[0], 0 : roi.shape[1]]
+        cy_roi = roi.shape[0] / 2.0
+        cx_roi = roi.shape[1] / 2.0
+        r = np.sqrt((yy - cy_roi) ** 2 + (xx - cx_roi) ** 2)
+
+        r_in = np.percentile(r, 40)  # inner region
+        r_out = np.percentile(r, 80)  # outer ring
+
+        inside = roi[r <= r_in]
+        outside = roi[(r >= r_out)]
+
+        mean_in = inside.mean()
+        mean_out = outside.mean()
+
+        # threshold halfway between means (you mentioned ~1.7 vs 1.5 after gamma)
+        thr = mean_out + thresh_factor * (mean_in - mean_out)
+
+        # binary mask
+        mask = roi > thr
+
+        # keep only the connected component nearest to the ROI center
+        labeled, num = label(mask)
+        if num == 0:
+            # fallback: everything is background; return guess with zero size
+            return (int(cy0), int(cx0)), 0, 0
+
+        # distance of component centroids to ROI center
+        comps = np.arange(1, num + 1)
+        cents = np.array(center_of_mass(mask, labeled, comps))
+        d2 = (cents[:, 0] - cy_roi) ** 2 + (cents[:, 1] - cx_roi) ** 2
+        best_lab = comps[np.argmin(d2)]
+        mask_ellipse = labeled == best_lab
+
+        # pixel coordinates of that component (in ROI coords)
+        ys, xs = np.nonzero(mask_ellipse)
+        if ys.size < 3:
+            # not enough points
+            return (int(cy0), int(cx0)), 0, 0
+
+        # centroid in ROI coords
+        cy_e = ys.mean()
+        cx_e = xs.mean()
+
+        # covariance matrix → ellipse axes via eigenvalues
+        y_shift = ys - cy_e
+        x_shift = xs - cx_e
+        coords = np.vstack((y_shift, x_shift))
+        cov = np.cov(coords)
+
+        evals, evecs = np.linalg.eigh(cov)
+        # sort eigenvalues: largest = major axis
+        order = np.argsort(evals)[::-1]
+        evals = evals[order]
+
+        # std dev along axes
+        sigma_major = np.sqrt(evals[0])
+        sigma_minor = np.sqrt(evals[1])
+
+        # choose k to approximate the boundary (3σ ~ 99.7%, adjust if needed)
+        k = 3.0
+        semi_major = k * sigma_major
+        semi_minor = k * sigma_minor
+
+        # convert to full-image coordinates
+        cy_full = y1 + cy_e
+        cx_full = x1 + cx_e
+
+        width = int(np.round(2 * semi_major))
+        height = int(np.round(2 * semi_minor))
+
+        center = (int(np.round(cy_full)), int(np.round(cx_full)))
+        return center, width, height
+
+    def get_zernike_coeffs(
+        self,
+        array: np.ndarray,
+        centre: tuple[int, int],
+        radius: int,
+        max_noll: int = 15,
+        plot: bool = True,
+    ):
+        """
+        Get the Zernike Coefficients of a roi of a reconstructed field.
+        :param array: Full array of object field.
+        :param centre: Center of roi. (y,x)
+        :param radius: Radius of roi.
+        :param max_noll: Max Nolls. recommended = 15.
+        :param plot: Represent nolls on plot.
+        :return: Zernike coefficients array.
+        """
+        array = array[
+            centre[0] - radius : centre[0] + radius,
+            centre[1] - radius : centre[1] + radius,
+        ]
+        # U: complex array, result of your holography reconstruction
+        phase = np.angle(array)
+
+        Ny, Nx = phase.shape
+        if Ny != Nx:
+            # enforce square for the simple radial definition; crop or pad if needed
+            N = min(Ny, Nx)
+            cy = Ny // 2
+            cx = Nx // 2
+            phase = phase[cy - N // 2 : cy + N // 2, cx - N // 2 : cx + N // 2]
+        else:
+            N = Ny
+
+        y, x = np.indices((N, N))
+        x = x - (N - 1) / 2
+        y = y - (N - 1) / 2
+
+        r = np.sqrt(x**2 + y**2)
+        pupil_mask = r < (0.9 * r.max())  # or use a threshold on amplitude
+        r_norm = r / r[pupil_mask].max()
+        theta = np.arctan2(y, x)
+
+        valid = (r_norm <= 1.0) & pupil_mask
+        r_p = r_norm[valid]
+        theta_p = theta[valid]
+        phi_p = phase[valid]
+
+        # --- Fit Zernike coefficients (Noll indexing) ---
+        Z = []
+        for j in range(1, max_noll + 1):
+            Zj = zernike_noll(j, r_p, theta_p)
+            Z.append(Zj)
+
+        Z = np.vstack(Z).T  # shape: (num_points, num_modes)
+        a, residuals, rank, s = lstsq(Z, phi_p, rcond=None)  # a[k] -> Noll index k+1
+
+        if not plot:
+            return a
+
+        # --- Reconstruct each mode on full grid for display ---
+        r_norm_full = r / r[pupil_mask].max()
+        theta_full = theta
+        inside = r_norm_full <= 1.0
+
+        mode_maps = np.zeros((max_noll, N, N))
+
+        for k in range(max_noll):
+            j = k + 1  # Noll index
+            Z_full = np.zeros_like(r_norm_full)
+            Z_full_inside = zernike_noll(j, r_norm_full[inside], theta_full[inside])
+            Z_full[inside] = Z_full_inside
+            mode_maps[k] = a[k] * Z_full
+
+        # --- Plot all mode phase maps in one window ---
+        ncols = 5
+        nrows = int(np.ceil(max_noll / ncols))
+
+        fig, axes = plt.subplots(nrows, ncols, figsize=(3 * ncols, 3 * nrows))
+        axes = axes.ravel()
+
+        vmax = np.max(np.abs(mode_maps))  # symmetric color scale
+
+        for k in range(max_noll):
+            ax = axes[k]
+            im = ax.imshow(
+                mode_maps[k],
+                cmap="twilight",
+                origin="lower",
+                vmin=-vmax,
+                vmax=vmax,
+            )
+            ax.set_title(f"Noll {k + 1}\na={a[k]:.3f}")
+            ax.axis("off")
+
+        # Hide any unused subplots
+        for k in range(max_noll, len(axes)):
+            axes[k].axis("off")
+
+        fig.colorbar(im, ax=axes.tolist(), shrink=0.7, label="Phase [rad]")
+        fig.suptitle("Zernike Mode Phase Contributions", fontsize=14)
+        plt.tight_layout()
+        plt.show()
+
+        return a
 
     @property
     def path(self) -> Path:

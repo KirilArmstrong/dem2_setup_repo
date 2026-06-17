@@ -3,7 +3,7 @@
 import logging
 import os
 from logging import Logger
-
+import numpy as np
 from zeiss_helpers.common import setup_logging, ConfigurationFile
 
 from src.dem_2_3d_label_free.__globals__ import (
@@ -65,3 +65,42 @@ def setup_root_logger(root_file=__file__) -> Logger:
     setup_logging(verbose=False, logfile_directory=os.path.join(__root__, "logs"))
     # Return the root logger
     return logging.getLogger(os.path.basename(root_file))
+
+def noll_to_nm(j: int):
+    """Convert Noll index j (1-based) to (n, m)."""
+    n = int(np.ceil((-3 + np.sqrt(9 + 8 * (j - 1))) / 2))
+    p = j - n * (n + 1) // 2
+    k = n % 2
+    m = 2 * ((p + k) // 2) - k
+    if j % 2 == 0:
+        m = -m
+    return n, m
+
+def radial_poly(n: int, m: int, r: np.ndarray):
+    """Radial Zernike polynomial R_n^m(r)."""
+    m = abs(m)
+    R = np.zeros_like(r, dtype=float)
+    for k in range((n - m) // 2 + 1):
+        c = ((-1) ** k *
+             np.math.factorial(n - k) /
+             (np.math.factorial(k) *
+              np.math.factorial((n + m) // 2 - k) *
+              np.math.factorial((n - m) // 2 - k)))
+        R += c * r ** (n - 2 * k)
+    return R
+
+def zernike_noll(j: int, r: np.ndarray, theta: np.ndarray):
+    """
+    Noll-indexed Zernike polynomial Z_j(r, theta), normalized in the
+    usual way (unit disk, real-valued).
+    r, theta: 1D arrays of same shape, with 0 <= r <= 1.
+    """
+    n, m = noll_to_nm(j)
+    R = radial_poly(n, m, r)
+    if m == 0:
+        Z = np.sqrt(n + 1) * R
+    elif m > 0:
+        Z = np.sqrt(2 * (n + 1)) * R * np.cos(m * theta)
+    else:  # m < 0
+        Z = np.sqrt(2 * (n + 1)) * R * np.sin(-m * theta)
+    return Z
