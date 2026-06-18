@@ -23,8 +23,8 @@ FILE_NAME = Path("dem2") / "26-06-12" / "collimated_via_eye_2.h5"
 # FILE_NAME = Path("26-06-16") / "mirror.h5"
 
 def prep_zernike(processor: Dem2Processor, array: np.ndarray, centre: tuple[int,int]|None=None, radius:int|None=None):
-        cx = int(input("Centre X: ")) if centre is None else centre[0]
-        cy = int(input("Centre Y: ")) if centre is None else centre[1]
+        cx = int(input("Centre X: ")) if centre is None else centre[1]
+        cy = int(input("Centre Y: ")) if centre is None else centre[0]
         r = int(input("Radius: ")) if radius is None else radius
         processor.get_zernike_coeffs(array, (cy,cx), r)
 
@@ -75,7 +75,7 @@ def use_processor():
     else:
         z = int(z)
     recon_arr = processor.reconstruct(centre=(cy,cx), width=w, height=h, z_slice=z)
-    # prep_zernike(processor, recon_arr)
+    prep_zernike(processor, recon_arr, centre=(1712,2352), radius=1500)
 
 
 def main():
