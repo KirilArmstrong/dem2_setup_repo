@@ -5,6 +5,7 @@ from pathlib import Path
 import os
 from PIL import Image
 from matplotlib import pyplot as plt
+from matplotlib.gridspec import GridSpec
 from numpy.linalg import lstsq
 from scipy.ndimage import center_of_mass, label
 
@@ -14,7 +15,7 @@ import h5py
 import numpy as np
 import scipy
 
-
+from src.dem_2_3d_label_free.dem2_common.dem2_constants import ZERNIKE_NOLLS
 from src.dem_2_3d_label_free.dem2_common.dem2_helper import zernike_noll
 
 
@@ -533,15 +534,35 @@ class Dem2Processor:
             Z_full[inside] = Z_full_inside
             mode_maps[k] = a[k] * Z_full
 
-        # --- Plot all mode phase maps in one window ---
         ncols = 5
         nrows = int(np.ceil(max_noll / ncols))
 
-        fig, axes = plt.subplots(nrows, ncols, figsize=(3 * ncols, 3 * nrows))
-        axes = axes.ravel()
+        # Extra column for the colorbar
+        fig = plt.figure(figsize=(3 * ncols + 1.5, 3 * nrows))
+        gs = GridSpec(
+            nrows,
+            ncols + 1,  # last column = colorbar
+            width_ratios=[1] * ncols + [0.07],
+            figure=fig,
+            left=0.05,
+            right=0.95,
+            bottom=0.06,
+            top=0.90,
+            wspace=0.25,
+            hspace=0.35,
+        )
 
-        vmax = np.max(np.abs(mode_maps))  # symmetric color scale
+        axes = []
+        vmax = np.max(np.abs(mode_maps))
 
+        # Create image axes
+        for i in range(nrows):
+            for j in range(ncols):
+                axes.append(fig.add_subplot(gs[i, j]))
+
+        axes = np.array(axes).ravel()
+
+        # Plot modes
         for k in range(max_noll):
             ax = axes[k]
             im = ax.imshow(
@@ -551,18 +572,23 @@ class Dem2Processor:
                 vmin=-vmax,
                 vmax=vmax,
             )
-            ax.set_title(f"Noll {k + 1}\na={a[k]:.3f}")
-            ax.axis("off")
+            ax.set_title(f"Noll {k+1} ({ZERNIKE_NOLLS[k+1]})\na={a[k]:.3f}", fontsize=9)
+            ax.set_xticks([])
+            ax.set_yticks([])
 
-        # Hide any unused subplots
+        # Hide unused axes
         for k in range(max_noll, len(axes)):
             axes[k].axis("off")
 
-        fig.colorbar(im, ax=axes.tolist(), shrink=0.7, label="Phase [rad]")
-        fig.suptitle("Zernike Mode Phase Contributions", fontsize=14)
-        plt.tight_layout()
-        plt.show()
+        # Colorbar occupying the last column, all rows
+        cax = fig.add_subplot(gs[:, -1])
+        cbar = fig.colorbar(im, cax=cax)
+        cbar.set_label("Phase [rad]")
 
+        # Clean, non-overlapping suptitle
+        fig.suptitle("Zernike Mode Phase Contributions", fontsize=16, y=0.96)
+
+        plt.show()
         return a
 
     @property
