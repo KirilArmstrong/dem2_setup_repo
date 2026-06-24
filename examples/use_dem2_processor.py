@@ -26,7 +26,7 @@ def prep_zernike(processor: Dem2Processor, array: np.ndarray, centre: tuple[int,
         cx = int(input("Centre X: ")) if centre is None else centre[1]
         cy = int(input("Centre Y: ")) if centre is None else centre[0]
         r = int(input("Radius: ")) if radius is None else radius
-        processor.get_zernike_coeffs(array, (cy,cx), r)
+        return processor.get_zernike_coeffs(array, (cy,cx), r)
 
 def use_processor():
     """Demo script"""

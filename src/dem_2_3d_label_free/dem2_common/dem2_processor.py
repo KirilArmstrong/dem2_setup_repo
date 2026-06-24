@@ -7,6 +7,7 @@ from PIL import Image
 from matplotlib import pyplot as plt
 from matplotlib.gridspec import GridSpec
 from numpy.linalg import lstsq
+from skimage.restoration import unwrap_phase
 from scipy.ndimage import center_of_mass, label
 
 from src.dem_2_3d_label_free.__globals__ import __datapath__
@@ -99,7 +100,7 @@ class Dem2Processor:
             self._log.info(f"Removed existing file: {h5_path}")
 
         self.save(array, Path(h5_path))
-        self.load()
+        self.load(full_path=Path(h5_path))
 
     def load(
         self,
@@ -271,6 +272,7 @@ class Dem2Processor:
         :param z_slice: Which z index to use, i.e. image in image stack.
         :return: Reconstructed array (size of roi if provided.)
         """
+        self._log.info("Beginning reconstruction...")
         arr = array if array is not None else self[z_slice, :, :]
         arr = (
             arr if arr.ndim == 2 else arr[z_slice, :, :]
@@ -285,14 +287,25 @@ class Dem2Processor:
                 self._attributes[name] = value
         self.save()
         ft_arr = self.ft(arr, roi, dataset)
+        self._log.info(
+            "Using centre: "
+            + str(self.centre)
+            + ", with a height/width: "
+            + str(self.height)
+            + "/"
+            + str(self.width)
+            + " px."
+        )
         cft_arr = self.crop_and_centre(ft_arr, self.centre, self.width, self.height)
         recon_arr = self.ift(cft_arr)
         if plot:
+            self._log.info("Plotting...")
             self._prep_plot(arr, "Intensity Hologram", roi=roi)
             self._prep_plot(ft_arr, "FFT of Hologram", gamma=0.05)
             self._prep_plot(cft_arr, "Cropped & Centred FFT", gamma=0.05)
             self._prep_plot(recon_arr, "Reconstructed Intensity")
             self._prep_plot(recon_arr, "Reconstructed Phase", cmap="hsv")
+            self._prep_plot(recon_arr, "Reconstructed Phase Unwrapped", cmap="hsv", unwrap=True)
             plt.show()
         return recon_arr
 
@@ -303,6 +316,7 @@ class Dem2Processor:
         roi: tuple[slice, slice] | None = None,
         gamma: float | None = None,
         cmap: str = "gray",
+        unwrap: bool = False
     ):
         """
         Prepare plots.
@@ -317,12 +331,14 @@ class Dem2Processor:
             array = array[roi[0], roi[1]]
         if cmap == "hsv":
             array = np.angle(array)
+            if unwrap:
+                array = unwrap_phase(array)
         elif np.issubdtype(array.dtype, np.complexfloating):
             # array = (array * array.conj()).real
             array = abs(array)
             if gamma is not None:
                 array = array**gamma
-        plt.imshow(array, cmap=cmap)
+        im = plt.imshow(array, cmap=cmap)
         if cmap == "hsv":
             plt.colorbar(fraction=0.046, pad=0.04)
         plt.title(title)
@@ -343,122 +359,6 @@ class Dem2Processor:
         ft_arr = self.ft(full_array, roi, dataset)
         self._prep_plot(ft_arr, "FFTed Image", gamma=0.05)
         plt.show()
-
-    def estimate_ellipse_from_fft(self,
-        fft_img, center_guess, gamma=0.05, roi_half_size=700, thresh_factor=0.5
-    ):
-        """
-        Parameters
-        ----------
-        fft_img : np.ndarray (2D, complex or real)
-            FFTed array (off-axis holography spectrum).
-        center_guess : tuple (cy, cx)
-            Approximate center (in pixel coordinates) of the signal lobe in k-space.
-        gamma : float
-            Gamma exponent (use 0.05 to match your acquisition).
-        roi_half_size : int
-            Half-size of the square ROI extracted around center_guess.
-        thresh_factor : float in (0, 1)
-            Factor between inside/outside means used for threshold.
-
-        Returns
-        -------
-        center : tuple of int
-            (center_y, center_x) in full-image coordinates.
-        width : int
-            Ellipse width (major-axis bounding box, in pixels).
-        height : int
-            Ellipse height (minor-axis bounding box, in pixels).
-        """
-
-        # magnitude + gamma
-        mag = np.abs(fft_img).astype(np.float64)
-        mag_gamma = mag**gamma
-
-        H, W = mag_gamma.shape
-        cy0, cx0 = center_guess
-
-        # ROI bounds
-        y1 = max(0, cy0 - roi_half_size)
-        y2 = min(H, cy0 + roi_half_size)
-        x1 = max(0, cx0 - roi_half_size)
-        x2 = min(W, cx0 + roi_half_size)
-
-        roi = mag_gamma[y1:y2, x1:x2]
-
-        # Rough “inside vs outside” statistics using a circular mask
-        yy, xx = np.mgrid[0 : roi.shape[0], 0 : roi.shape[1]]
-        cy_roi = roi.shape[0] / 2.0
-        cx_roi = roi.shape[1] / 2.0
-        r = np.sqrt((yy - cy_roi) ** 2 + (xx - cx_roi) ** 2)
-
-        r_in = np.percentile(r, 40)  # inner region
-        r_out = np.percentile(r, 80)  # outer ring
-
-        inside = roi[r <= r_in]
-        outside = roi[(r >= r_out)]
-
-        mean_in = inside.mean()
-        mean_out = outside.mean()
-
-        # threshold halfway between means (you mentioned ~1.7 vs 1.5 after gamma)
-        thr = mean_out + thresh_factor * (mean_in - mean_out)
-
-        # binary mask
-        mask = roi > thr
-
-        # keep only the connected component nearest to the ROI center
-        labeled, num = label(mask)
-        if num == 0:
-            # fallback: everything is background; return guess with zero size
-            return (int(cy0), int(cx0)), 0, 0
-
-        # distance of component centroids to ROI center
-        comps = np.arange(1, num + 1)
-        cents = np.array(center_of_mass(mask, labeled, comps))
-        d2 = (cents[:, 0] - cy_roi) ** 2 + (cents[:, 1] - cx_roi) ** 2
-        best_lab = comps[np.argmin(d2)]
-        mask_ellipse = labeled == best_lab
-
-        # pixel coordinates of that component (in ROI coords)
-        ys, xs = np.nonzero(mask_ellipse)
-        if ys.size < 3:
-            # not enough points
-            return (int(cy0), int(cx0)), 0, 0
-
-        # centroid in ROI coords
-        cy_e = ys.mean()
-        cx_e = xs.mean()
-
-        # covariance matrix → ellipse axes via eigenvalues
-        y_shift = ys - cy_e
-        x_shift = xs - cx_e
-        coords = np.vstack((y_shift, x_shift))
-        cov = np.cov(coords)
-
-        evals, evecs = np.linalg.eigh(cov)
-        # sort eigenvalues: largest = major axis
-        order = np.argsort(evals)[::-1]
-        evals = evals[order]
-
-        # std dev along axes
-        sigma_major = np.sqrt(evals[0])
-        sigma_minor = np.sqrt(evals[1])
-
-        # choose k to approximate the boundary (3σ ~ 99.7%, adjust if needed)
-        k = 3.0
-        semi_major = k * sigma_major
-        semi_minor = k * sigma_minor
-
-        # convert to full-image coordinates
-        cy_full = y1 + cy_e
-        cx_full = x1 + cx_e
-
-        width = int(np.round(2 * semi_major))
-        height = int(np.round(2 * semi_minor))
-
-        center = (int(np.round(cy_full)), int(np.round(cx_full)))
-        return center, width, height
 
     def get_zernike_coeffs(
         self,
@@ -483,6 +383,7 @@ class Dem2Processor:
         ]
         # U: complex array, result of your holography reconstruction
         phase = np.angle(array)
+        phase = unwrap_phase(phase)
 
         Ny, Nx = phase.shape
         if Ny != Nx:
@@ -509,6 +410,7 @@ class Dem2Processor:
         phi_p = phase[valid]
 
         # --- Fit Zernike coefficients (Noll indexing) ---
+        self._log.info("Fitting coefficients...")
         Z = []
         for j in range(1, max_noll + 1):
             Zj = zernike_noll(j, r_p, theta_p)
@@ -521,6 +423,7 @@ class Dem2Processor:
             return a
 
         # --- Reconstruct each mode on full grid for display ---
+        self._log.info("Plottings coefficients...")
         r_norm_full = r / r[pupil_mask].max()
         theta_full = theta
         inside = r_norm_full <= 1.0
@@ -572,7 +475,9 @@ class Dem2Processor:
                 vmin=-vmax,
                 vmax=vmax,
             )
-            ax.set_title(f"Noll {k+1} ({ZERNIKE_NOLLS[k+1]})\na={a[k]:.3f}", fontsize=9)
+            ax.set_title(
+                f"Noll {k + 1} ({ZERNIKE_NOLLS[k + 1]})\na={a[k]:.3f}", fontsize=9
+            )
             ax.set_xticks([])
             ax.set_yticks([])
 
@@ -589,7 +494,28 @@ class Dem2Processor:
         fig.suptitle("Zernike Mode Phase Contributions", fontsize=16, y=0.96)
 
         plt.show()
-        return a
+        return a, N
+
+    def reconstruct_from_zernikes(self, a, N, max_noll=15):
+        # Rebuild total wavefront from coefficients a[0..max_noll-1]
+        y, x = np.indices((N, N))
+        x = x - (N - 1) / 2
+        y = y - (N - 1) / 2
+        r = np.sqrt(x**2 + y**2)
+        r_norm = r / r.max()
+        theta = np.arctan2(y, x)
+        inside = r_norm <= 1.0
+
+        wave = np.zeros_like(r_norm, dtype=float)
+
+        for k in range(max_noll):
+            j = k + 1  # Noll index
+            Z_full = np.zeros_like(r_norm)
+            Z_full_inside = zernike_noll(j, r_norm[inside], theta[inside])
+            Z_full[inside] = Z_full_inside
+            wave += a[k] * Z_full   # sum contribution
+
+        return wave, inside
 
     @property
     def path(self) -> Path:
