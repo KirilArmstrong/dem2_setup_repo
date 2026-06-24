@@ -726,7 +726,7 @@ class MainWindow(QMainWindow):
         controller.laser.wavelength_max = float(self.spin_laser_max.value())
         controller.laser.wavelength_min = float(self.spin_laser_min.value())
         controller.laser.total_sweep_time = float(self.spin_laser_sweep.value())
-        controller.update_burst_properties(True)
+        controller.update_burst_properties()
         self._update_frames()
 
     def set_stage_properties(self, relative: bool, focus: bool):
@@ -868,9 +868,9 @@ class MainWindow(QMainWindow):
         self._update_states()
         self._update_modes()
         self._update_properties()
-        self._update_laser_properties()
         self._update_stage_properties()
         self._update_integration_time()
+        self._update_laser_properties()
         self._update_frames()
         self._update_ui()
 
@@ -914,9 +914,9 @@ class MainWindow(QMainWindow):
         self.frames.setText(str(controller.camera.samples_a_scan))
 
     def _update_sweep_speed(self):
-        controller.laser.wavelength_min = self.spin_laser_min.value()
-        controller.laser.wavelength_max = self.spin_laser_max.value()
-        controller.update_burst_properties()
+        # controller.laser.wavelength_min = self.spin_laser_min.value()
+        # controller.laser.wavelength_max = self.spin_laser_max.value()
+        # controller.update_burst_properties()
         self.spin_laser_sweep_speed.setValue(controller.laser.sweep_speed)
         self.spin_laser_sweep.setValue(controller.laser.total_sweep_time)
 
