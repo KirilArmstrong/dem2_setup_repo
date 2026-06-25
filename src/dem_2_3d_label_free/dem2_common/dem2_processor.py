@@ -378,8 +378,8 @@ class Dem2Processor:
         :return: Zernike coefficients array.
         """
         array = array[
-            centre[0] - radius : centre[0] + radius,
-            centre[1] - radius : centre[1] + radius,
+            centre[0] - radius - 1: centre[0] + radius,
+            centre[1] - radius - 1: centre[1] + radius,
         ]
         # U: complex array, result of your holography reconstruction
         phase = np.angle(array)
@@ -400,11 +400,11 @@ class Dem2Processor:
         y = y - (N - 1) / 2
 
         r = np.sqrt(x**2 + y**2)
-        pupil_mask = r < (0.9 * r.max())  # or use a threshold on amplitude
-        r_norm = r / r[pupil_mask].max()
+        pupil_mask = r <= radius  # or use a threshold on amplitude
+        r_norm = r / radius
         theta = np.arctan2(y, x)
 
-        valid = (r_norm <= 1.0) & pupil_mask
+        valid = pupil_mask
         r_p = r_norm[valid]
         theta_p = theta[valid]
         phi_p = phase[valid]

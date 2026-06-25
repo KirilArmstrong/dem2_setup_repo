@@ -72,7 +72,7 @@ def noll_to_nm(j: int):
     p = j - n * (n + 1) // 2
     k = n % 2
     m = 2 * ((p + k) // 2) - k
-    if j % 2 == 0:
+    if j % 2 == 1:
         m = -m
     return n, m
 

@@ -23,19 +23,19 @@ class Dem2StageMode(Enum):
 
 ZERNIKE_NOLLS = [
     None,                 # 0 (unused)
-    "Piston",             # 1
-    "Tilt Vert.",        # 2
-    "Tilt Horiz.",         # 3
-    "Defocus",            # 4
-    "1. Astig. Vert.",  # 5
-    "1. Astig. Oblique",    # 6
-    "1. Coma Horiz.",     # 7
-    "1. Coma Vert.",      # 8
-    "Trefoil Oblique",    # 9
-    "Trefoil Vert.",      # 10
-    "1. Spherical",       # 11 (primary)
-    "2. Astig. Oblique",    # 12
-    "2. Astig. Vert.",  # 13
-    "Quadfoil Oblique",     # 14
-    "Quadfoil Vert.",      # 15
+    "Piston",
+    "Tilt Horiz.",
+    "Tilt Vert.",
+    "Defocus",
+    "1. Astig. Oblique",
+    "1. Astig. Vert.",
+    "1. Coma Vert.",
+    "1. Coma Horiz.",
+    "Trefoil Vert.",
+    "Trefoil Oblique",
+    "1. Spherical",
+    "2. Astig. Vert.",
+    "2. Astig. Oblique",
+    "Quadfoil Vert.",
+    "Quadfoil Oblique",
 ]
