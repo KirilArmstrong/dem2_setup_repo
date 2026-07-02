@@ -3,12 +3,12 @@
 import logging
 from pathlib import Path
 import os
+
 from PIL import Image
 from matplotlib import pyplot as plt
 from matplotlib.gridspec import GridSpec
 from numpy.linalg import lstsq
 from skimage.restoration import unwrap_phase
-from scipy.ndimage import center_of_mass, label
 
 from src.dem_2_3d_label_free.__globals__ import __datapath__
 
@@ -305,7 +305,15 @@ class Dem2Processor:
             self._prep_plot(cft_arr, "Cropped & Centred FFT", gamma=0.05)
             self._prep_plot(recon_arr, "Reconstructed Intensity")
             self._prep_plot(recon_arr, "Reconstructed Phase", cmap="hsv")
-            self._prep_plot(recon_arr, "Reconstructed Phase Unwrapped", cmap="hsv", unwrap=True)
+            self._prep_plot(
+                recon_arr, "Reconstructed Phase Unwrapped", cmap="hsv", unwrap=True
+            )
+            pupil_field = self.ft(recon_arr)
+            self._prep_plot(pupil_field, "Pupil Field Intensity")
+            self._prep_plot(pupil_field, "Pupil Field Phase", cmap="hsv")
+            self._prep_plot(
+                pupil_field, "Pupil Field Phase Unwrapped", cmap="hsv", unwrap=True
+            )
             plt.show()
         return recon_arr
 
@@ -316,7 +324,7 @@ class Dem2Processor:
         roi: tuple[slice, slice] | None = None,
         gamma: float | None = None,
         cmap: str = "gray",
-        unwrap: bool = False
+        unwrap: bool = False,
     ):
         """
         Prepare plots.
@@ -378,8 +386,8 @@ class Dem2Processor:
         :return: Zernike coefficients array.
         """
         array = array[
-            centre[0] - radius - 1: centre[0] + radius,
-            centre[1] - radius - 1: centre[1] + radius,
+            centre[0] - radius - 1 : centre[0] + radius,
+            centre[1] - radius - 1 : centre[1] + radius,
         ]
         # U: complex array, result of your holography reconstruction
         phase = np.angle(array)
@@ -398,6 +406,7 @@ class Dem2Processor:
         y, x = np.indices((N, N))
         x = x - (N - 1) / 2
         y = y - (N - 1) / 2
+        # [-2, -1, 0, 1, 2...]
 
         r = np.sqrt(x**2 + y**2)
         pupil_mask = r <= radius  # or use a threshold on amplitude
@@ -423,7 +432,7 @@ class Dem2Processor:
             return a
 
         # --- Reconstruct each mode on full grid for display ---
-        self._log.info("Plottings coefficients...")
+        self._log.info("Plotting coefficients...")
         r_norm_full = r / r[pupil_mask].max()
         theta_full = theta
         inside = r_norm_full <= 1.0
@@ -513,9 +522,50 @@ class Dem2Processor:
             Z_full = np.zeros_like(r_norm)
             Z_full_inside = zernike_noll(j, r_norm[inside], theta[inside])
             Z_full[inside] = Z_full_inside
-            wave += a[k] * Z_full   # sum contribution
+            wave += a[k] * Z_full  # sum contribution
 
         return wave, inside
+
+    def determine_speckle_size(
+        self,
+        roi: tuple[slice, slice],
+        full_array: np.ndarray | None = None,
+        pixel_pos_no: int = 100,
+        z_slice: int = 1,
+        just_similarity: bool = True
+    ):
+        """
+        Determine the speckle size and plot.
+        :param full_array: Full array
+        :param roi: ROI to correlate (y:y,x:x)
+        :param pixel_pos_no: Number of sample points.
+        :param z_slice: z slice in image stack.
+        :param just_similarity: Whether to absolute the resulting coefs to just show similarity.
+        :return: Coef array for x and y shape=(2,`pixel_pos_no`), 0=x & 1=y
+        """
+        arr = np.abs(
+            full_array[roi[0], roi[1]]
+            if full_array is not None
+            else self[z_slice, roi[0], roi[1]]
+        )
+        correlations_x = []
+        correlations_y = []
+        for i in range(pixel_pos_no):
+            a = np.abs(
+                full_array[roi[0], roi[1].start + i : roi[1].stop + i]
+                if full_array is not None
+                else self[z_slice, roi[0], roi[1].start + i : roi[1].stop + i]
+            )
+            correlations_x.append(np.corrcoef(arr.ravel(), a.ravel())[0, 1])
+        for i in range(pixel_pos_no):
+            a = np.abs(
+                full_array[roi[0].start + i : roi[0].stop + i, roi[1]]
+                if full_array is not None
+                else self[z_slice, roi[0].start + i : roi[0].stop + i, roi[1]]
+            )
+            correlations_y.append(np.corrcoef(arr.ravel(), a.ravel())[0, 1])
+        result = np.array([correlations_x, correlations_y])
+        return np.abs(result) if just_similarity else result
 
     @property
     def path(self) -> Path:
