@@ -13,9 +13,10 @@ from src.dem_2_3d_label_free.dem2_common.dem2_calculator import Dem2SystemCalcul
 class Dem2SweepPacket:
     """IO for a single sweep (burst of images). Appends directly to HDF5 incrementally."""
 
-    def __init__(self, filepath: str):
+    def __init__(self, filepath: str, data_set: str = "1"):
         self._log = logging.getLogger(self.__class__.__name__)
         self.filepath = filepath
+        self.data_set: str = data_set
         
         self._h5_file = None
         self._data = None
@@ -28,7 +29,7 @@ class Dem2SweepPacket:
         self._data = None
         self._frame_count = 0
 
-    def append_frame(self, frame_data: np.ndarray):
+    def append_frame(self, frame_data: np.ndarray, data_set: str | None = None):
         """Appends a single frame to the open HDF5 dataset on the fly."""
         if self._h5_file is None:
             raise RuntimeError("Packet is not open. Call start_capture() first.")
@@ -37,7 +38,7 @@ class Dem2SweepPacket:
             h, w = frame_data.shape
             # Initialize resizable dataset on the first frame
             self._data = self._h5_file.create_dataset(
-                "images",
+                self.data_set if data_set is None else data_set,
                 shape=(1, h, w),
                 maxshape=(None, h, w),
                 dtype=frame_data.dtype,
@@ -59,19 +60,71 @@ class Dem2SweepPacket:
             self._log.info("Saved %d frames to %s", self._frame_count, self.filepath)
 
     def __getitem__(self, key):
-        """Allows slicing of images directly from the disk without filling RAM."""
+        """
+        Allows slicing of images directly from the disk without filling RAM.
+
+        Supported patterns:
+          - data["set1", :, :, :]   -> 3D slice of dataset "set1"
+          - data["set1"]            -> full array of dataset "set1"
+          - data["set1", :, :]      -> 2D slice at z=1 of 3D dataset "set1"
+          - data[:, :, :]           -> 3D slice of default dataset self.data_set
+          - data[:, :]              -> 2D slice at z=1 of default 3D dataset self.data_set
+        """
         if not os.path.exists(self.filepath):
             raise FileNotFoundError(f"Packet file {self.filepath} does not exist.")
-        
-        with h5py.File(self.filepath, 'r') as f:
-            # Slices are read directly from the disk and returned as a numpy array
-            return f['images'][key]
+
+        with h5py.File(self.filepath, "r") as f:
+            # Normalize key to a tuple
+            if not isinstance(key, tuple):
+                key = (key,)
+
+            # Decide which dataset we are indexing
+            if key and isinstance(key[0], str):
+                # First element is dataset name
+                dset_name = key[0]
+                slice_key = key[1:]  # remaining elements are indices/slices
+            else:
+                # No dataset name provided: use default
+                if self.data_set is None:
+                    raise KeyError(
+                        "No default dataset set for this packet and no dataset name "
+                        "given in the index (e.g. data['set1', ...])."
+                    )
+                dset_name = self.data_set
+                slice_key = key
+
+            dset = f[dset_name]
+            ndim = dset.ndim
+
+            # If no explicit indices given -> return entire dataset
+            if len(slice_key) == 0:
+                return dset[...]  # same as dset[:], but more general
+
+            # --- Dimension-normalization logic ---
+
+            # 3D dataset, 2D key: treat as [1, :, :]
+            # (change 1 -> 0 here if you want z=0 instead)
+            if ndim == 3 and len(slice_key) == 2:
+                slice_key = (1,) + slice_key
+
+            # 2D dataset, 3D key: drop the first index, use remaining 2
+            if ndim == 2 and len(slice_key) == 3:
+                slice_key = slice_key[1:]
+
+            # Optional: enforce correct number of indices
+            if len(slice_key) > ndim:
+                raise IndexError(
+                    f"{len(slice_key)} indices given for {ndim}D dataset of "
+                    f"shape {dset.shape}"
+                )
+
+            return dset[slice_key]
 
     @property
-    def shape(self):
+    def shape(self, data_set: str | None = None):
         """Returns the shape of the packet's images without loading into RAM."""
         with h5py.File(self.filepath, 'r') as f:
-            return f['images'].shape
+            return f[self.data_set if data_set is None else data_set].shape
 
 
 class Dem2SweepExperiment:
