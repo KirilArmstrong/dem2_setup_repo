@@ -205,8 +205,6 @@ class Dem2Laser:
         if new_speed < 0.1:
             raise Dem2Errors.LaserError(f"Total sweep time is too low! Sweep speed min is 0.1 nm/s, calculated = {new_speed}")
         self._sweep_speed = new_speed
-        if self._state not in (Dem2State.DISCONNECTED, Dem2State.RUNNING):
-            self.send_sweep_speed(self._sweep_speed)
 
     @property
     def wavelength(self):
@@ -228,8 +226,6 @@ class Dem2Laser:
         if value < self._cfg["wavelength_min"] or value > self._cfg["wavelength_max"]:
             raise Dem2Errors.LaserError("wavelength out of configuration range!")
         self._wavelength = value
-        if self._state not in (Dem2State.DISCONNECTED, Dem2State.RUNNING):
-            self.send_command(f"P21{wavelength_to_hex(self._wavelength, self._base_wavelength, 100)}")
 
     @property
     def wavelength_max(self):
@@ -251,8 +247,6 @@ class Dem2Laser:
         if value < self._cfg["wavelength_min"] or value > self._cfg["wavelength_max"]:
             raise Dem2Errors.LaserError("wavelength out of configuration range!")
         self._wavelength_max = value
-        if self._state not in (Dem2State.DISCONNECTED, Dem2State.RUNNING):
-            self.send_command(f"P23{wavelength_to_hex(self._wavelength_max, self._base_wavelength, 100)}")
 
     @property
     def wavelength_min(self):
@@ -274,8 +268,6 @@ class Dem2Laser:
         if value < self._cfg["wavelength_min"] or value > self._cfg["wavelength_max"]:
             raise Dem2Errors.LaserError("wavelength out of configuration range!")
         self._wavelength_min = value
-        if self._state not in (Dem2State.DISCONNECTED, Dem2State.RUNNING):
-            self.send_command(f"P22{wavelength_to_hex(self._wavelength_min, self._base_wavelength, 100)}")
 
     @property
     def sweep_speed(self) -> float:

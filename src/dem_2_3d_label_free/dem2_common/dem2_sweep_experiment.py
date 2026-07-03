@@ -48,7 +48,11 @@ class Dem2SweepPacket:
         else:
             # Expand dataset and write new frame
             self._data.resize((self._frame_count + 1, self._data.shape[1], self._data.shape[2]))
-            self._data[self._frame_count] = frame_data
+            if self._data[self._frame_count].shape == frame_data.shape:
+                self._data[self._frame_count] = frame_data
+            else:
+                self._log.error(
+                    f"Frame shape mismatch for frame {self._frame_count}. ")
             
         self._frame_count += 1
 
@@ -57,7 +61,7 @@ class Dem2SweepPacket:
         if self._h5_file is not None:
             self._h5_file.close()
             self._h5_file = None
-            self._log.info("Saved %d frames to %s", self._frame_count, self.filepath)
+            self._log.info("Saved %d frames to %s in dataset %s", self._frame_count, self.filepath, self.data_set)
 
     def __getitem__(self, key):
         """

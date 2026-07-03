@@ -81,10 +81,11 @@ class Dem2Camera(Thread, xiapi.Camera):
         self._log.info("Initialising the Camera in mode: " + str(self._mode) + "...")
         if self._state != Dem2State.CONNECTED:
             raise Dem2Errors.CameraError("Must be connected to initialize!")
-        if self.samples_a_scan is None:
-            raise Dem2Errors.CameraError("Number of images must be set to initialize!")
+        # if self.samples_a_scan is None:
+        #     raise Dem2Errors.CameraError("Number of images must be set to initialize!")
 
         self.set_exposure(self._t_exp * 1000)  # convert ms to us
+        self._log.info("Exposure initialized to " + str(self._t_exp * 1000) + " us.")
         self.set_imgdataformat("XI_MONO8")
 
         match self._mode:
@@ -92,16 +93,17 @@ class Dem2Camera(Thread, xiapi.Camera):
                 self._log.info("mode: " + str(self._mode))
             case Dem2CameraMode.FRAME_BURST_EXT_TRIGGER: # Experiment mode
                 self._log.info("mode: " + str(self._mode))
-                if self.samples_a_scan is None or self.samples_a_scan < 2:
-                    raise Dem2Errors.CameraError("Camera must have a specified number of frames for frame burst mode. It must be >1 and not None.")
-
+                # if self.samples_a_scan is None or self.samples_a_scan < 2:
+                #     raise Dem2Errors.CameraError("Camera must have a specified number of frames for frame burst mode. It must be >1 and not None.")
                 self.set_gpi_selector('XI_GPI_PORT2') # Adjust to your actual port
                 self.set_gpi_mode('XI_GPI_TRIGGER')
                 self.set_trigger_source("XI_TRG_EDGE_FALLING")  # trigger when laser rises
-                self.set_trigger_selector(
-                    "XI_TRG_SEL_FRAME_BURST_ACTIVE"
-                )  # while pulse high, it continuously exposes.
-                # self.set_acq_frame_burst_count(self.samples_a_scan)
+                self.set_trigger_selector("XI_TRG_SEL_FRAME_BURST_START") # while pulse high, it continuously exposes.
+                self.set_acq_frame_burst_count(int(self.samples_a_scan))
+                self._log.info("Samples/a_scan: " + str(int(self.samples_a_scan)))
+
+                self.set_counter_selector("XI_CNT_SEL_API_SKIPPED_FRAMES")
+
         self._state = Dem2State.READY
         self._log.info("Initialized the Camera.")
 
@@ -123,13 +125,16 @@ class Dem2Camera(Thread, xiapi.Camera):
         super().stop_acquisition()
         self._log.info("Acquisition stopped.")
 
-    def get_image(self, image: xiapi.Image|None = None, timeout: int = 5000) -> np.ndarray:
+    def get_image(self, image: xiapi.Image|None = None, timeout: int = 5000, return_numpy: bool = True) -> np.ndarray|None:
         """Override ``xiapi.Camera.get_image()`` to also return as numpy array.
         :param image: Image as xiapi.Image.
         :param timeout: Timeout in ms.
         :returns: Image as numpy array."""
         super().get_image(image, timeout)
-        return image.get_image_data_numpy()
+        if return_numpy:
+            return image.get_image_data_numpy()
+        else:
+            return None
 
     def acquire_single_image(self) -> np.ndarray :
         """Acquire single image and return it.
@@ -198,6 +203,10 @@ class Dem2Camera(Thread, xiapi.Camera):
     @property
     def mode(self) -> Dem2CameraMode:
         return self._mode
+
+    @mode.setter
+    def mode(self, mode: Dem2CameraMode):
+        self._mode = mode
 
     @property
     def t_frame(self):

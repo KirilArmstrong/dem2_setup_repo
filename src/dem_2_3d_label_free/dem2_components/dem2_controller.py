@@ -51,7 +51,7 @@ class Dem2Controller:
         )
         self.camera = Dem2Camera(self._cfg["camera"])
         self.cam_packet = Dem2SweepPacket(str(Path(__datapath__) / "packet.h5"))
-        self.cam_capturer = Dem2Capturer(self.camera, self.cam_packet)
+        self.cam_capturer = Dem2Capturer(self.camera, self.cam_packet, 0)
         self.laser = Dem2Laser(self._cfg["laser"])
         self.update_burst_properties()
 
@@ -103,8 +103,8 @@ class Dem2Controller:
             raise Dem2Errors.ControllerError(
                 "Stage must be calibrated for Controller to use it! Min stage_wait_time = 0"
             )
-        self.camera.initialize()
         self.laser.initialize()
+        self.camera.initialize()
         self.stage.initialize(calibration_wait_time=stage_wait_time)
         self._state = Dem2State.INITIALIZED
         self._log.info("Demonstrator 2 ready! 🎉")

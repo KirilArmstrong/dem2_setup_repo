@@ -777,6 +777,7 @@ class MainWindow(QMainWindow):
         controller.cam_capturer = Dem2Capturer(
             controller.camera,
             Dem2SweepPacket(str(DATA_PATH / "image.h5")),
+            int(controller.camera.samples_a_scan),
         )
         controller.cam_capturer.start()
 
@@ -1024,6 +1025,7 @@ class MainWindow(QMainWindow):
 
     def _init_camera(self):
         self.initialize_device("camera")
+        self._log.info("Camera Initialized")
         controller.update_burst_properties()
 
     def _disc_camera(self):
