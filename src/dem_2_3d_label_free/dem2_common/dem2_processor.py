@@ -527,6 +527,54 @@ class Dem2Processor:
 
         return wave, inside
 
+    def determine_speckle_size(
+        self,
+        roi: tuple[slice, slice],
+        full_array: np.ndarray | None = None,
+        pixel_pos_no: int = 100,
+        z_slice: int = 1,
+        just_similarity: bool = True
+    ):
+        """
+        Determine the speckle size and plot.
+        :param full_array: Full array
+        :param roi: ROI to correlate (y:y,x:x)
+        :param pixel_pos_no: Number of sample points.
+        :param z_slice: z slice in image stack.
+        :param just_similarity: Whether to absolute the resulting coefs to just show similarity.
+        :return: Coef array for x and y shape=(2,`pixel_pos_no`), 0=x & 1=y
+        """
+        arr = np.abs(
+            full_array[roi[0], roi[1]]
+            if full_array is not None
+            else self[z_slice, roi[0], roi[1]]
+        )
+        correlations_x = []
+        correlations_y = []
+        for i in range(pixel_pos_no):
+            a = np.abs(
+                full_array[roi[0], roi[1].start + i : roi[1].stop + i]
+                if full_array is not None
+                else self[z_slice, roi[0], roi[1].start + i : roi[1].stop + i]
+            )
+            correlations_x.append(np.corrcoef(arr.ravel(), a.ravel())[0, 1])
+        for i in range(pixel_pos_no):
+            a = np.abs(
+                full_array[roi[0].start + i : roi[0].stop + i, roi[1]]
+                if full_array is not None
+                else self[z_slice, roi[0].start + i : roi[0].stop + i, roi[1]]
+            )
+            correlations_y.append(np.corrcoef(arr.ravel(), a.ravel())[0, 1])
+        result = np.array([correlations_x, correlations_y])
+        return np.abs(result) if just_similarity else result
+
+    def oct_reconstruct(self,
+        array: np.ndarray,
+    ) -> np.ndarray:
+        return scipy.fft.fft(array, axis=0)
+
+
+
     @property
     def path(self) -> Path:
         """
