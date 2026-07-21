@@ -14,9 +14,9 @@ from src.dem_2_3d_label_free.dem2_common.dem2_bscan_pattern import Dem2BScanPatt
 from src.dem_2_3d_label_free.dem2_common.dem2_calculator import Dem2SystemCalculator
 from src.dem_2_3d_label_free.dem2_common.dem2_constants import Dem2State
 from src.dem_2_3d_label_free.dem2_common.dem2_errors import Dem2Errors
+from src.dem_2_3d_label_free.dem2_common.dem2_helper import get_current_timestamp
 from src.dem_2_3d_label_free.dem2_common.dem2_sweep_experiment import (
     Dem2SweepPacket,
-    Dem2SweepExperiment,
 )
 from src.dem_2_3d_label_free.dem2_components.dem2_capturer import Dem2Capturer
 from src.dem_2_3d_label_free.dem2_devices.dem2_camera import Dem2Camera
@@ -110,39 +110,61 @@ class Dem2Controller:
         self._log.info("Demonstrator 2 ready! 🎉")
 
     def run_bscan_pattern(
-        self, bsp: Dem2BScanPattern, save_to_directory_path: str = __datapath__
-    ) -> Dem2SweepExperiment:
-        """Run a bscan_pattern."""
-        sweep_exp = Dem2SweepExperiment()
+        self, bsp: Dem2BScanPattern, save_to_directory_path: str = __datapath__, start_pos: int = 1
+    ) -> Dem2SweepPacket:
+        """
+        Run a bscan_pattern.
+        :param bsp: scan pattern
+        :param save_to_directory_path: directory to save the experiment to.
+        :param start_pos: starting scan pat index. starts at 1 for scan pat index 0
+        :return: experiment measurement as Dem2SweepPacket object. (it saves to h5 as it goes.)
+        """
+        pos = start_pos if 0 < start_pos < bsp.a_scans_b_scan + 1 else 1
+        sweep_exp = Dem2SweepPacket(save_to_directory_path + "data_" + get_current_timestamp())
+        self._log.info("Running full scan pattern... ETA: TBD")
+
         for i in range(bsp.a_scans_b_scan):
+            # allow for resuming experiment
+            if i == 0 and pos != 1:
+                i = pos - 1
+            # time tracking
             start_time = datetime.now()
+            #stage movement
             self.stage.move_stage(bsp.x_positions[i], bsp.y_positions[i])
             time_diff = start_time - datetime.now()
             self._log.info(f"Stage moved in {time_diff.total_seconds()} seconds.")
-            # if time less than 1ms, wait remaining time for laser to chill out.
+            # if time less than 1ms, wait remaining time for laser to reset.
             if time_diff < timedelta(milliseconds=1) and i != 0:
                 self._log.info(
                     "Minimum 1ms pause time required for laser. waiting "
                     f"{(timedelta(milliseconds=1) - time_diff).total_seconds()} s..."
                 )
                 time.sleep((timedelta(milliseconds=1) - time_diff).total_seconds())
-            sweep_exp.packets.append(self.run_single_sweep(os.path.join(save_to_directory_path, f"packet_sample{i}")))
-        if save_to_directory_path:
-            sweep_exp.save(os.path.join(save_to_directory_path, "sweep_exp"))
+            # create new dataset for current position in scan pattern.
+            sweep_exp.data_set = str(pos)
+            self._log.info(f"Running sweep {i+1} of {bsp.a_scans_b_scan+1}...")
+            self.run_single_sweep(sweep_exp)
+            pos += 1
+            eta = ((start_time - datetime.now())*(bsp.a_scans_b_scan-i)).total_seconds()
+            self._log.info(f"Running full scan pattern... ETA: {(eta//60):02d} min and {(eta % 60):02d} s.")
         return sweep_exp
 
-    def run_single_sweep(self, save_to_directory_path: str = "") -> Dem2SweepPacket:
-        """Run a single laser sweep (single a-scan)."""
-        self.camera.start_acquisition()
-        # start the laser sweep
-        self.camera.get_image(
-            self._buffer, timeout=(self.laser.total_sweep_time + 5) * 1000
-        )
-        packet = Dem2SweepPacket()
-        # beep boop, do the laser.
-        # save to save_to_directory_path
-        # return Dem2SweepPacket
-        return packet
+    def run_single_sweep(self, packet: Dem2SweepPacket):
+        """
+        Run a single laser sweep (single a-scan).
+        :param packet: packet to save measurements to.
+        """
+        self._log.info("Preparing capturer...")
+        self.cam_capturer = Dem2Capturer(self.camera, packet, int(self.camera.samples_a_scan))
+        # start camera and set it to listen for laser HIGH.
+        self.cam_capturer.start()
+        # turn laser on.
+        self.laser.toggle_emission()
+        self._log.info("Laser on.")
+        # wait until laser finished and camera saved everything to h5
+        if self.cam_capturer.is_alive():
+            self.cam_capturer.join()
+        self._log.info("Capture finished.")
 
     def save(self, save_to_directory_path: str = ""):
         settings = self._cfg
