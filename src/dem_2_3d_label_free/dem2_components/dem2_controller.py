@@ -2,12 +2,10 @@
 
 import logging
 import math
-import os
 import time
 from datetime import datetime, timedelta
 from pathlib import Path
 
-import numpy as np
 
 import xiapi
 from src.dem_2_3d_label_free.dem2_common.dem2_bscan_pattern import Dem2BScanPattern
@@ -26,6 +24,7 @@ from src.dem_2_3d_label_free.dem2_devices.dem2_stage import Dem2Stage
 
 from src.dem_2_3d_label_free.__globals__ import __datapath__
 
+
 class Dem2Controller:
     """Control class for the Demonstrator 2."""
 
@@ -40,15 +39,13 @@ class Dem2Controller:
 
         # System property setup
         self.z_max = self._cfg["system"]["depth_max"]
-        self.mag = self._cfg["system"]["magnification"]
+        self.mag: float = self._cfg["system"]["magnification"]
         self.na = self._cfg["system"]["numerical_aperture"]
 
         self.calculator = Dem2SystemCalculator()
 
         # Device setup
-        self.stage = Dem2Stage(
-            self._cfg["stage"]
-        )
+        self.stage = Dem2Stage(self._cfg["stage"])
         self.camera = Dem2Camera(self._cfg["camera"])
         self.cam_packet = Dem2SweepPacket(str(Path(__datapath__) / "packet.h5"))
         self.cam_capturer = Dem2Capturer(self.camera, self.cam_packet, 0)
@@ -62,8 +59,8 @@ class Dem2Controller:
 
     def update_burst_properties(self):
         self.camera.samples_a_scan = self.calculator.sample_no(
-                self.laser.wavelength_min, self.laser.wavelength_max, self.z_max
-            )
+            self.laser.wavelength_min, self.laser.wavelength_max, self.z_max
+        )
         self.laser.total_sweep_time = self.calculator.total_time(
             self.camera.t_exp,
             self.camera.samples_a_scan,
@@ -110,7 +107,10 @@ class Dem2Controller:
         self._log.info("Demonstrator 2 ready! 🎉")
 
     def run_bscan_pattern(
-        self, bsp: Dem2BScanPattern, save_to_directory_path: str = __datapath__, start_pos: int = 1
+        self,
+        bsp: Dem2BScanPattern,
+        save_to_directory_path: str = __datapath__,
+        start_pos: int = 1,
     ) -> Dem2SweepPacket:
         """
         Run a bscan_pattern.
@@ -120,7 +120,9 @@ class Dem2Controller:
         :return: experiment measurement as Dem2SweepPacket object. (it saves to h5 as it goes.)
         """
         pos = start_pos if 0 < start_pos < bsp.a_scans_b_scan + 1 else 1
-        sweep_exp = Dem2SweepPacket(save_to_directory_path + "data_" + get_current_timestamp())
+        sweep_exp = Dem2SweepPacket(
+            save_to_directory_path + "data_" + get_current_timestamp()
+        )
         self._log.info("Running full scan pattern... ETA: TBD")
 
         for i in range(bsp.a_scans_b_scan):
@@ -129,7 +131,7 @@ class Dem2Controller:
                 i = pos - 1
             # time tracking
             start_time = datetime.now()
-            #stage movement
+            # stage movement
             self.stage.move_stage(bsp.x_positions[i], bsp.y_positions[i])
             time_diff = start_time - datetime.now()
             self._log.info(f"Stage moved in {time_diff.total_seconds()} seconds.")
@@ -142,11 +144,15 @@ class Dem2Controller:
                 time.sleep((timedelta(milliseconds=1) - time_diff).total_seconds())
             # create new dataset for current position in scan pattern.
             sweep_exp.data_set = str(pos)
-            self._log.info(f"Running sweep {i+1} of {bsp.a_scans_b_scan+1}...")
+            self._log.info(f"Running sweep {i + 1} of {bsp.a_scans_b_scan + 1}...")
             self.run_single_sweep(sweep_exp)
             pos += 1
-            eta = ((start_time - datetime.now())*(bsp.a_scans_b_scan-i)).total_seconds()
-            self._log.info(f"Running full scan pattern... ETA: {(eta//60):02d} min and {(eta % 60):02d} s.")
+            eta = (
+                (start_time - datetime.now()) * (bsp.a_scans_b_scan - i)
+            ).total_seconds()
+            self._log.info(
+                f"Running full scan pattern... ETA: {(eta // 60):02d} min and {(eta % 60):02d} s."
+            )
         return sweep_exp
 
     def run_single_sweep(self, packet: Dem2SweepPacket):
@@ -155,7 +161,9 @@ class Dem2Controller:
         :param packet: packet to save measurements to.
         """
         self._log.info("Preparing capturer...")
-        self.cam_capturer = Dem2Capturer(self.camera, packet, int(self.camera.samples_a_scan))
+        self.cam_capturer = Dem2Capturer(
+            self.camera, packet, int(self.camera.samples_a_scan)
+        )
         # start camera and set it to listen for laser HIGH.
         self.cam_capturer.start()
         # turn laser on.
@@ -195,7 +203,7 @@ class Dem2Controller:
         return (self.camera.t_exp / 1000) * self.laser.sweep_speed
 
     @property
-    def lateral_fov(self):
+    def lateral_fov(self) -> tuple[float, float]:
         """
         Calculate the lateral FOV.
         :return: Lateral FOV in mm.
@@ -203,7 +211,7 @@ class Dem2Controller:
         return self.camera.lateral_size / self.mag
 
     @property
-    def lateral_spacing(self):
+    def lateral_spacing(self) -> tuple[float, float]:
         """
         Calculate amount of spacing between A-scans.
         :return: Lateral spacing in um.
@@ -216,7 +224,9 @@ class Dem2Controller:
             raise Dem2Errors.ControllerError(
                 "B_scan_pattern's no_of_a_scans is set to 0. Minimum 1 for lateral_spacing calculation."
             )
-        return self.lateral_fov * 1000 / self.bscan_pattern.a_scans_b_scan
+        return (self.lateral_fov[0] * 1000) / self.bscan_pattern.a_scans_b_scan, (
+            self.lateral_fov[1] * 1000
+        ) / self.bscan_pattern.a_scans_b_scan
 
     @property
     def lateral_resolution(self):

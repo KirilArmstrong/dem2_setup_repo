@@ -26,7 +26,7 @@ class Dem2Camera(Thread, xiapi.Camera):
         if self._t_exp < 0.1:
             raise Dem2Errors.CameraError("Minimum exposure time is 100 us.")
         self.t_read = self._cfg["time_readout"]
-        self.lateral_size = self._cfg["lateral_size"]
+        self.lateral_size = (self._cfg["lateral_size_x"],self._cfg["lateral_size_y"])
 
         # Number of images per a-scan.
         self.samples_a_scan: int | None = None
