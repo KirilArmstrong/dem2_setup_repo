@@ -103,6 +103,7 @@ class Dem2Camera(Thread, xiapi.Camera):
                 self._log.info("Samples/a_scan: " + str(int(self.samples_a_scan)))
 
                 self.set_counter_selector("XI_CNT_SEL_API_SKIPPED_FRAMES")
+                self.set_buffer_policy("XI_BP_SAFE")
 
         self._state = Dem2State.READY
         self._log.info("Initialized the Camera.")

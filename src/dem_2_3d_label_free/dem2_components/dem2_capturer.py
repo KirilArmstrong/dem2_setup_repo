@@ -41,17 +41,18 @@ class Dem2Capturer(Thread):
         # img = xiapi.Image()
         imgs = []
 
-        self._log.info("Capturer Thread: Starting acquisition...")
-        self._cam.start_acquisition()
 
         # Prepare the packet (creates the file and readies the dataset)
         self._packet.start_capture()
-        self._log.info("Capturer Thread: Waiting for external trigger...")
 
         is_capturing = False
         # timeout = int(self._cam.concat_amm*(self._cam.t_exp+1))+1
         timeout = int(self._cam.t_exp + self._cam.t_read + 1)
         self._log.info(f"Capturer Thread: Timeout set to {timeout} ms.")
+
+        self._log.info("Capturer Thread: Starting acquisition...")
+        self._cam.start_acquisition()
+        self._log.info("Capturer Thread: Waiting for external trigger...")
 
         try:
             while True:
