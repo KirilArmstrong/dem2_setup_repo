@@ -3,6 +3,7 @@
 import logging
 import os
 from logging import Logger
+from datetime import datetime
 import numpy as np
 from zeiss_helpers.common import setup_logging, ConfigurationFile
 
@@ -24,6 +25,9 @@ def hex_to_decimal(hex_string: str) -> float:
 
 def wavelength_to_hex(lam: float, min_lam: float, resolution: float) -> str:
     return convert_to_hex((lam-min_lam) * resolution)
+
+def get_current_timestamp() -> str:
+    return datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
 
 
 def load_config_file(config_filepath: str = os.path.join(__configpath__, "config.yml")) -> dict:
