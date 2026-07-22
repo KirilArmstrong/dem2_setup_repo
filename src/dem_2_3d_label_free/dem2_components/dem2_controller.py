@@ -6,6 +6,7 @@ import time
 from datetime import datetime, timedelta
 from pathlib import Path
 
+import numpy as np
 
 import xiapi
 from src.dem_2_3d_label_free.dem2_common.dem2_bscan_pattern import Dem2BScanPattern
@@ -147,6 +148,7 @@ class Dem2Controller:
             sweep_exp.data_set = str(pos)
             self._log.info(f"Running sweep {i + 1} of {bsp.a_scans_b_scan + 1}...")
             self.run_single_sweep(sweep_exp)
+            sweep_exp.set_attributes(self.settings)
             pos += 1
             eta = (
                 (start_time - datetime.now()) * (bsp.a_scans_b_scan - i)
@@ -175,9 +177,27 @@ class Dem2Controller:
             self.cam_capturer.join()
         self._log.info("Capture finished.")
 
-    def save(self, save_to_directory_path: str = ""):
-        settings = self._cfg
-        # todo finish this
+    def run_multiple_lambdas(self, filename, lambdas: np.ndarray) -> Dem2SweepPacket:
+        """
+        Run a single image at multiple CW wavelengths.
+        :param filename: File to save data to.
+        :param lambdas: Wavelength list in nm.
+        :return: Data packet.
+        """
+        self._log.info("Running multiple lambdas...")
+        packet = Dem2SweepPacket(filename)
+        for i in range(lambdas.size):
+            self._log.info(f"Running lambda {lambdas[i]} ({i+1} of {lambdas.size})...")
+            packet.data_set = str(i+1)
+            packet.start_capture()
+            self.laser.send_cw(lambdas[i])
+            self.laser.toggle_emission()
+            packet.append_frame(self.camera.acquire_single_image())
+            self.laser.kill_emission()
+            packet.stop_capture()
+            packet.set_attributes(self.settings)
+        self._log.info(f"Finished and saved to {filename}.")
+        return packet
 
     # Properties
 

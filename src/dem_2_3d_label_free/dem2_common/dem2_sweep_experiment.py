@@ -71,9 +71,9 @@ class Dem2SweepPacket:
         Allows slicing of images directly from the disk without filling RAM.
 
         Supported patterns:
-          - data["set1", :, :, :]   -> 3D slice of dataset "set1"
-          - data["set1"]            -> full array of dataset "set1"
-          - data["set1", :, :]      -> 2D slice at z=1 of 3D dataset "set1"
+          - data["1", :, :, :]   -> 3D slice of dataset "1"
+          - data["1"]            -> full array of dataset "1"
+          - data["1", :, :]      -> 2D slice at z=1 of 3D dataset "1"
           - data[:, :, :]           -> 3D slice of default dataset self.data_set
           - data[:, :]              -> 2D slice at z=1 of default 3D dataset self.data_set
         """
@@ -164,7 +164,7 @@ class Dem2SweepPacket:
             f[dset].attrs = attrs
 
     def set_attributes(
-        self, data_set: str | None = None, attributes: dict | None = None
+        self, attributes: dict | None = None, data_set: str | None = None
     ):
         """
         Set attributes for the current or another data set.

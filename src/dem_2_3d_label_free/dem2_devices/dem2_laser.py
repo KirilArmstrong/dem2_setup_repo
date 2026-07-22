@@ -88,7 +88,7 @@ class Dem2Laser:
             case Dem2LaserMode.CW:
                 self.send_command("MT") # CW mode
                 # set cw wavelength
-                self.send_command(f"P21{wavelength_to_hex(self._wavelength, self._base_wavelength, 100)}")
+                self.send_cw()
             case Dem2LaserMode.SINGLE:
                 if self._sweep_speed is None or self._total_sweep_time is None:
                     raise Dem2Errors.LaserError(
@@ -109,7 +109,10 @@ class Dem2Laser:
         self._state = Dem2State.READY
         self._log.info("Initialized the laser source.")
 
-
+    def send_cw(self, wavelength = None):
+        if wavelength is not None:
+            self.wavelength = wavelength
+        self.send_command(f"P21{wavelength_to_hex(self.wavelength, self._base_wavelength, 100)}")
 
     def queue_command(self, command):
         """Queue a command to the laser device and return the response as a future object."""

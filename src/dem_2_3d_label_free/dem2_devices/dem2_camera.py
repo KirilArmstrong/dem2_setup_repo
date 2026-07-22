@@ -151,7 +151,7 @@ class Dem2Camera(Thread, xiapi.Camera):
         :returns: Image as numpy array."""
         self.start_acquisition()
         # self.set_exposure(self._t_exp * 1000)
-        time.sleep((self._t_exp/1000)+0.1)
+        time.sleep(((self._t_exp+self.t_read)/1000)+0.1)
         data = self.get_image(self.image)
         self._append_to_buffer(data)
         self._log.info("Acquired single Image.")
