@@ -175,6 +175,23 @@ class Dem2SweepPacket:
         with h5py.File(self.filepath, "r+") as f:
             f[dset].attrs = attributes if attributes is not None else self._attributes
 
+    def get_attributes(
+        self, data_set: str | None = None
+    )-> dict:
+        """
+        Get attributes for the current or another data set.
+        :param data_set: Dataset. Defaults to current loaded one.
+        """
+        dset = self.data_set
+        with h5py.File(self.filepath, "r") as f:
+            if data_set is not None:
+                dset = data_set
+                return f[dset].attrs
+            attrs = f[dset].attrs
+            attrs.update(self._attributes)
+            self._attributes = attrs
+            return self._attributes
+
     def rename_dataset(self, dataset: str, new_name: str, path: Path = Path("")):
         """
         Rename a dataset in a H5 file.
