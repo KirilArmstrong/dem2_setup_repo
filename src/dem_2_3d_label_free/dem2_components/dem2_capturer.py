@@ -92,5 +92,6 @@ class Dem2Capturer(Thread):
                     )
             self.packet.stop_capture()
             self._log.info(f"Skipped api frames: {self._cam.get_counter_value()}")
+            self.packet.set_attributes()
             self._cam.stop_acquisition()
             self._log.info("Capturer Thread: Acquisition stopped. Thread finished.")

@@ -77,8 +77,8 @@ class Dem2Controller:
                 "Already been connected! Disconnect first."
             )
         self.stage.connect()
-        self.camera.connect()
         self.laser.connect()
+        self.camera.connect()
         self._state = Dem2State.CONNECTED
 
     def disconnect(self):
@@ -102,9 +102,9 @@ class Dem2Controller:
             raise Dem2Errors.ControllerError(
                 "Stage must be calibrated for Controller to use it! Min stage_wait_time = 0"
             )
+        self.stage.initialize(calibration_wait_time=stage_wait_time)
         self.laser.initialize()
         self.camera.initialize()
-        self.stage.initialize(calibration_wait_time=stage_wait_time)
         self._state = Dem2State.INITIALIZED
         self._log.info("Demonstrator 2 ready! 🎉")
 
@@ -229,7 +229,7 @@ class Dem2Controller:
         Calculate the lateral FOV.
         :return: Lateral FOV in mm.
         """
-        return self.camera.lateral_size / self.mag
+        return self.camera.lateral_size[0] / self.mag, self.camera.lateral_size[1] / self.mag
 
     @property
     def lateral_spacing(self) -> tuple[float, float]:

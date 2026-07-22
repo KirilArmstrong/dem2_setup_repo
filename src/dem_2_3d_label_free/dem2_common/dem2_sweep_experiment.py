@@ -153,15 +153,13 @@ class Dem2SweepPacket:
         :param value: Value of attribute.
         :param data_set: Dataset to add to. Defaults to current loaded one.
         """
-        dset  = self.data_set if data_set is not None else data_set
+        dset  = self.data_set if data_set is None else data_set
         with h5py.File(self.filepath, "r+") as f:
-            attrs = dict(f[dset].attrs)
             if data_set is None:
                 self._attributes[name] = value
-                attrs.update(self._attributes)
-            else:
-                attrs[name] = value
-            f[dset].attrs = attrs
+                f[dset].attrs.update(self._attributes)
+                return
+            f[dset].attrs[name] = value
 
     def set_attributes(
         self, attributes: dict | None = None, data_set: str | None = None
@@ -171,9 +169,38 @@ class Dem2SweepPacket:
         :param data_set: Dataset. Defaults to current loaded one.
         :param attributes: Dictionary of attributes to replace current one with.
         """
-        dset  = self.data_set if data_set is not None else data_set
+        dset = self.data_set if data_set is None else data_set
+        target_data = attributes if attributes is not None else getattr(self, '_attributes', {})
+
         with h5py.File(self.filepath, "r+") as f:
-            f[dset].attrs = attributes if attributes is not None else self._attributes
+            dataset = f[dset]
+            dataset.attrs.clear()
+
+            def flatten(d, parent_key='', sep='__'):
+                items = []
+                for k, v in d.items():
+                    new_key = f"{parent_key}{sep}{k}" if parent_key else k
+                    if isinstance(v, dict):
+                        items.extend(flatten(v, new_key, sep=sep).items())
+                    elif isinstance(v, tuple):
+                        # Convert tuple to list (numpy handles this better)
+                        items.append((new_key, list(v)))
+                    elif isinstance(v, (list, int, float, str, bool)):
+                        items.append((new_key, v))
+                    else:
+                        # Skip unsupported types or convert to string
+                        items.append((new_key, str(v)))
+                return dict(items)
+
+            flat_data = flatten(target_data)
+
+            for key, value in flat_data.items():
+                try:
+                    dataset.attrs[key] = value
+                except Exception as e:
+                    # Fallback to string if specific type fails
+                    self._log.warning(f"Failed to set attr {key} ({type(value)}), storing as string: {e}")
+                    dataset.attrs[key] = str(value)
 
     def get_attributes(
         self, data_set: str | None = None
@@ -182,15 +209,44 @@ class Dem2SweepPacket:
         Get attributes for the current or another data set.
         :param data_set: Dataset. Defaults to current loaded one.
         """
-        dset = self.data_set
+        dset = self.data_set if data_set is None else data_set
+
         with h5py.File(self.filepath, "r") as f:
-            if data_set is not None:
-                dset = data_set
-                return f[dset].attrs
-            attrs = dict(f[dset].attrs)
-            attrs.update(self._attributes)
-            self._attributes = attrs
-            return self._attributes
+            # Read all attrs as a flat dict
+            raw_attrs = dict(f[dset].attrs)
+
+            if not raw_attrs:
+                return {}
+
+            # Helper to reconstruct nested dict
+            def unflatten(flat_dict: dict, sep: str = '__') -> dict:
+                result = {}
+                for key, value in flat_dict.items():
+                    parts = key.split(sep)
+                    current = result
+
+                    # Traverse/Create path
+                    for i, part in enumerate(parts[:-1]):
+                        if part not in current:
+                            current[part] = {}
+                        elif not isinstance(current[part], dict):
+                            # Collision: key exists but isn't a dict (shouldn't happen if consistent)
+                            current[part] = {}
+
+                        current = current[part]
+
+                    # Set the final value
+                    current[parts[-1]] = value
+
+                return result
+
+            reconstructed = unflatten(raw_attrs, sep='__')
+
+            # If this is the "current" dataset, update local cache
+            if data_set is None:
+                self._attributes = reconstructed
+
+            return reconstructed
 
     def rename_dataset(self, dataset: str, new_name: str, path: Path = Path("")):
         """

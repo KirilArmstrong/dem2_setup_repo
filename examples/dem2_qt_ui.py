@@ -774,22 +774,20 @@ class MainWindow(QMainWindow):
         if controller.cam_capturer.is_alive():
             controller.cam_capturer.end()
             controller.cam_capturer.join()
-        controller.cam_capturer = Dem2Capturer(
-            controller.camera,
-            Dem2SweepPacket(str(DATA_PATH / "image.h5")),
-            int(controller.camera.samples_a_scan),
-        )
-        controller.cam_capturer.start()
-        controller.cam_capturer.join()
         attrs = controller.settings
-        centre_time_offset = controller.camera.t_exp / 2
+        centre_time_offset = controller.camera.t_exp / 2.0
         centre_lambdas = []
         self._log.info("Calculating centre lambdas for each frame assuming linear lambda sweep.")
-        for i in range(controller.camera.samples_a_scan):
+        for i in range(int(controller.camera.samples_a_scan)):
             time = (centre_time_offset + (controller.camera.t_frame * i)) / 1000 # convert to seconds
             centre_lambdas.append(controller.laser.wavelength_min + (controller.laser.sweep_speed * time))
         attrs["centre_lambdas"] = centre_lambdas
-        controller.cam_capturer.packet.set_attributes(attributes=attrs)
+        controller.cam_capturer = Dem2Capturer(
+            controller.camera,
+            Dem2SweepPacket(str(DATA_PATH / "image.h5"),attributes=attrs),
+            int(controller.camera.samples_a_scan),
+        )
+        controller.cam_capturer.start()
 
     def emergency_stop(self):
         controller.laser.kill_emission()

@@ -105,11 +105,12 @@ class Dem2Camera(Thread, xiapi.Camera):
                 self.set_trigger_selector("XI_TRG_SEL_FRAME_BURST_START") # while pulse high, it continuously exposes.
                 self.set_acq_frame_burst_count(int(self.samples_a_scan))
                 self._log.info("Samples/a_scan: " + str(int(self.samples_a_scan)))
-                self.set_acq_timing_mode("XI_ACQ_TIMING_MODE_FRAME_RATE")
+                self.set_acq_timing_mode("XI_ACQ_TIMING_MODE_FRAME_RATE_LIMIT")
                 self._fps = 1 / (self.t_frame / 1000)
                 if not 0.01 < self._fps < 10000:
                     raise Dem2Errors.CameraError(f"Camera fps must be between 0.01 and 10,000 fps. Yours:{self._fps} fps.")
                 self.set_framerate(self._fps)
+                self._log.info(f"Frame rate on. set to {self._fps} fps.")
 
                 self.set_counter_selector("XI_CNT_SEL_API_SKIPPED_FRAMES")
                 self.set_buffer_policy("XI_BP_SAFE")
