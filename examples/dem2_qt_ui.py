@@ -17,7 +17,7 @@ from PySide6.QtWidgets import (
 from src.dem_2_3d_label_free.dem2_common.dem2_bscan_pattern import Dem2BScanPattern  # noqa: F401
 from src.dem_2_3d_label_free.dem2_common.dem2_constants import Dem2State, Dem2LaserMode, Dem2CameraMode
 from src.dem_2_3d_label_free.dem2_common.dem2_helper import setup_root_logger
-from src.dem_2_3d_label_free.dem2_common.dem2_sweep_experiment import Dem2Results, Dem2SweepPacket
+from src.dem_2_3d_label_free.dem2_common.dem2_sweep_experiment import Dem2SweepPacket
 from src.dem_2_3d_label_free.dem2_components.dem2_capturer import Dem2Capturer
 from src.dem_2_3d_label_free.dem2_components.dem2_controller import Dem2Controller
 from src.dem_2_3d_label_free.__globals__ import __config__, __datapath__
@@ -1120,13 +1120,15 @@ class MainWindow(QMainWindow):
         # Crop to camera ROI for FFT processing (exclusive BR, no zero-padding)
         proc_array = display_arr[cy1:cy2, cx1:cx2] if has_cam_roi else display_arr
         if self.state.saveEnabled:
-            results = Dem2Results(
-                image_array,
+            filepath=str(DATA_PATH / f"image_{datetime.now().strftime('%Y-%m-%dT%H-%M-%S')}.h5")
+            results = Dem2SweepPacket(
+                filepath,
+                "1",
                 controller.settings,
-                controller._cfg,
-                controller.stage.b_scan_pattern[0],
             )
-            results.save(str(DATA_PATH / f"image_{datetime.now().strftime('%Y-%m-%dT%H-%M-%S')}.h5"))
+            results.start_capture()
+            results.append_frame(image_array)
+            results.stop_capture()
         if self.state.fftEnabled:
             ft_arr = compute_fft(proc_array)
             self._last_fft_array = covert_fft_to_img(ft_arr, gamma)
