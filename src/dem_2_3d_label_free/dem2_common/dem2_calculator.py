@@ -18,12 +18,12 @@ class Dem2SystemCalculator:
         # k-range over k-interval (satisfying Nyquist criterion)
         # um * 1000 = nm
         return (
-            (2 * np.pi / lambda_min)
-            - (2 * np.pi / lambda_max)
-        ) / (np.pi / (z_max * 1000))
+            (1 / lambda_min)
+            - (1 / lambda_max)
+        ) * 2 * (z_max * 1000)
 
 
-    def total_time(self,t_exp,sample_no,t_read=3.02):
+    def total_time(self,t_exp,t_idle,sample_no,t_read=3.02):
         """
         Calculate total time.
         :return: Total time in seconds.
@@ -31,7 +31,7 @@ class Dem2SystemCalculator:
         if t_exp < 0.1:
             raise Exception("Minimum exposure time is 100 us.")
         return (
-            (t_exp if t_exp > t_read else t_read) / 1000
+                ((t_exp if t_exp > t_read else t_read)+t_idle) / 1000
         ) * sample_no
 
 

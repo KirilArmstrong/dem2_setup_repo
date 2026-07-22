@@ -18,14 +18,15 @@ import scipy
 
 from src.dem_2_3d_label_free.dem2_common.dem2_constants import ZERNIKE_NOLLS
 from src.dem_2_3d_label_free.dem2_common.dem2_helper import zernike_noll
+from src.dem_2_3d_label_free.dem2_common.dem2_sweep_experiment import Dem2SweepPacket
 
 
-class Dem2Processor:
+class Dem2Processor(Dem2SweepPacket):
     def __init__(
         self,
         file_path: Path | None = None,
         data_path: Path = Path(__datapath__),
-        dataset_name: str = "1",
+        dataset_name: str = "1",attributes: dict|None = None
     ):
         # Non-root logging. See dem2_helper.setup_root_logger() documentation.
         self._log = logging.getLogger(self.__class__.__name__)
@@ -33,48 +34,7 @@ class Dem2Processor:
         self._file_path: Path | None = file_path
         self._data_path: Path = data_path
         self._path_override: Path | None = None
-        self.dataset: str = dataset_name
-        self._attributes: dict = {}
-
-    def __getitem__(self, key):
-        """Allows slicing of images directly from the disk without filling RAM."""
-        with h5py.File(self.path, "r") as f:
-            # Slices are read directly from the disk and returned as a numpy array
-            dset = f[self.dataset]
-            ndim = dset.ndim
-
-            # Normalize key to a tuple
-            if not isinstance(key, tuple):
-                key = (key,)
-
-            # 3D dataset, 2D key: treat as [1, :, :]
-            if ndim == 3 and len(key) == 2:
-                key = (1,) + key
-
-            # 2D dataset, 3D key -> drop the first index, use remaining 2
-            if ndim == 2 and len(key) == 3:
-                key = key[1:]
-
-            # Optional: enforce correct number of indices
-            if len(key) > ndim:
-                raise IndexError(
-                    f"{len(key)} indices given for {ndim}D dataset of shape {dset.shape}"
-                )
-
-            return dset[key]
-
-    def __getattr__(self, name):
-        # Called only if normal attributes (like path, dataset, etc.) are missing
-        if name in self._attributes:
-            return self._attributes[name]
-        with h5py.File(self.path, "r") as f:
-            attrs = f[self.dataset].attrs
-            if name in attrs:
-                return attrs[name]
-        # Important: if not found, raise AttributeError
-        raise AttributeError(
-            f"No attribute '{name}' in HDF5 attrs or loaded attributes"
-        )
+        super().__init__(str(self.path), dataset_name,attributes)
 
     def convert_tif_to_h5(self, path: Path = Path("")):
         """
@@ -137,7 +97,7 @@ class Dem2Processor:
         attrs = attributes if attributes is not None else self._attributes
 
         path = path if str(path) != "." else self.path
-        ds_name = dataset_name if dataset_name else self.dataset
+        ds_name = dataset_name if dataset_name else self.data_set
 
         with h5py.File(str(path), "a") as f:
             if array is not None:
@@ -171,33 +131,6 @@ class Dem2Processor:
         self._log.info(f"Saved H5 file: {path}")
         self._log.info(f"File size: {os.path.getsize(path) / 1024 / 1024:.2f} MB")
 
-    def rename_dataset(self, dataset: str, new_name: str, path: Path = Path("")):
-        """
-        Rename a dataset in a H5 file.
-        :param dataset: Original dataset name.
-        :param new_name: New dataset name.
-        :param path: Path to other h5 file if not using current loaded one. This won't load it, use load() first.
-        """
-        h5_path = path if str(path) != "." else self.path
-        with h5py.File(str(h5_path), "r+") as f:
-            if dataset not in f:
-                raise KeyError(f"Dataset '{dataset}' not found in file '{h5_path}'.")
-            if new_name in f:
-                raise KeyError(
-                    f"Target dataset name '{new_name}' already exists in file '{h5_path}'."
-                )
-
-            # Copy dataset to new name
-            f.copy(dataset, new_name)
-            # Remove old dataset
-            del f[dataset]
-
-        # Update instance default dataset name if it was renamed
-        if self.dataset == dataset:
-            self.dataset = new_name
-
-        self._log.info(f"Renamed dataset '{dataset}' to '{new_name}' in file {h5_path}")
-
     def ft(
         self,
         array: np.ndarray | None = None,
@@ -213,7 +146,7 @@ class Dem2Processor:
         :return: FFTed array (size of roi if provided.)
         """
         if dataset is not None:
-            self.dataset = dataset
+            self.data_set = dataset
         arr = array if array is not None else self[z_index, :, :]
         if roi is not None:
             arr = arr[roi[0], roi[1]]

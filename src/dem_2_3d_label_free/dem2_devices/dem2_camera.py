@@ -25,11 +25,15 @@ class Dem2Camera(Thread, xiapi.Camera):
         self._t_exp = self._cfg["time_exposure"]
         if self._t_exp < 0.1:
             raise Dem2Errors.CameraError("Minimum exposure time is 100 us.")
+        self._t_idle = self._cfg["time_idle"]
+        if self._t_idle < 0:
+            raise Dem2Errors.CameraError("Minimum idle time is 0 us.")
         self.t_read = self._cfg["time_readout"]
         self.lateral_size = (self._cfg["lateral_size_x"],self._cfg["lateral_size_y"])
 
         # Number of images per a-scan.
         self.samples_a_scan: int | None = None
+        self._fps = None
 
         self._buffer_offset = None
 
@@ -101,6 +105,11 @@ class Dem2Camera(Thread, xiapi.Camera):
                 self.set_trigger_selector("XI_TRG_SEL_FRAME_BURST_START") # while pulse high, it continuously exposes.
                 self.set_acq_frame_burst_count(int(self.samples_a_scan))
                 self._log.info("Samples/a_scan: " + str(int(self.samples_a_scan)))
+                self.set_acq_timing_mode("XI_ACQ_TIMING_MODE_FRAME_RATE")
+                self._fps = 1 / (self.t_frame / 1000)
+                if not 0.01 < self._fps < 10000:
+                    raise Dem2Errors.CameraError(f"Camera fps must be between 0.01 and 10,000 fps. Yours:{self._fps} fps.")
+                self.set_framerate(self._fps)
 
                 self.set_counter_selector("XI_CNT_SEL_API_SKIPPED_FRAMES")
                 self.set_buffer_policy("XI_BP_SAFE")
@@ -211,8 +220,8 @@ class Dem2Camera(Thread, xiapi.Camera):
 
     @property
     def t_frame(self):
-        """Get time for 1 frame in ms."""
-        return self.t_exp if self.t_exp > self.t_read else self.t_read
+        """Get time for 1 frame in ms. t_epx + t_idle"""
+        return (self.t_exp if self.t_exp > self.t_read else self.t_read)+self._t_idle
 
     @property
     def t_exp(self):
@@ -220,6 +229,11 @@ class Dem2Camera(Thread, xiapi.Camera):
         if self._state == Dem2State.DISCONNECTED:
             return self._t_exp
         return self.get_exposure() / 1000
+
+    @property
+    def t_idle(self):
+        """Get camera idle time in ms."""
+        return self._t_idle
 
     @t_exp.setter
     def t_exp(self, value: float):
@@ -239,4 +253,7 @@ class Dem2Camera(Thread, xiapi.Camera):
             return _dict
         _dict["mode"] = self.mode.value
         _dict["time_exposure"] = self.t_exp
+        _dict["time_idle"] = self.t_idle
+        _dict["frames"] = self.samples_a_scan
+        _dict["fps"] = self._fps
         return _dict

@@ -63,6 +63,7 @@ class Dem2Controller:
         )
         self.laser.total_sweep_time = self.calculator.total_time(
             self.camera.t_exp,
+            self.camera.t_idle,
             self.camera.samples_a_scan,
             self.camera.t_read,
         )
@@ -242,6 +243,10 @@ class Dem2Controller:
     def settings(self) -> dict:
         _dict = {}
         _dict.update(self._cfg)
+
+        _dict["system"]["depth_max"] = self.z_max
+        _dict["system"]["magnification"] = self.mag
+        _dict["system"]["numerical_aperture"] = self.na
         _dict["stage"] = self.stage.settings
         _dict["camera"] = self.camera.settings
         _dict["laser"] = self.laser.settings

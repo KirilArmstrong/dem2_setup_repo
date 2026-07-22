@@ -1,5 +1,6 @@
 import logging
 import os
+from pathlib import Path
 
 import h5py
 import numpy as np
@@ -13,14 +14,16 @@ from src.dem_2_3d_label_free.dem2_common.dem2_calculator import Dem2SystemCalcul
 class Dem2SweepPacket:
     """IO for a single sweep (burst of images). Appends directly to HDF5 incrementally."""
 
-    def __init__(self, filepath: str, data_set: str = "1"):
+    def __init__(self, filepath: str, data_set: str = "1", attributes: dict|None = None):
         self._log = logging.getLogger(self.__class__.__name__)
         self.filepath = filepath
         self.data_set: str = data_set
-        
+        self._attributes: dict = attributes if attributes is not None else {}
+
         self._h5_file = None
         self._data = None
         self._frame_count = 0
+
 
     def start_capture(self):
         """Prepares the HDF5 file to receive streaming frames."""
@@ -123,6 +126,82 @@ class Dem2SweepPacket:
                 )
 
             return dset[slice_key]
+
+    def __getattr__(self, name, dset: str|None = None):
+        """
+        Get attribute if exists. Usage: ``self.some_attr`` or ``self.__getattr__("some_attr",dset="other_dataset")``.
+        :param name: Attribute name.
+        :param dset: Dataset. Defaults to current loaded one.
+        :return: Attribute value.
+        """
+        # Called only if normal attributes (like path, dataset, etc.) are missing
+        if name in self._attributes and dset is None:
+            return self._attributes[name]
+        with h5py.File(self.filepath, "r") as f:
+            attrs = f[self.dataset if dset is None else dset].attrs
+            if name in attrs:
+                return attrs[name]
+        # Important: if not found, raise AttributeError
+        raise AttributeError(
+            f"No attribute '{name}' in HDF5 attrs or loaded attributes"
+        )
+
+    def set_attribute(self, name, value, data_set: str|None = None):
+        """
+        Set single attribute in dataset.
+        :param name: Name of attribute.
+        :param value: Value of attribute.
+        :param data_set: Dataset to add to. Defaults to current loaded one.
+        """
+        dset  = self.data_set if data_set is not None else data_set
+        with h5py.File(self.filepath, "r+") as f:
+            attrs = f[dset].attrs
+            if data_set is None:
+                self._attributes[name] = value
+                attrs.update(self._attributes)
+            else:
+                attrs[name] = value
+            f[dset].attrs = attrs
+
+    def set_attributes(
+        self, data_set: str | None = None, attributes: dict | None = None
+    ):
+        """
+        Set attributes for the current or another data set.
+        :param data_set: Dataset. Defaults to current loaded one.
+        :param attributes: Dictionary of attributes to replace current one with.
+        """
+        dset  = self.data_set if data_set is not None else data_set
+        with h5py.File(self.filepath, "r+") as f:
+            f[dset].attrs = attributes if attributes is not None else self._attributes
+
+    def rename_dataset(self, dataset: str, new_name: str, path: Path = Path("")):
+        """
+        Rename a dataset in a H5 file.
+        :param dataset: Original dataset name.
+        :param new_name: New dataset name.
+        :param path: Path to other h5 file if not using current loaded one. This won't load it.
+        """
+        h5_path = path if str(path) != "." else self.filepath
+        with h5py.File(str(h5_path), "r+") as f:
+            if dataset not in f:
+                raise KeyError(f"Dataset '{dataset}' not found in file '{h5_path}'.")
+            if new_name in f:
+                raise KeyError(
+                    f"Target dataset name '{new_name}' already exists in file '{h5_path}'."
+                )
+
+            # Copy dataset to new name
+            f.copy(dataset, new_name)
+            # Remove old dataset
+            del f[dataset]
+
+        # Update instance default dataset name if it was renamed
+        if self.data_set == dataset and h5_path == self.filepath:
+            self.data_set = new_name
+
+        self._log.info(f"Renamed dataset '{dataset}' to '{new_name}' in file {h5_path}")
+
 
     @property
     def shape(self, data_set: str | None = None):

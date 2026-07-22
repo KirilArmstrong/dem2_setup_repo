@@ -20,10 +20,10 @@ class Dem2Capturer(Thread):
     ):
         Thread.__init__(self)
         self._cam = cam
-        self._packet = packet
+        self.packet = packet
         if data_set is not None:
             if data_set:
-                self._packet.data_set = data_set
+                self.packet.data_set = data_set
         self._log = logging.getLogger(self.__class__.__name__)
         self._break = False
         self._expected_frames = expected_frames
@@ -43,11 +43,11 @@ class Dem2Capturer(Thread):
 
 
         # Prepare the packet (creates the file and readies the dataset)
-        self._packet.start_capture()
+        self.packet.start_capture()
 
         is_capturing = False
         # timeout = int(self._cam.concat_amm*(self._cam.t_exp+1))+1
-        timeout = int(self._cam.t_exp + self._cam.t_read + 1)
+        timeout = int(self._cam.t_frame + 1)
         self._log.info(f"Capturer Thread: Timeout set to {timeout} ms.")
 
         self._log.info("Capturer Thread: Starting acquisition...")
@@ -85,12 +85,12 @@ class Dem2Capturer(Thread):
             for i in range(len(imgs)):
                 arr = imgs[i].get_image_data_numpy()
                 # self._log.info(f"writing frame {imgs[i].nframe}-{imgs[i].nframe+self._cam.concat_amm} to disk... its shape is {arr.shape}")
-                self._packet.append_frame(arr)
+                self.packet.append_frame(arr)
                 if i % (len(imgs) // 10) == 0:
                     self._log.info(
                         f"writing frames {int((i / len(imgs)) * 100)}% ({('up to ' + str(imgs[i].nframe)) if i != 0 else 'starting at frame ' + str(imgs[i].nframe)})"
                     )
-            self._packet.stop_capture()
+            self.packet.stop_capture()
             self._log.info(f"Skipped api frames: {self._cam.get_counter_value()}")
             self._cam.stop_acquisition()
             self._log.info("Capturer Thread: Acquisition stopped. Thread finished.")

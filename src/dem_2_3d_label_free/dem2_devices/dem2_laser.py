@@ -288,4 +288,6 @@ class Dem2Laser:
         _dict["wavelength"] = self.wavelength
         _dict["wavelength_min"] = self.wavelength_min
         _dict["wavelength_max"] = self.wavelength_max
+        _dict["wavelength_rng"] = self.wavelength_max - self.wavelength_min
+        _dict["sweep_speed"] = self.sweep_speed
         return _dict

@@ -372,6 +372,7 @@ class Dem2Stage:
             return _dict
         _dict["mode"] = self.mode.value
         _dict["focus_z_pos"] = self.get_focus()
+        _dict["stage_pos"] = self.get_position()
         return _dict
 
 
