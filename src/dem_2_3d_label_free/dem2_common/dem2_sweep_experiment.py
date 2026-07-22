@@ -155,7 +155,7 @@ class Dem2SweepPacket:
         """
         dset  = self.data_set if data_set is not None else data_set
         with h5py.File(self.filepath, "r+") as f:
-            attrs = f[dset].attrs
+            attrs = dict(f[dset].attrs)
             if data_set is None:
                 self._attributes[name] = value
                 attrs.update(self._attributes)
@@ -187,7 +187,7 @@ class Dem2SweepPacket:
             if data_set is not None:
                 dset = data_set
                 return f[dset].attrs
-            attrs = f[dset].attrs
+            attrs = dict(f[dset].attrs)
             attrs.update(self._attributes)
             self._attributes = attrs
             return self._attributes
@@ -225,122 +225,3 @@ class Dem2SweepPacket:
         """Returns the shape of the packet's images without loading into RAM."""
         with h5py.File(self.filepath, 'r') as f:
             return f[self.data_set if data_set is None else data_set].shape
-
-
-class Dem2SweepExperiment:
-    """IO for managing full experimental data (multiple packets)."""
-
-    def __init__(self, save_directory: str = ""):
-        self._log = logging.getLogger(self.__class__.__name__)
-        
-        self.save_directory = save_directory or os.path.join(__datapath__, "dem2_sweep_experiment")
-        self.packets: list[Dem2SweepPacket] =[]
-
-        self.config = {}
-        self.samples_per_a_scan = 0
-        self.a_scans_b_scan = 0
-
-        if os.path.exists(os.path.join(self.save_directory, "properties.yml")):
-            self.load(self.save_directory)
-
-    def create_new_packet(self) -> Dem2SweepPacket:
-        """Instantiates a new empty packet in the experiment directory."""
-        packet_idx = len(self.packets)
-        packet_path = os.path.join(self.save_directory, f"sweep_packet_{packet_idx:03d}.h5")
-        packet = Dem2SweepPacket(packet_path)
-        self.packets.append(packet)
-        return packet
-
-    def __getitem__(self, key):
-        """
-        Slicing support. I.e. ``experiment[:, j]``.
-        Returns frames across packets without killing RAM.
-        """
-        if isinstance(key, tuple):
-            i, j = key
-            if isinstance(i, slice):
-                return [packet[j] for packet in self.packets[i]]
-            else:
-                return self.packets[i][j]
-        else:
-            return self.packets[key]
-
-    def load(self, load_directory: str = ""):
-        """Load experiment properties and identify all packet files."""
-        if load_directory:
-            self.save_directory = load_directory
-            
-        self._log.info("Loading Sweep experiment from directory '%s'...", self.save_directory)
-        
-        props_path = os.path.join(self.save_directory, "properties.yml")
-        if not os.path.exists(props_path):
-            self._log.warning("No properties.yml found in %s", self.save_directory)
-            return
-
-        with open(props_path, encoding="utf-8") as yml_file:
-            properties = yaml.safe_load(yml_file)
-            self.config = properties.get("config", {})
-            self.samples_per_a_scan = properties.get("samples_per_a_scan", 0)
-            self.a_scans_b_scan = properties.get("a_scans_b_scan", 0)
-
-        # Load all h5 packets in alphabetical order
-        self.packets =[]
-        for file in sorted(os.listdir(self.save_directory)):
-            if file.startswith("sweep_packet_") and file.endswith(".h5"):
-                self.packets.append(Dem2SweepPacket(os.path.join(self.save_directory, file)))
-
-    def save(self):
-        """Save overarching experiment settings to directory."""
-        os.makedirs(self.save_directory, exist_ok=True)
-        properties_file = os.path.join(self.save_directory, "properties.yml")
-        
-        _dict_to_save = {
-            "config": self.config,
-            "samples_per_a_scan": self.samples_per_a_scan,
-            "a_scans_b_scan": self.a_scans_b_scan,
-        }
-        
-        self._log.info("Saving Sweep experiment to directory '%s'...", self.save_directory)
-        with open(properties_file, "w", encoding="utf-8") as yml_file:
-            yaml.safe_dump(_dict_to_save, yml_file, default_style=False)
-
-
-class Dem2Results(Dem2SystemCalculator):
-    """The Big Manager: Manages Configuration, State, and the Experiment."""
-
-    def __init__(
-        self,
-        experiment: Dem2SweepExperiment | None = None,
-        settings: dict | None = None,
-        config: dict | None = None,
-        b_scan_pattern: Dem2BScanPattern | None = None,
-        load_from_directory: str = "",
-    ):
-        self._log = logging.getLogger(self.__class__.__name__)
-
-        self.experiment = experiment if experiment is not None else Dem2SweepExperiment()
-
-        # Update settings dictionary
-        self._settings = config if config else {}
-        self._settings.update(settings if settings else {})
-
-        self.b_scan_pattern = b_scan_pattern if b_scan_pattern else Dem2BScanPattern()
-
-        if load_from_directory:
-            self.experiment.load(load_from_directory)
-            self._settings.update(self.experiment.config)
-
-        super().__init__(self._settings)
-
-    def save_all(self):
-        """Syncs config values and saves the whole experiment metadata."""
-        self.experiment.config = self._settings
-        self.experiment.save()
-
-    @property
-    def settings(self) -> dict:
-        return self._settings
-
-    @settings.setter
-    def settings(self, value: dict):
-        self._settings.update(value)
