@@ -43,7 +43,7 @@ class Dem2Capturer(Thread):
 
 
         # Prepare the packet (creates the file and readies the dataset)
-        self.packet.start_capture()
+        self.packet.open_file()
 
         is_capturing = False
         # timeout = int(self._cam.concat_amm*(self._cam.t_exp+1))+1
@@ -90,7 +90,7 @@ class Dem2Capturer(Thread):
                     self._log.info(
                         f"writing frames {int((i / len(imgs)) * 100)}% ({('up to ' + str(imgs[i].nframe)) if i != 0 else 'starting at frame ' + str(imgs[i].nframe)})"
                     )
-            self.packet.stop_capture()
+            self.packet.close_file()
             self._log.info(f"Skipped api frames: {self._cam.get_counter_value()}")
             self.packet.set_attributes()
             self._cam.stop_acquisition()

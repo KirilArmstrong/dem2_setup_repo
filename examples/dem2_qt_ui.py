@@ -1126,9 +1126,9 @@ class MainWindow(QMainWindow):
                 "1",
                 controller.settings,
             )
-            results.start_capture()
+            results.open_file()
             results.append_frame(image_array)
-            results.stop_capture()
+            results.close_file()
         if self.state.fftEnabled:
             ft_arr = compute_fft(proc_array)
             self._last_fft_array = covert_fft_to_img(ft_arr, gamma)

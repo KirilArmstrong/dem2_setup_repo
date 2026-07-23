@@ -189,12 +189,12 @@ class Dem2Controller:
         for i in range(lambdas.size):
             self._log.info(f"Running lambda {lambdas[i]} ({i+1} of {lambdas.size})...")
             packet.data_set = str(i+1)
-            packet.start_capture()
+            packet.open_file()
             self.laser.send_cw(lambdas[i])
             self.laser.toggle_emission()
             packet.append_frame(self.camera.acquire_single_image())
             self.laser.kill_emission()
-            packet.stop_capture()
+            packet.close_file()
             packet.set_attributes(self.settings)
         self._log.info(f"Finished and saved to {filename}.")
         return packet

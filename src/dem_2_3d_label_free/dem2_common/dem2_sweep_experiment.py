@@ -25,7 +25,7 @@ class Dem2SweepPacket:
         self._frame_count = 0
 
 
-    def start_capture(self):
+    def open_file(self):
         """Prepares the HDF5 file to receive streaming frames."""
         os.makedirs(os.path.dirname(self.filepath), exist_ok=True)
         self._h5_file = h5py.File(self.filepath, 'w')
@@ -59,7 +59,7 @@ class Dem2SweepPacket:
             
         self._frame_count += 1
 
-    def stop_capture(self):
+    def close_file(self):
         """Safely closes the file after capture is complete."""
         if self._h5_file is not None:
             self._h5_file.close()
@@ -248,7 +248,7 @@ class Dem2SweepPacket:
 
             return reconstructed
 
-    def rename_dataset(self, dataset: str, new_name: str, path: Path = Path("")):
+    def rename_dataset(self, dataset: str, new_name: str, path: Path = Path(""), overwrite: bool = False):
         """
         Rename a dataset in a H5 file.
         :param dataset: Original dataset name.
@@ -260,9 +260,12 @@ class Dem2SweepPacket:
             if dataset not in f:
                 raise KeyError(f"Dataset '{dataset}' not found in file '{h5_path}'.")
             if new_name in f:
-                raise KeyError(
-                    f"Target dataset name '{new_name}' already exists in file '{h5_path}'."
-                )
+                if overwrite:
+                    del f[new_name]
+                else:
+                    raise KeyError(
+                        f"Target dataset name '{new_name}' already exists in file '{h5_path}'. Set overwrite=True to overwrite it."
+                    )
 
             # Copy dataset to new name
             f.copy(dataset, new_name)
@@ -275,6 +278,32 @@ class Dem2SweepPacket:
 
         self._log.info(f"Renamed dataset '{dataset}' to '{new_name}' in file {h5_path}")
 
+    def trim_dataset(self, data_set, start, end):
+        """
+        Trim the no. of images in a data set.
+        :param data_set: Dataset to trim.
+        :param start: Start k index.
+        :param end: End k index (does not include)
+        """
+        self.open_file()
+        if "temp_ds" in self._h5_file:
+            self.close_file()
+            raise KeyError(
+                f"Target dataset name 'temp_ds' already exists in file '{self.filepath}'. Please delete or rename it."
+            )
+        for i in range(self.shape[0]):
+            self.append_frame(self[start+i:end,:,:], "temp_ds")
+        self.close_file()
+        self.set_attributes(self.get_attributes(data_set),"temp_ds")
+        self.rename_dataset("temp_ds", data_set, overwrite=True)
+        self._log.info(f"'{data_set}' dataset trimmed.")
+
+
+    def delete_dataset(self, data_set):
+        self.open_file()
+        del self._h5_file[data_set]
+        self.close_file()
+        self._log.info(f"'{data_set}' dataset deleted.")
 
     @property
     def shape(self, data_set: str | None = None):
