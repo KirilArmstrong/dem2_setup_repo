@@ -4,6 +4,7 @@ from datetime import datetime
 from pathlib import Path
 import threading
 import numpy as np
+import cupy as cp
 from PIL import Image  # noqa: F401 (kept as in original)
 from io import BytesIO  # noqa: F401 (kept as in original)
 from PySide6.QtCore import Qt, QTimer, QThread, QObject, Signal
@@ -55,31 +56,31 @@ def normalize_to_255(array: np.ndarray):
     return (array * 255).astype(np.uint8)
 
 
-def compute_fft(image_array: np.ndarray) -> np.ndarray:
-    ft_array = np.fft.fft2(image_array)
-    ft_array = np.fft.fftshift(ft_array)
+def compute_fft(image_array: cp.ndarray) -> cp.ndarray:
+    ft_array = cp.fft.fft2(image_array)
+    ft_array = cp.fft.fftshift(ft_array)
     return ft_array
 
 
-def covert_fft_to_img(ft_array: np.ndarray, gamma: float) -> np.ndarray:
+def covert_fft_to_img(ft_array: cp.ndarray, gamma: float) -> cp.ndarray:
     ft_array = np.abs(ft_array)
     ft_array = ft_array ** gamma
     return normalize_to_255(ft_array)
 
 
-def phase_to_hsv(array: np.ndarray) -> np.ndarray:
+def phase_to_hsv(array: cp.ndarray) -> cp.ndarray:
     """Convert -pi to pi to 0 - 1."""
     from matplotlib.colors import hsv_to_rgb
-    hue = (np.angle(array) + np.pi) / (2 * np.pi)
-    hsv = np.zeros((*array.shape, 3), dtype=np.float32)
+    hue = (cp.angle(array) + cp.pi) / (2 * cp.pi)
+    hsv = cp.zeros((*array.shape, 3), dtype=cp.float32)
     hsv[:, :, 0] = hue
     hsv[:, :, 1] = 1.0
     hsv[:, :, 2] = 1.0
-    rgb = hsv_to_rgb(hsv)
-    return (rgb * 255).astype(np.uint8)
+    rgb = cp.array(hsv_to_rgb(hsv.get()))
+    return (rgb * 255).astype(cp.uint8)
 
 
-def crop_centre_ifft(ft_array: np.ndarray, top_left, bottom_right) -> np.ndarray:
+def crop_centre_ifft(ft_array: cp.ndarray, top_left, bottom_right) -> cp.ndarray:
     """
     Extract ft_array[top_left:bottom_right], place it in the centre of a
     zero-padded array of the same size as ft_array, then ifftshift + ifft2.
@@ -100,7 +101,7 @@ def crop_centre_ifft(ft_array: np.ndarray, top_left, bottom_right) -> np.ndarray
     if h <= 0 or w <= 0:
         ft_centred = ft_array
     else:
-        ft_centred = np.zeros_like(ft_array)
+        ft_centred = cp.zeros_like(ft_array)
         ch = ft_array.shape[0] // 2
         cw = ft_array.shape[1] // 2
 
@@ -111,8 +112,8 @@ def crop_centre_ifft(ft_array: np.ndarray, top_left, bottom_right) -> np.ndarray
         ft_centred[row_start:row_start + h, col_start:col_start + w] = \
             ft_array[y1:y2, x1:x2]
 
-    ft_unshifted = np.fft.ifftshift(ft_centred)
-    img_iffted = np.fft.ifft2(ft_unshifted)
+    ft_unshifted = cp.fft.ifftshift(ft_centred)
+    img_iffted = cp.fft.ifft2(ft_unshifted)
     return img_iffted
 
 
@@ -220,9 +221,9 @@ class ProcessingWorker(QObject):
                 display_rgb = np.stack([display_arr, display_arr, display_arr], axis=-1)
             else:
                 display_rgb = np.ascontiguousarray(display_arr)
+            color = [255, 255, 255]
             if has_cam_roi:
                 thickness = 2
-                color = [255, 0, 0]
                 display_rgb[cy1:min(cy1 + thickness, cy2 + 1), cx1:cx2 + 1] = color
                 display_rgb[max(cy2 - thickness + 1, cy1):cy2 + 1, cx1:cx2 + 1] = color
                 display_rgb[cy1:cy2 + 1, cx1:min(cx1 + thickness, cx2 + 1)] = color
@@ -233,7 +234,8 @@ class ProcessingWorker(QObject):
             phase_rgb = None
             if self._fft_enabled and proc_array.size > 0:
                 # Full FFT/iFFT/phase every frame
-                ft_arr = compute_fft(proc_array)
+                proc_arr_cp = cp.array(proc_array)
+                ft_arr = compute_fft(proc_arr_cp)
                 fft_img_u8 = covert_fft_to_img(ft_arr, self._gamma)
                 fh, fw = ft_arr.shape[:2]
 
@@ -259,8 +261,8 @@ class ProcessingWorker(QObject):
                         mag = np.abs(roi_slice)
                         max_val = mag.max()
                         ys, xs = np.where(mag == max_val)
-                        cx = int(round(xs.mean())) + x1
-                        cy = int(round(ys.mean())) + y1
+                        cx = int(round(xs.mean().item())) + x1
+                        cy = int(round(ys.mean().item())) + y1
                         self._fft_roi = (cx, cy, roi_w, roi_h)
                         self.fft_roi_moved.emit(cx, cy)
 
@@ -281,13 +283,13 @@ class ProcessingWorker(QObject):
                 phase_rgb = phase_to_hsv(ifft_arr)
 
                 # FFT display with ROI rectangle and centre cross
-                rgb_fft = np.stack([fft_img_u8, fft_img_u8, fft_img_u8], axis=-1)
+                rgb_fft = cp.stack([fft_img_u8, fft_img_u8, fft_img_u8], axis=-1)
                 if x2 > x1 and y2 > y1:
                     th = 2
-                    rgb_fft[y1:min(y1 + th, y2), x1:x2] = [255, 0, 0]
-                    rgb_fft[max(y2 - th, y1):y2, x1:x2] = [255, 0, 0]
-                    rgb_fft[y1:y2, x1:min(x1 + th, x2)] = [255, 0, 0]
-                    rgb_fft[y1:y2, max(x2 - th, x1):x2] = [255, 0, 0]
+                    rgb_fft[y1:min(y1 + th, y2), x1:x2] = cp.asarray(color)
+                    rgb_fft[max(y2 - th, y1):y2, x1:x2] = cp.asarray(color)
+                    rgb_fft[y1:y2, x1:min(x1 + th, x2)] = cp.asarray(color)
+                    rgb_fft[y1:y2, max(x2 - th, x1):x2] = cp.asarray(color)
 
                     # Red cross at centre
                     arm = max(5, min(roi_w, roi_h) // 4) if roi_w > 0 and roi_h > 0 else 10
@@ -297,13 +299,13 @@ class ProcessingWorker(QObject):
                     x_end = min(fw, cx_c + arm + 1)
                     y_start = max(0, cy_c - arm)
                     y_end = min(fh, cy_c + arm + 1)
-                    rgb_fft[cy_c, x_start:x_end] = [255, 0, 0]
-                    rgb_fft[y_start:y_end, cx_c] = [255, 0, 0]
+                    rgb_fft[cy_c, x_start:x_end] = cp.asarray(color)
+                    rgb_fft[y_start:y_end, cx_c] = cp.asarray(color)
                 fft_img = rgb_fft
             else:
                 fft_img = None
                 phase_rgb = None
-            self.frame_ready.emit(display_rgb, fft_img, phase_rgb)
+            self.frame_ready.emit(display_rgb, fft_img.get() if fft_img is not None else fft_img, phase_rgb.get() if phase_rgb is not None else phase_rgb)
 
 
 class MainWindow(QMainWindow):
@@ -1106,7 +1108,7 @@ class MainWindow(QMainWindow):
             display_rgb = np.ascontiguousarray(display_arr)
         if has_cam_roi:
             thickness = 2
-            color = [255, 0, 0]
+            color = [255, 255, 255]
             display_rgb[cy1:min(cy1 + thickness, cy2 + 1), cx1:cx2 + 1] = color
             display_rgb[max(cy2 - thickness + 1, cy1):cy2 + 1, cx1:cx2 + 1] = color
             display_rgb[cy1:cy2 + 1, cx1:min(cx1 + thickness, cx2 + 1)] = color
@@ -1258,10 +1260,11 @@ class MainWindow(QMainWindow):
         rgb = np.stack([ft_arr, ft_arr, ft_arr], axis=-1)
         if x2 > x1 and y2 > y1:
             th = 2
-            rgb[y1:min(y1 + th, y2), x1:x2] = [255, 0, 0]
-            rgb[max(y2 - th, y1):y2, x1:x2] = [255, 0, 0]
-            rgb[y1:y2, x1:min(x1 + th, x2)] = [255, 0, 0]
-            rgb[y1:y2, max(x2 - th, x1):x2] = [255, 0, 0]
+            color = [255, 255, 255]
+            rgb[y1:min(y1 + th, y2), x1:x2] = color
+            rgb[max(y2 - th, y1):y2, x1:x2] = color
+            rgb[y1:y2, x1:min(x1 + th, x2)] = color
+            rgb[y1:y2, max(x2 - th, x1):x2] = color
             # Red cross at centre
             arm = max(5, min(roi_w, roi_h) // 4) if roi_w > 0 and roi_h > 0 else 10
             cx_c = max(0, min(cx, fw - 1))
@@ -1270,8 +1273,8 @@ class MainWindow(QMainWindow):
             x_end = min(fw, cx_c + arm + 1)
             y_start = max(0, cy_c - arm)
             y_end = min(fh, cy_c + arm + 1)
-            rgb[cy_c, x_start:x_end] = [255, 0, 0]
-            rgb[y_start:y_end, cx_c] = [255, 0, 0]
+            rgb[cy_c, x_start:x_end] = color
+            rgb[y_start:y_end, cx_c] = color
         qpix = numpy_to_qpixmap(rgb)
         self.label_cam_fft.setPixmap(
             qpix.scaled(self.label_cam_fft.size(), Qt.KeepAspectRatio, Qt.SmoothTransformation)
