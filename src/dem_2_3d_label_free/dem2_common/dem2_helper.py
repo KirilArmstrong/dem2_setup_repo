@@ -4,6 +4,8 @@ import logging
 import os
 from logging import Logger
 from datetime import datetime
+
+import h5py
 import numpy as np
 from zeiss_helpers.common import setup_logging, ConfigurationFile
 
@@ -14,6 +16,69 @@ from src.dem_2_3d_label_free.__globals__ import (
     __template_path__,
 )
 
+def collect_attrs(obj, lines, indent=""):
+    """Collect all attributes of an HDF5 object into lines."""
+    if len(obj.attrs) == 0:
+        return
+    lines.append(f"{indent}Attributes:")
+    for key, val in obj.attrs.items():
+        lines.append(f"{indent}  {key}: {val}")
+
+def collect_dataset_data(ds, lines, indent="", max_elements=50):
+    """
+    Optionally collect dataset contents.
+    Be careful with large datasets: we only show up to max_elements.
+    """
+    try:
+        data = ds[()]  # read entire dataset
+    except Exception as e:
+        lines.append(f"{indent}  (Could not read data: {e})")
+        return
+
+    # Flatten just for nice printing
+    flat = np.array(data).ravel()
+    if flat.size <= max_elements:
+        lines.append(f"{indent}  Data (all {flat.size} elements): {flat}")
+    else:
+        lines.append(f"{indent}  Data (first {max_elements} of {flat.size} elements): {flat[:max_elements]}")
+
+def collect_h5_contents(filename, print_data=False, max_elements=50):
+    """
+    Recursively collect the full structure of an HDF5 file into a string:
+    - File attributes
+    - All groups and their attributes
+    - All datasets, with shape, dtype, attributes
+    - Optionally some data values
+    Returns a single string with all information.
+    """
+    lines = []
+    with h5py.File(filename, "r") as f:
+        lines.append(f"File: {filename}")
+        collect_attrs(f, lines, indent="  ")
+        lines.append(f"\nContents of {filename}:")
+
+        def visitor(name, obj):
+            # indent based on depth (number of '/' in the path)
+            depth = name.count("/")
+            indent = "  " * (depth + 1)
+
+            if isinstance(obj, h5py.Group):
+                lines.append(f"{indent}Group: {name}")
+                collect_attrs(obj, lines, indent=indent + "  ")
+
+            elif isinstance(obj, h5py.Dataset):
+                lines.append(f"{indent}Dataset: {name}")
+                lines.append(f"{indent}  Shape: {obj.shape}")
+                lines.append(f"{indent}  Dtype: {obj.dtype}")
+                collect_attrs(obj, lines, indent=indent + "  ")
+
+                if print_data:
+                    collect_dataset_data(obj, lines, indent=indent + "  ", max_elements=max_elements)
+
+        # Walk the file tree
+        f.visititems(visitor)
+
+    return "\n".join(lines)
 
 def convert_to_hex(decimal: float) -> str:
     hexcode = hex(int(decimal))[2:]  # ignore the "0x" in front

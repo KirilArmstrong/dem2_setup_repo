@@ -63,10 +63,8 @@ class Dem2Controller:
             self.laser.wavelength_min, self.laser.wavelength_max, self.z_max
         )
         self.laser.total_sweep_time = self.calculator.total_time(
-            self.camera.t_exp,
-            self.camera.t_idle,
+            self.camera.t_frame,
             self.camera.samples_a_scan,
-            self.camera.t_read,
         )
 
     def connect(self):

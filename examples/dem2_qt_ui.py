@@ -727,7 +727,7 @@ class MainWindow(QMainWindow):
         controller.laser.wavelength = float(self.spin_laser_cw.value())
         controller.laser.wavelength_max = float(self.spin_laser_max.value())
         controller.laser.wavelength_min = float(self.spin_laser_min.value())
-        controller.laser.total_sweep_time = float(self.spin_laser_sweep.value())
+        # controller.laser.total_sweep_time = float(self.spin_laser_sweep.value())
         controller.update_burst_properties()
         self._update_frames()
 

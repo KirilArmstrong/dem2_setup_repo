@@ -23,15 +23,13 @@ class Dem2SystemCalculator:
         ) * 2 * (z_max * 1000)
 
 
-    def total_time(self,t_exp,t_idle,sample_no,t_read=3.02):
+    def total_time(self,t_frame,sample_no):
         """
         Calculate total time.
         :return: Total time in seconds.
         """
-        if t_exp < 0.1:
-            raise Exception("Minimum exposure time is 100 us.")
         return (
-                ((t_exp if t_exp > t_read else t_read)+t_idle) / 1000
+                t_frame / 1000
         ) * sample_no
 
 
