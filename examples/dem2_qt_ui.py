@@ -17,6 +17,7 @@ from PySide6.QtWidgets import (
 )
 from src.dem_2_3d_label_free.dem2_common.dem2_bscan_pattern import Dem2BScanPattern  # noqa: F401
 from src.dem_2_3d_label_free.dem2_common.dem2_constants import Dem2State, Dem2LaserMode, Dem2CameraMode
+from src.dem_2_3d_label_free.dem2_common.dem2_errors import Dem2Errors
 from src.dem_2_3d_label_free.dem2_common.dem2_helper import setup_root_logger
 from src.dem_2_3d_label_free.dem2_common.dem2_sweep_experiment import Dem2SweepPacket
 from src.dem_2_3d_label_free.dem2_components.dem2_capturer import Dem2Capturer
@@ -125,7 +126,7 @@ class SystemState:
             "camera": {"id": "camera", "status": 0, "mode": 0, "name": "XIB64_CAM"},
             "stage": {"id": "stage", "status": 0, "mode": 0, "name": "MTB_STAGE"},
         }
-        self.integration_time = 0.1
+        self.integration_time = controller.camera.t_exp
         self.isLive = False
         self.isCaptBurst = False
         self.fftEnabled = False
@@ -438,7 +439,7 @@ class MainWindow(QMainWindow):
         self.int_time_spin = QDoubleSpinBox()
         self.int_time_spin.setRange(0.1, 1000.0)
         self.int_time_spin.setSingleStep(0.01)
-        self.int_time_spin.setValue(0.1)
+        self.int_time_spin.setValue(controller.camera.t_exp)
         grid_camctrl.addWidget(QLabel("Int. time [ms]"), 2, 0)
         grid_camctrl.addWidget(self.int_time_spin, 2, 1)
         grid_camctrl.addWidget(self.btn_cam_set_int, 2, 2)
@@ -727,9 +728,10 @@ class MainWindow(QMainWindow):
         controller.laser.wavelength = float(self.spin_laser_cw.value())
         controller.laser.wavelength_max = float(self.spin_laser_max.value())
         controller.laser.wavelength_min = float(self.spin_laser_min.value())
-        # controller.laser.total_sweep_time = float(self.spin_laser_sweep.value())
+        # controller.laser.total_sweep_time = float(self.spin_laser_sweep.value()) # this is set in controller.update_burst_properties()
         controller.update_burst_properties()
         self._update_frames()
+        self.update_all()
 
     def set_stage_properties(self, relative: bool, focus: bool):
         if relative:
@@ -906,7 +908,7 @@ class MainWindow(QMainWindow):
         self.spin_laser_max.setValue(info["max"])
         self.spin_laser_min.setValue(info["min"])
         self.spin_laser_cw.setValue(info["wavelength"])
-        self.spin_laser_sweep.setValue(info["total_time"])
+        self.spin_laser_sweep.setValue(info["total_time"] if info["total_time"] is not None else 0.0)
         self._update_sweep_speed()
 
     def _update_stage_properties(self):
@@ -928,8 +930,12 @@ class MainWindow(QMainWindow):
         # controller.laser.wavelength_min = self.spin_laser_min.value()
         # controller.laser.wavelength_max = self.spin_laser_max.value()
         # controller.update_burst_properties()
-        self.spin_laser_sweep_speed.setValue(controller.laser.sweep_speed)
-        self.spin_laser_sweep.setValue(controller.laser.total_sweep_time)
+        try:
+            self.spin_laser_sweep_speed.setValue(controller.laser.sweep_speed)
+        except Dem2Errors.PropertyNotSetError:
+            self._log.warning("Property sweep_speed not set.")
+            self.spin_laser_sweep_speed.setValue(0.0)
+        self.spin_laser_sweep.setValue(controller.laser.total_sweep_time if controller.laser.total_sweep_time is not None else 0.0)
 
     def _update_flags(self):
         self.state.fftEnabled = self.chk_fft.isChecked()

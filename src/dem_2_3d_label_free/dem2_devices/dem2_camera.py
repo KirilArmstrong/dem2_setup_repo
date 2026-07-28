@@ -61,6 +61,7 @@ class Dem2Camera(Thread, xiapi.Camera):
             raise Dem2Errors.CameraError(f"Failed to connect: {e}")
         self._state = Dem2State.CONNECTED
         self._log.info("Connected to the Camera.")
+        self.set_exposure(self._t_exp * 1000)
 
     def disconnect(self):
         """Disconnect the camera."""
