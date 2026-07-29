@@ -98,9 +98,7 @@ class Dem2Laser:
 
                 # convert wavelength into hex and send
                 self.send_command("P22")
-                self._log.info(f"Sending wavelength min {self._wavelength_min} wavelength max {self._wavelength_max}  with base wavelength as {self._base_wavelength} as {wavelength_to_hex(self._wavelength_min, self._base_wavelength, 100)}, and {wavelength_to_hex(self._wavelength_max, self._base_wavelength, 100)}")
-                self.send_command(f"P22{wavelength_to_hex(self._wavelength_min, self._base_wavelength, 100)}")
-                self.send_command(f"P23{wavelength_to_hex(self._wavelength_max, self._base_wavelength, 100)}")
+                self.send_lambda_min_max(self._wavelength_min, self._wavelength_max)
                 self.send_sweep_speed(self._sweep_speed)
 
         self.send_command("MW") # wake pump source
@@ -108,11 +106,6 @@ class Dem2Laser:
 
         self._state = Dem2State.READY
         self._log.info("Initialized the laser source.")
-
-    def send_cw(self, wavelength = None):
-        if wavelength is not None:
-            self.wavelength = wavelength
-        self.send_command(f"P21{wavelength_to_hex(self.wavelength, self._base_wavelength, 100)}")
 
     def queue_command(self, command):
         """Queue a command to the laser device and return the response as a future object."""
@@ -144,6 +137,18 @@ class Dem2Laser:
 
     # Commands
 
+    def send_lambda_min_max(self, min_lambda, max_lambda, base_lambda=None, resolution=100):
+        base = base_lambda if base_lambda is not None else self._base_wavelength
+        self._log.info(f"Sending wavelength min {min_lambda} wavelength max {max_lambda}  with base wavelength as {base}...")
+        self.send_command(f"P22{wavelength_to_hex(min_lambda, base, resolution)}")
+        self.send_command(f"P23{wavelength_to_hex(max_lambda, base, resolution)}")
+
+    def send_cw(self, wavelength = None):
+        if wavelength is not None:
+            self.wavelength = wavelength
+        self._log.info(f"Sending CW to laser: {wavelength}")
+        self.send_command(f"P21{wavelength_to_hex(self.wavelength, self._base_wavelength, 100)}")
+
     def send_command(self, command):
         """Send string command and wait for response."""
         future = self.queue_command(command)
@@ -152,6 +157,7 @@ class Dem2Laser:
     def send_sweep_speed(self, sweep_speed):
         # convert sweep speed into hex and send
         sweep_speed_hex = format(int(sweep_speed * 10), "06X")
+        self._log.info(f"Sending sweep speed to laser: {sweep_speed}")
         return self.send_command(f"P24{str(sweep_speed_hex)}")
 
     def get_device_info(self) -> str:

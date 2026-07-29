@@ -236,7 +236,7 @@ class Dem2Stage:
         self._calibrate_axis(self.focus)
         self._log.info(
             "Focus: " + self._focus_settled_future.result() if isinstance(self._focus_settled_future.result(),
-                                                                          str) else "Calibrated."
+                                                                          str) else "Focus: Calibrated."
         )  # wait for calibration to finish.
         # Calibrate axis:
         self._log.info("Calibrating the stage...")
@@ -244,7 +244,7 @@ class Dem2Stage:
             self._calibrate_axis(self._axis[ax])
             self._log.info(
                 f"{ax} axis: " + self._pos_settled_future.result() if isinstance(self._pos_settled_future.result(),
-                                                                                 str) else "Calibrated."
+                                                                                 str) else f"{ax} axis: Calibrated."
             )  # wait for calibration to finish.
         time.sleep(1)
         self._set_sw_limits()

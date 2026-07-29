@@ -62,10 +62,12 @@ class Dem2Controller:
         self.camera.samples_a_scan = self.calculator.sample_no(
             self.laser.wavelength_min, self.laser.wavelength_max, self.z_max
         )
+        self._log.info(f"update_burst_properties: Frames: {self.camera.samples_a_scan}")
         self.laser.total_sweep_time = self.calculator.total_time(
             self.camera.t_frame,
             self.camera.samples_a_scan,
         )
+        self._log.info(f"update_burst_properties: total_sweep_time: {self.laser.total_sweep_time} for t_frame: {self.camera.t_frame}")
 
     def connect(self):
         """Connect all devices."""
@@ -75,8 +77,8 @@ class Dem2Controller:
                 "Already been connected! Disconnect first."
             )
         self.stage.connect()
-        self.laser.connect()
         self.camera.connect()
+        self.laser.connect()
         self._state = Dem2State.CONNECTED
 
     def disconnect(self):
@@ -101,8 +103,8 @@ class Dem2Controller:
                 "Stage must be calibrated for Controller to use it! Min stage_wait_time = 0"
             )
         self.stage.initialize(calibration_wait_time=stage_wait_time)
+        self.camera.initialize() # First camera to set laser sweep time!
         self.laser.initialize()
-        self.camera.initialize()
         self._state = Dem2State.INITIALIZED
         self._log.info("Demonstrator 2 ready! 🎉")
 
@@ -219,7 +221,11 @@ class Dem2Controller:
         Calculate the change the lambda bandwidth over the exposure time.
         :return: Lambda bandwidth over exposure time in nm.
         """
-        return (self.camera.t_exp / 1000) * self.laser.sweep_speed
+        try:
+            return (self.camera.t_exp / 1000) * self.laser.sweep_speed
+        except Dem2Errors.PropertyNotSetError:
+            self._log.warning(f"Property sweep_speed not set in camera, exposure_lambda_range incalculable.")
+            return None
 
     @property
     def lateral_fov(self) -> tuple[float, float]:
