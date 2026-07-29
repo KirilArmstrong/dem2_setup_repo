@@ -138,7 +138,7 @@ class Dem2SweepPacket:
         if name in self._attributes and dset is None:
             return self._attributes[name]
         with h5py.File(self.filepath, "r") as f:
-            attrs = f[self.dataset if dset is None else dset].attrs
+            attrs = f[self.data_set if dset is None else dset].attrs
             if name in attrs:
                 return attrs[name]
         # Important: if not found, raise AttributeError
@@ -146,20 +146,39 @@ class Dem2SweepPacket:
             f"No attribute '{name}' in HDF5 attrs or loaded attributes"
         )
 
-    def set_attribute(self, name, value, data_set: str|None = None):
+    def set_attribute(self, name, value, data_set: str | None = None):
         """
         Set single attribute in dataset.
         :param name: Name of attribute.
         :param value: Value of attribute.
         :param data_set: Dataset to add to. Defaults to current loaded one.
         """
-        dset  = self.data_set if data_set is None else data_set
+        dset = self.data_set if data_set is None else data_set
+
         with h5py.File(self.filepath, "r+") as f:
             if data_set is None:
+                if value is None:
+                    # remove from internal store if present
+                    if name in self._attributes:
+                        del self._attributes[name]
+                    # remove from the actual dataset attributes
+                    if name in f[dset].attrs:
+                        del f[dset].attrs[name]
+                    return
+                # normal set when data_set is None
                 self._attributes[name] = value
                 f[dset].attrs.update(self._attributes)
                 return
+
+            # data_set specified
+            if value is None:
+                # delete attribute if exists
+                if name in f[dset].attrs:
+                    del f[dset].attrs[name]
+                return
+
             f[dset].attrs[name] = value
+
 
     def set_attributes(
         self, attributes: dict | None = None, data_set: str | None = None

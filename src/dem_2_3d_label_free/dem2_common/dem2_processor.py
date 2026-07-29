@@ -109,7 +109,9 @@ class Dem2Processor(Dem2SweepPacket):
                 )
                 # (Re)create or create dataset with compression
                 if ds_name in f:
-                    # Optional: decide whether to delete/overwrite or raise
+                    a = dict(f[ds_name].attrs)
+                    a.update(attrs)
+                    attrs = a
                     del f[ds_name]
                 dset = f.create_dataset(
                     ds_name,
@@ -124,9 +126,10 @@ class Dem2Processor(Dem2SweepPacket):
                 dset = f[ds_name]
 
             # Write all merged attributes
-            for key, value in attrs.items():
-                if value is not None:
-                    dset.attrs[key] = value
+            # for key, value in attrs.items():
+            #     if value is not None:
+            #         dset.attrs[key] = value
+            self.set_attributes(attrs)
 
         self._log.info(f"Saved H5 file: {path}")
         self._log.info(f"File size: {os.path.getsize(path) / 1024 / 1024:.2f} MB")
@@ -504,7 +507,7 @@ class Dem2Processor(Dem2SweepPacket):
     def oct_reconstruct(self,
         array: np.ndarray,
     ) -> np.ndarray:
-        return scipy.fft.fft(array, axis=0)
+        return scipy.fft.fftshift(scipy.fft.fft(array, axis=0),axes=0)
 
 
 
