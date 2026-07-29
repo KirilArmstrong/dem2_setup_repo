@@ -83,3 +83,16 @@ class Dem2SystemCalculator:
         # for full field OCT 0.61
         constant = 0.61
         return (constant * (lambda_0 / 1000)) / na
+
+    def lambdas_array(self, start_lambda: float, end_lambda: float, no_of_images: int) -> np.ndarray:
+        """
+        Generate a array of lambdas between a start and end that is linear in k-space.
+        :param start_lambda: Initial wavelength in nm. i.e. 805.0 nm.
+        :param end_lambda: Last wavelength in nm. i.e. 880.0 nm.
+        :param no_of_images: Number of images.
+        :return: Lambda array.
+        """
+        k_start = 2*np.pi/start_lambda
+        k_end = 2*np.pi/end_lambda
+        array = np.linspace(k_start, k_end, no_of_images)
+        return 2*np.pi/array

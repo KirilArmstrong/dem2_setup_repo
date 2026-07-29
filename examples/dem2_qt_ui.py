@@ -430,27 +430,46 @@ class MainWindow(QMainWindow):
         self.chk_save = QCheckBox("Save")
         self.gamma_spin = QDoubleSpinBox()
         self.frames = QLabel("1")
+        self.frames2 = QLabel("1")
         self.gamma_spin.setRange(0.0, 1.0)
         self.gamma_spin.setSingleStep(0.1)
         self.gamma_spin.setValue(0.3)
         self.btn_cam_live = QPushButton("Live")
         self.btn_cam_burst = QPushButton("Capt. Burst")
+        self.btn_cam_disc_sweep = QPushButton("Discrete Swp.")
         self.btn_cam_set_int = QPushButton("Set Texp")
         self.int_time_spin = QDoubleSpinBox()
         self.int_time_spin.setRange(0.1, 1000.0)
         self.int_time_spin.setSingleStep(0.01)
         self.int_time_spin.setValue(controller.camera.t_exp)
-        grid_camctrl.addWidget(QLabel("Int. time [ms]"), 2, 0)
-        grid_camctrl.addWidget(self.int_time_spin, 2, 1)
-        grid_camctrl.addWidget(self.btn_cam_set_int, 2, 2)
-        grid_camctrl.addWidget(QLabel("Gamma"), 3, 0)
-        grid_camctrl.addWidget(self.gamma_spin, 3, 1)
-        grid_camctrl.addWidget(self.frames, 3, 2)
-        grid_camctrl.addWidget(self.chk_fft, 1, 0)
-        grid_camctrl.addWidget(self.chk_save, 1, 1)
-        grid_camctrl.addWidget(self.btn_cam_capture, 0, 0)
-        grid_camctrl.addWidget(self.btn_cam_live, 0, 1)
-        grid_camctrl.addWidget(self.btn_cam_burst, 0, 2)
+        grid_camctrl.addWidget(QLabel("Int. time [ms]"), 0, 0)
+        grid_camctrl.addWidget(self.int_time_spin, 0, 1)
+        grid_camctrl.addWidget(self.btn_cam_set_int, 0, 2)
+        grid_camctrl_mono = QGridLayout()
+        grid_camctrl_burst = QGridLayout()
+        grid_camctrl_mono.addWidget(QLabel("Gamma"), 2, 0)
+        grid_camctrl_mono.addWidget(self.gamma_spin, 2, 1)
+        grid_camctrl_mono.addWidget(self.frames, 1, 2)
+        grid_camctrl_burst.addWidget(self.frames2, 0, 1)
+        grid_camctrl_mono.addWidget(self.chk_fft, 1, 0)
+        grid_camctrl_mono.addWidget(self.chk_save, 1, 1)
+        grid_camctrl_mono.addWidget(self.btn_cam_capture, 0, 0)
+        grid_camctrl_mono.addWidget(self.btn_cam_live, 0, 1)
+        grid_camctrl_burst.addWidget(self.btn_cam_burst, 0, 0)
+        grid_camctrl_mono.addWidget(self.btn_cam_disc_sweep, 0, 2)
+
+        tabs_camctrl_mode = QTabWidget()
+        # Control tab
+        mono_widget = QWidget()
+        mono_layout = QVBoxLayout(mono_widget)
+        mono_layout.addLayout(grid_camctrl_mono)
+        tabs_camctrl_mode.addTab(mono_widget, "Mono")
+        # ROIs tab
+        burst_widget = QWidget()
+        burst_layout = QVBoxLayout(burst_widget)
+        burst_layout.addLayout(grid_camctrl_burst)
+        tabs_camctrl_mode.addTab(burst_widget, "Burst")
+
         grid_camctrl_roi = QGridLayout()
         # Camera ROI controls (pre-FFT crop)
         self.spin_cam_roi_tl_x = QSpinBox()
@@ -509,6 +528,7 @@ class MainWindow(QMainWindow):
         rois_layout.addLayout(grid_camctrl_roi)
         tabs_camctrl.addTab(rois_widget, "ROIs")
         camctrl_layout.addWidget(tabs_camctrl)
+        control_layout.addWidget(tabs_camctrl_mode)
         # Laser
         laser_group = QGroupBox("SWEPT SOURCE")
         laser_group.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Maximum)
@@ -788,7 +808,7 @@ class MainWindow(QMainWindow):
         attrs["centre_lambdas"] = centre_lambdas
         controller.cam_capturer = Dem2Capturer(
             controller.camera,
-            Dem2SweepPacket(str(DATA_PATH / "image.h5"),attributes=attrs),
+            Dem2SweepPacket(str(DATA_PATH / "image_cont.h5"),attributes=attrs),
             int(controller.camera.samples_a_scan),
         )
         controller.cam_capturer.start()
@@ -819,6 +839,7 @@ class MainWindow(QMainWindow):
             lambda idx: self._with_wait(lambda: self.set_mode("camera", idx))
         )
         self.btn_cam_capture.clicked.connect(lambda: self._with_wait(self._get_single_image))
+        self.btn_cam_disc_sweep.clicked.connect(lambda: self._with_wait(self._run_discrete_sweep))
         self.btn_cam_set_int.clicked.connect(lambda: self._with_wait(self._set_integration_time))
         self.btn_cam_live.clicked.connect(lambda: self._with_wait(self._toggle_live_clicked))
         self.btn_cam_burst.clicked.connect(lambda: self._with_wait(self._start_burst))
@@ -925,6 +946,7 @@ class MainWindow(QMainWindow):
 
     def _update_frames(self):
         self.frames.setText(str(controller.camera.samples_a_scan))
+        self.frames2.setText(str(controller.camera.samples_a_scan))
 
     def _update_sweep_speed(self):
         # controller.laser.wavelength_min = self.spin_laser_min.value()
@@ -981,6 +1003,10 @@ class MainWindow(QMainWindow):
         self.btn_ctrl_init.setEnabled(ctrl_status == 1)
         # camera
         cam = self.state.devices["camera"]
+        is_mono = cam["mode"] == 0
+        self.btn_cam_burst.setEnabled(not is_mono)
+        self.btn_cam_capture.setEnabled(is_mono)
+        self.btn_cam_live.setEnabled(is_mono)
         label, color = STATUS_MAP.get(cam["status"], STATUS_MAP[99])
         self.cam_status_label.setText(f"STATUS: {label} | MODE: {MODES['camera'][cam['mode']]}")
         self.btn_cam_connect.setEnabled(cam["status"] == 0)
@@ -997,8 +1023,9 @@ class MainWindow(QMainWindow):
         self.laser_mode_combo.setCurrentIndex(laser["mode"])
         is_cw = laser["mode"] == 0
         self.spin_laser_cw.setEnabled(is_cw)
-        self.spin_laser_min.setEnabled(not is_cw)
-        self.spin_laser_max.setEnabled(not is_cw)
+        self.btn_cam_disc_sweep.setEnabled(is_mono and is_cw)
+        # self.spin_laser_min.setEnabled(not is_cw)
+        # self.spin_laser_max.setEnabled(not is_cw)
         self.spin_laser_sweep.setEnabled(not is_cw)
         self.btn_laser_on.setEnabled(laser["status"] == 3)
         self.btn_laser_off.setEnabled(laser["status"] == 4)
@@ -1157,6 +1184,10 @@ class MainWindow(QMainWindow):
     def _start_burst(self):
         self.start_trigger_capturing()
         self.state.isCaptBurst = True
+
+    def _run_discrete_sweep(self):
+        lambdas = controller.calculator.lambdas_array(controller.laser.wavelength_min, controller.laser.wavelength_max,int(controller.camera.samples_a_scan))
+        controller.run_multiple_lambdas(str(DATA_PATH / "image_discrete.h5"),lambdas,False)
 
     def _set_integration_time(self):
         controller.camera.t_exp = float(self.int_time_spin.value())

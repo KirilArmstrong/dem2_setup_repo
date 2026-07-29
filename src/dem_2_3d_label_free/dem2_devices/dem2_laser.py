@@ -228,10 +228,10 @@ class Dem2Laser:
         Also updates sweep speed.
         :param value: Total time in seconds.
         """
-        if self._state in (Dem2State.READY, Dem2State.RUNNING, Dem2State.INITIALIZED):
-            raise Dem2Errors.LaserError(
-                "wavelength can only be changed when uninitialised!"
-            )
+        # if self._state in (Dem2State.READY, Dem2State.RUNNING, Dem2State.INITIALIZED):
+        #     raise Dem2Errors.LaserError(
+        #         "wavelength can only be changed when uninitialised!"
+        #     )
         if value < self._cfg["wavelength_min"] or value > self._cfg["wavelength_max"]:
             raise Dem2Errors.LaserError("wavelength out of configuration range!")
         self._wavelength = value

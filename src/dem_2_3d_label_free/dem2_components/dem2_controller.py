@@ -177,25 +177,35 @@ class Dem2Controller:
             self.cam_capturer.join()
         self._log.info("Capture finished.")
 
-    def run_multiple_lambdas(self, filename, lambdas: np.ndarray) -> Dem2SweepPacket:
+    def run_multiple_lambdas(self, filename, lambdas: np.ndarray, increment_data_set: bool = True) -> Dem2SweepPacket:
         """
-        Run a single image at multiple CW wavelengths.
+        Capture single images at multiple CW wavelengths.
         :param filename: File to save data to.
         :param lambdas: Wavelength list in nm.
+        :param increment_data_set: Increment the data set for each wavelength.
         :return: Data packet.
         """
-        self._log.info("Running multiple lambdas...")
+        self._log.info(f"Running multiple lambdas... increment_data_set={increment_data_set}")
         packet = Dem2SweepPacket(filename)
         for i in range(lambdas.size):
             self._log.info(f"Running lambda {lambdas[i]} ({i+1} of {lambdas.size})...")
-            packet.data_set = str(i+1)
-            packet.open_file()
+            if increment_data_set or i == 0:
+                if not increment_data_set:
+                    self.camera.start_acquisition()
+                packet.data_set = str(i+1)
+                packet.open_file()
             self.laser.send_cw(lambdas[i])
             self.laser.toggle_emission()
-            packet.append_frame(self.camera.acquire_single_image())
+            packet.append_frame(self.camera.acquire_single_image(increment_data_set))
             self.laser.kill_emission()
-            packet.close_file()
-            packet.set_attributes(self.settings)
+            if increment_data_set or i == lambdas.size - 1:
+                packet.close_file()
+                attrs = self.settings
+                if not increment_data_set:
+                    self.camera.stop_acquisition()
+                    packet.set_attribute("lambdas", lambdas)
+                    attrs.update(packet.get_attributes())
+                packet.set_attributes(attrs)
         self._log.info(f"Finished and saved to {filename}.")
         return packet
 
