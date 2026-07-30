@@ -124,12 +124,15 @@ class Dem2Processor(Dem2SweepPacket):
                 if ds_name not in f:
                     raise KeyError(f"Dataset {ds_name!r} does not exist in file {path}")
                 dset = f[ds_name]
+            a = dict(dset.attrs)
+            a.update(attrs)
+            attrs = a
 
             # Write all merged attributes
             # for key, value in attrs.items():
             #     if value is not None:
             #         dset.attrs[key] = value
-            self.set_attributes(attrs)
+            self.set_attributes(attrs, ds_name)
 
         self._log.info(f"Saved H5 file: {path}")
         self._log.info(f"File size: {os.path.getsize(path) / 1024 / 1024:.2f} MB")
@@ -507,7 +510,12 @@ class Dem2Processor(Dem2SweepPacket):
     def oct_reconstruct(self,
         array: np.ndarray,
     ) -> np.ndarray:
-        return scipy.fft.fftshift(scipy.fft.fft(array, axis=0),axes=0)
+        # array = 
+        dy = array.shape[0] // 2
+        pad_top = np.zeros((dy, array.shape[1]), dtype=array.dtype)
+        pad_bottom = np.zeros((dy, array.shape[1]), dtype=array.dtype)
+        arr_padded = np.vstack([pad_top, array, pad_bottom])
+        return scipy.fft.fftshift(scipy.fft.fft(arr_padded, axis=0),axes=0)
 
 
 
