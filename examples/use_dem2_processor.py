@@ -70,6 +70,16 @@ def _estimate_batch_size(H, W, safety=0.5):
     bytes_per_image = H * W * 4 + H * W * 8 + H * W * 8
     return max(1, int(free * safety / bytes_per_image))
 
+def _process_batch_along_z(imgs_batch, w, z, pad=0):
+    imgs_batch = cp.asarray(imgs_batch, dtype=cp.float32)
+    dy = imgs_batch.shape[0] // 2 if pad is None else pad
+    if dy != 0:
+        pad_top = np.zeros((dy, imgs_batch.shape[1]), dtype=imgs_batch.dtype)
+        pad_bottom = np.zeros((dy, imgs_batch.shape[1]), dtype=imgs_batch.dtype)
+        arr_padded = np.vstack([pad_top, imgs_batch, pad_bottom])
+        return cp.fft.fftshift(cp.fft.fft(arr_padded, axis=0), axes=0)
+    return cp.fft.fftshift(cp.fft.fft(imgs_batch, axis=0), axes=0)
+
 def _process_batch(imgs_batch, cx, cy, w, h, compute_image=True):
     """
     imgs_batch : (B, H, W)  (NumPy or CuPy)
@@ -201,6 +211,44 @@ def use_processor(log):
             padding = None
         else:
             padding = int(padding) if padding != "" else 0
+        cuda_version = input("cuda? (y/n): ")
+        if cuda_version.lower() == "y":
+            packet = Dem2SweepPacket(
+                str(DATA_PATH / FILE_NAME)[:-3] + "_oct_recon.h5", "1", processor.get_attributes()
+            )
+            packet.open_file()
+            # If you can keep the slice in RAM; otherwise pass the h5py Dataset directly
+            imgs = processor[:,:,:]
+            Z, H, W = imgs.shape
+            log.info("This'll take a while...")
+            # process and stream to the packet's HDF5 file
+            ds = packet.prepare_dataset(
+                (Z, H, W),
+                dtype=np.complex64,
+                data_set="1",
+            )
+            packet._frame_count = Z
+            batch_size = _estimate_batch_size(Z, W)
+
+            for start in range(0, H, batch_size):
+                t1 = time.time()
+                end = min(start + batch_size, H)
+                images = _process_batch_along_z(
+                    imgs[:,start:end,:],
+                    W,
+                    Z,
+                    padding
+                )
+                packet.write_batch(start, cp.asnumpy(images), data_set="1", axis=1)
+                del images
+                cp.get_default_memory_pool().free_all_blocks()
+
+                dt = (time.time() - t1) * ((H - end) / batch_size)
+                log.info(
+                    f"{start}:{end} / {H} " + f"{int(end / H * 100)}%, ETA: {int(dt // 60)} mins {int(dt % 60)} s.")
+            packet.close_file()
+            packet.set_attributes()
+            return
         oct_recon = processor.oct_reconstruct(abs(processor[:,Y,:]), pad=padding)
         # oct_recon = oct_recon[:oct_recon.shape[0]//2,:]
         processor._prep_plot(oct_recon, "OCT Recon", gamma=GAMMA)

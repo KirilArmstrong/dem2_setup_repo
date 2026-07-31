@@ -379,19 +379,25 @@ class Dem2SweepPacket:
         self._frame_count = 0
         return self._data
 
-    def write_batch(self, start: int, data: np.ndarray, data_set: str | None = None):
+    def write_batch(self, start: int, data: np.ndarray, data_set: str | None = None, axis=0):
         """Write a contiguous batch starting at frame `start`."""
         if self._h5_file is None:
             raise RuntimeError("Packet is not open.")
 
         ds = self._data if data_set is None else self._h5_file[data_set]
-        end = start + data.shape[0]
+        end = start + data.shape[axis]
 
-        if end > ds.shape[0]:
-            ds.resize((end,) + ds.shape[1:])
+        if end > ds.shape[axis]:
+            t = (end,) + ds.shape[(1 if axis == 0 else 2):]
+            t = ds.shape[0]+t if axis == 1 else t
+            ds.resize(t)
+
+        if axis == 1:
+            ds[:, start:end, :] = data
+            return
 
         ds[start:end] = data
-        self._frame_count = max(self._frame_count, end)
+
 
     def get_info(self, log_it: bool =True, max_elements=0)-> str:
         """
