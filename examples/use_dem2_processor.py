@@ -196,7 +196,12 @@ def use_processor(log):
     # start_pos = ()
 
     if OCT_RECON:
-        oct_recon = processor.oct_reconstruct(abs(processor[:,Y,:]))
+        padding = input("padding (auto/0/#): ")
+        if padding.lower() == "auto":
+            padding = None
+        else:
+            padding = int(padding) if padding != "" else 0
+        oct_recon = processor.oct_reconstruct(abs(processor[:,Y,:]), pad=padding)
         # oct_recon = oct_recon[:oct_recon.shape[0]//2,:]
         processor._prep_plot(oct_recon, "OCT Recon", gamma=GAMMA)
         plt.show()

@@ -509,13 +509,16 @@ class Dem2Processor(Dem2SweepPacket):
 
     def oct_reconstruct(self,
         array: np.ndarray,
+                        pad: int | None = None,
     ) -> np.ndarray:
-        # array = 
-        dy = array.shape[0] // 2
-        pad_top = np.zeros((dy, array.shape[1]), dtype=array.dtype)
-        pad_bottom = np.zeros((dy, array.shape[1]), dtype=array.dtype)
-        arr_padded = np.vstack([pad_top, array, pad_bottom])
-        return scipy.fft.fftshift(scipy.fft.fft(arr_padded, axis=0),axes=0)
+        # array =
+        dy = array.shape[0] // 2 if pad is None else pad
+        if dy != 0:
+            pad_top = np.zeros((dy, array.shape[1]), dtype=array.dtype)
+            pad_bottom = np.zeros((dy, array.shape[1]), dtype=array.dtype)
+            arr_padded = np.vstack([pad_top, array, pad_bottom])
+            return scipy.fft.fftshift(scipy.fft.fft(arr_padded, axis=0),axes=0)
+        return scipy.fft.fftshift(scipy.fft.fft(array, axis=0),axes=0)
 
 
 
