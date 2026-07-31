@@ -42,7 +42,7 @@ def collect_dataset_data(ds, lines, indent="", max_elements=50):
     else:
         lines.append(f"{indent}  Data (first {max_elements} of {flat.size} elements): {flat[:max_elements]}")
 
-def collect_h5_contents(filename, print_data=False, max_elements=50):
+def collect_h5_contents(filename, log=None, max_elements=0) -> str:
     """
     Recursively collect the full structure of an HDF5 file into a string:
     - File attributes
@@ -72,13 +72,16 @@ def collect_h5_contents(filename, print_data=False, max_elements=50):
                 lines.append(f"{indent}  Dtype: {obj.dtype}")
                 collect_attrs(obj, lines, indent=indent + "  ")
 
-                if print_data:
+                if max_elements > 0:
                     collect_dataset_data(obj, lines, indent=indent + "  ", max_elements=max_elements)
 
         # Walk the file tree
         f.visititems(visitor)
 
-    return "\n".join(lines)
+    strs = "\n".join(lines)
+    if log is not None:
+        log.info(strs)
+    return strs
 
 def convert_to_hex(decimal: float) -> str:
     hexcode = hex(int(decimal))[2:]  # ignore the "0x" in front

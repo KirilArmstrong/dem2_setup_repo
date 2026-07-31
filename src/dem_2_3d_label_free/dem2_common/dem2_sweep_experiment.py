@@ -9,6 +9,7 @@ import yaml
 from src.dem_2_3d_label_free.__globals__ import __datapath__
 from src.dem_2_3d_label_free.dem2_common.dem2_bscan_pattern import Dem2BScanPattern
 from src.dem_2_3d_label_free.dem2_common.dem2_calculator import Dem2SystemCalculator
+from src.dem_2_3d_label_free.dem2_common.dem2_helper import collect_h5_contents
 
 
 class Dem2SweepPacket:
@@ -392,8 +393,17 @@ class Dem2SweepPacket:
         ds[start:end] = data
         self._frame_count = max(self._frame_count, end)
 
+    def get_info(self, log_it: bool =True, max_elements=0)-> str:
+        """
+        Get info of the h5 files and print it.
+        :param log_it: Print it to log.
+        :param max_elements: Show elements within dataset.
+        """
+        return collect_h5_contents(self.filepath, self.log if log_it else None, max_elements )
+
     @property
     def shape(self, data_set: str | None = None):
         """Returns the shape of the packet's images without loading into RAM."""
         with h5py.File(self.filepath, 'r') as f:
             return f[self.data_set if data_set is None else data_set].shape
+
