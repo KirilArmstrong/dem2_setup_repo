@@ -4,6 +4,7 @@ from pathlib import Path
 from matplotlib import pyplot as plt
 
 import numpy as np
+import cupy as cp
 
 from src.dem_2_3d_label_free.dem2_common.dem2_helper import (
     setup_directories,
@@ -32,7 +33,7 @@ def prep_zernike(processor: Dem2Processor, array: np.ndarray, centre: tuple[int,
     return processor.get_zernike_coeffs(array, (cy, cx), r)
 
 
-def recon_zs(log, processor, centre, w, h, z_slice):
+def determine_properties(processor, centre, w, h, z_slice):
     roi_bool = input("Roi? y/n: ")
     roi = None
     processor.set_attribute("roi", None)
@@ -53,17 +54,112 @@ def recon_zs(log, processor, centre, w, h, z_slice):
         centre = (cy, cx)
         w = int(input("Width: "))
         h = int(input("Height: "))
-    processor.plot_ft(roi=roi, z_index=processor.shape[0]-1)
+    processor.plot_ft(roi=roi, z_index=processor.shape[0] - 1)
     cx = int(input("End Centre X: "))
     cy = int(input("End Centre Y: "))
-    centre2 = (cy,cx)
-    y = np.linspace(centre[0], centre2[0], processor.shape[0]-z_slice).astype(int)
-    x = np.linspace(centre[1], centre2[1], processor.shape[0]-z_slice).astype(int)
+    centre2 = (cy, cx)
+    y = np.linspace(centre[0], centre2[0], processor.shape[0] - z_slice).astype(int)
+    x = np.linspace(centre[1], centre2[1], processor.shape[0] - z_slice).astype(int)
+    return roi, y, x
+
+
+def _estimate_batch_size(H, W, safety=0.5):
+    """Rough per-image GPU memory estimate for spectra-only mode."""
+    free, _ = cp.cuda.Device().mem_info
+    # input float32 + Fshift complex64 + padded complex64
+    bytes_per_image = H * W * 4 + H * W * 8 + H * W * 8
+    return max(1, int(free * safety / bytes_per_image))
+
+def _process_batch(imgs_batch, cx, cy, w, h, compute_image=True):
+    """
+    imgs_batch : (B, H, W)  (NumPy or CuPy)
+    cx, cy     : length-B array of integer centers
+    returns:
+        spectra : (B, H, W) complex64, crop embedded in centre
+        images  : (B, H, W) complex64 if compute_image else None
+    """
+    imgs_batch = cp.asarray(imgs_batch, dtype=cp.float32)
+
+    # chain fftshift(fft2(...)) so the unshifted FFT is freed immediately
+    Fshift = cp.fft.fftshift(cp.fft.fft2(imgs_batch, axes=(1, 2)), axes=(1, 2))
+    B, H, W = Fshift.shape
+
+    cx = cp.asarray(cx, dtype=cp.int64)
+    cy = cp.asarray(cy, dtype=cp.int64)
+
+    dx = cp.arange(-w // 2, w // 2, dtype=cp.int64)
+    dy = cp.arange(-h // 2, h // 2, dtype=cp.int64)
+    OX, OY = cp.meshgrid(dx, dy, indexing="xy")
+
+    x_idx = cx[:, None, None] + OX[None, :, :]
+    y_idx = cy[:, None, None] + OY[None, :, :]
+    x_idx_c = cp.clip(x_idx, 0, W - 1)
+    y_idx_c = cp.clip(y_idx, 0, H - 1)
+
+    crop = Fshift[cp.arange(B)[:, None, None], y_idx_c, x_idx_c]  # (B, h, w)
+
+    # embed the crop in the centre of a full (B, H, W) array
+    y0 = (H - h) // 2
+    x0 = (W - w) // 2
+    spectra = cp.zeros((B, H, W), dtype=Fshift.dtype)
+    spectra[:, y0 : y0 + h, x0 : x0 + w] = crop
+
+    images = None
+    if compute_image:
+        images = cp.fft.ifft2(
+            cp.fft.ifftshift(spectra, axes=(1, 2)), axes=(1, 2)
+        )
+
+    return spectra, images
+
+
+def recon_zs(log, processor, centre, w, h, z_slice, cuda_version: bool = False, dset: str = "1"):
+    roi, y, x = determine_properties(processor, centre, w, h, z_slice)
     log.info("Beginning full reconstruction...")
     packet = Dem2SweepPacket(
         str(DATA_PATH / FILE_NAME)[:-3] + "_recon.h5", "1", processor.get_attributes()
     )
     packet.open_file()
+    if cuda_version:
+        # If you can keep the slice in RAM; otherwise pass the h5py Dataset directly
+        imgs = processor[
+            z_slice:,
+            roi[0] if roi is not None else slice(None),
+            roi[1] if roi is not None else slice(None),
+        ]
+        log.info("This'll take a while...")
+        # imgs = holography_full_recon(processor[z_slice:,roi[0] if roi is not None else slice(None),roi[1] if roi is not None else slice(None)], np.array([y,x]), w, h)
+        # packet.set_array(imgs)
+        # process and stream to the packet's HDF5 file
+        ds = packet.prepare_dataset(
+            (imgs.shape[0], imgs.shape[1], imgs.shape[2]),
+            dtype=np.complex64,
+            data_set=dset,
+        )
+
+        Z, H, W = imgs.shape
+        cen = np.array([y, x])  # shape (2, Z)
+        batch_size = _estimate_batch_size(H, W)
+
+        for start in range(0, Z, batch_size):
+            t1 = time.time()
+            end = min(start + batch_size, Z)
+            _, images = _process_batch(
+                imgs[start:end],
+                cen[0, start:end],
+                cen[1, start:end],
+                w,
+                h,
+            )
+            packet.write_batch(start, cp.asnumpy(images), data_set=dset)
+            del images
+            cp.get_default_memory_pool().free_all_blocks()
+
+            dt = (time.time() - t1) * ((Z - end)/batch_size)
+            log.info(f"{start}:{end} / {Z} " + f"{int(end / Z * 100)}%, ETA: {int(dt // 60)} mins {int(dt % 60)} s.")
+        packet.close_file()
+        packet.set_attributes()
+        return
     rng = processor.shape[0] - z_slice
     for i in range(rng):
         t1 = time.time()
@@ -84,6 +180,7 @@ def recon_zs(log, processor, centre, w, h, z_slice):
     packet.close_file()
     packet.set_attributes()
 
+
 def use_processor(log):
     """Demo script"""
 
@@ -99,13 +196,13 @@ def use_processor(log):
     # start_pos = ()
 
     if OCT_RECON:
-        oct_recon = processor.oct_reconstruct(processor[:,Y,:])
+        oct_recon = processor.oct_reconstruct(abs(processor[:,Y,:]))
         # oct_recon = oct_recon[:oct_recon.shape[0]//2,:]
         processor._prep_plot(oct_recon, "OCT Recon", gamma=GAMMA)
         plt.show()
         return
     # processor.rename_dataset("images", "1")
-
+    cuda_all_z_bool = False
     # Just plot the FFT of the image. Useful to find 1st order center point.
     cor_bool = input("Plot reconstruction? y/n: ")
     cor_bool = True if cor_bool.lower() == "y" else False
@@ -113,6 +210,8 @@ def use_processor(log):
     if len(processor.shape) == 3:
         recon_all_z_bool = input("reconstruct all z? y/n: ")
         recon_all_z_bool = True if recon_all_z_bool.lower() == "y" else False
+        cuda_all_z_bool = input("with cuda? y/n: ")
+        cuda_all_z_bool = True if cuda_all_z_bool.lower() == "y" else False
     z_slice = input("z slice "+("(start)" if recon_all_z_bool else "")+": ")
     if not z_slice:
         z_slice = 1
@@ -140,7 +239,7 @@ def use_processor(log):
                 centre=centre, width=w, height=h, plot=cor_bool, z_slice=z_slice
             )
         else:
-            recon_zs(log, processor, centre, w, h, z_slice)
+            recon_zs(log, processor, centre, w, h, z_slice, cuda_version=cuda_all_z_bool)
             return
 
     # return
@@ -174,7 +273,7 @@ def use_processor(log):
         if not recon_all_z_bool:
             recon_arr = processor.reconstruct(centre=centre, width=w, height=h, plot=cor_bool, z_slice=z_slice)
         else:
-            recon_zs(log, processor, centre, w, h, z_slice)
+            recon_zs(log, processor, centre, w, h, z_slice, cuda_version=cuda_all_z_bool)
             return
     # a, N = prep_zernike(processor, recon_arr, centre=(1620, 2455), radius=1550)
     # a, N = prep_zernike(processor, recon_arr, centre=(1650, 2355), radius=150)

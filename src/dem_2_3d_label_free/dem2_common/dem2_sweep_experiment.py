@@ -32,6 +32,36 @@ class Dem2SweepPacket:
         self._data = None
         self._frame_count = 0
 
+    def set_array(self, data: np.ndarray, data_set: str | None = None):
+        """Sets the entire HDF5 dataset from a pre-loaded 3D NumPy array."""
+        if self._h5_file is None:
+            raise RuntimeError("Packet is not open. Call start_capture() first.")
+
+        if len(data.shape) != 3:
+            raise ValueError(f"Expected 3D array (z, h, w), got {len(data.shape)}D")
+
+        z, h, w = data.shape
+        ds_name = self.data_set if data_set is None else data_set
+
+        # Check if dataset already exists and delete
+        if ds_name in self._h5_file:
+            del self._h5_file[ds_name]
+
+        # chunks=(1, h, w) for consistency with append_frame
+        self._data = self._h5_file.create_dataset(
+            ds_name,
+            shape=data.shape,  # Initial shape is the full array
+            maxshape=(None, h, w),  # Allow expansion in the first dimension only
+            dtype=data.dtype,
+            chunks=(1, h, w)  # One frame per chunk
+        )
+
+        # Write the data
+        self._data[...] = data
+
+        # Update internal state to reflect the new total count
+        self._frame_count = z
+
     def append_frame(self, frame_data: np.ndarray, data_set: str | None = None):
         """Appends a single frame to the open HDF5 dataset on the fly."""
         if self._h5_file is None:
@@ -269,27 +299,24 @@ class Dem2SweepPacket:
 
     def rename_dataset(self, dataset: str, new_name: str, path: Path = Path(""), overwrite: bool = False):
         """
-        Rename a dataset in a H5 file.
-        :param dataset: Original dataset name.
-        :param new_name: New dataset name.
-        :param path: Path to other h5 file if not using current loaded one. This won't load it.
+        Rename a dataset in an H5 file (metadata-only, no data copy).
         """
         h5_path = path if str(path) != "." else self.filepath
         with h5py.File(str(h5_path), "r+") as f:
             if dataset not in f:
                 raise KeyError(f"Dataset '{dataset}' not found in file '{h5_path}'.")
+
             if new_name in f:
                 if overwrite:
                     del f[new_name]
                 else:
                     raise KeyError(
-                        f"Target dataset name '{new_name}' already exists in file '{h5_path}'. Set overwrite=True to overwrite it."
+                        f"Target dataset name '{new_name}' already exists in file '{h5_path}'. "
+                        "Set overwrite=True to overwrite it."
                     )
 
-            # Copy dataset to new name
-            f.copy(dataset, new_name)
-            # Remove old dataset
-            del f[dataset]
+            # Metadata-only rename; O(1) regardless of dataset size
+            f.move(dataset, new_name)
 
         # Update instance default dataset name if it was renamed
         if self.data_set == dataset and h5_path == self.filepath:
@@ -323,6 +350,47 @@ class Dem2SweepPacket:
         del self._h5_file[data_set]
         self.close_file()
         self._log.info(f"'{data_set}' dataset deleted.")
+
+    def prepare_dataset(
+            self,
+            shape,
+            dtype=None,
+            chunks=None,
+            data_set: str | None = None,
+    ):
+        if self._h5_file is None:
+            raise RuntimeError("Packet is not open. Call open_file() first.")
+
+        ds_name = data_set if data_set is not None else self.data_set
+        if ds_name in self._h5_file:
+            del self._h5_file[ds_name]
+
+        dtype = dtype if dtype is not None else np.float32
+        chunks = chunks if chunks is not None else (1,) + shape[1:]
+
+        self._data = self._h5_file.create_dataset(
+            ds_name,
+            shape=shape,
+            maxshape=(None,) + shape[1:],
+            dtype=dtype,
+            chunks=chunks,
+        )
+        self._frame_count = 0
+        return self._data
+
+    def write_batch(self, start: int, data: np.ndarray, data_set: str | None = None):
+        """Write a contiguous batch starting at frame `start`."""
+        if self._h5_file is None:
+            raise RuntimeError("Packet is not open.")
+
+        ds = self._data if data_set is None else self._h5_file[data_set]
+        end = start + data.shape[0]
+
+        if end > ds.shape[0]:
+            ds.resize((end,) + ds.shape[1:])
+
+        ds[start:end] = data
+        self._frame_count = max(self._frame_count, end)
 
     @property
     def shape(self, data_set: str | None = None):
