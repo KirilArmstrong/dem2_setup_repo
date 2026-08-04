@@ -70,7 +70,7 @@ def _estimate_batch_size(H, W, safety=0.5):
     bytes_per_image = H * W * 4 + H * W * 8 + H * W * 8
     return max(1, int(free * safety / bytes_per_image))
 
-def _process_batch_along_z(imgs_batch, w, z, pad_dz=0):
+def _process_batch_along_z(imgs_batch, pad_dz=0):
     imgs_batch = cp.asarray(imgs_batch, dtype=cp.float32)
     # dy = imgs_batch.shape[0] // 2 if pad is None else pad
     if pad_dz != 0:
@@ -82,7 +82,7 @@ def _process_batch_along_z(imgs_batch, w, z, pad_dz=0):
         return cp.fft.fftshift(cp.fft.fft(arr_padded, axis=0), axes=0)
     return cp.fft.fftshift(cp.fft.fft(imgs_batch, axis=0), axes=0)
 
-def _process_batch(imgs_batch, cx, cy, w, h, compute_image=True):
+def _process_batch(imgs_batch, cx, cy, w, h):
     """
     imgs_batch : (B, H, W)  (NumPy or CuPy)
     cx, cy     : length-B array of integer centers
@@ -116,16 +116,14 @@ def _process_batch(imgs_batch, cx, cy, w, h, compute_image=True):
     spectra = cp.zeros((B, H, W), dtype=Fshift.dtype)
     spectra[:, y0 : y0 + h, x0 : x0 + w] = crop
 
-    images = None
-    if compute_image:
-        images = cp.fft.ifft2(
-            cp.fft.ifftshift(spectra, axes=(1, 2)), axes=(1, 2)
-        )
+    images = cp.fft.ifft2(
+        cp.fft.ifftshift(spectra, axes=(1, 2)), axes=(1, 2)
+    )
 
-    return spectra, images
+    return images
 
 
-def recon_zs(log, processor, centre, w, h, z_slice, cuda_version: bool = False, dset: str = "1"):
+def recon_zs(log, processor, centre, w, h, z_slice: int = 0, cuda_version: bool = False, dset: str = "1"):
     roi, y, x = determine_properties(processor, centre, w, h, z_slice)
     log.info("Beginning full reconstruction...")
     packet = Dem2SweepPacket(
@@ -134,30 +132,33 @@ def recon_zs(log, processor, centre, w, h, z_slice, cuda_version: bool = False, 
     packet.open_file()
     if cuda_version:
         # If you can keep the slice in RAM; otherwise pass the h5py Dataset directly
-        imgs = processor[
-            z_slice:,
-            roi[0] if roi is not None else slice(None),
-            roi[1] if roi is not None else slice(None),
-        ]
+        # imgs = processor[
+        #     z_slice:,
+        #     roi[0] if roi is not None else slice(None),
+        #     roi[1] if roi is not None else slice(None),
+        # ]
         log.info("This'll take a while...")
+        Z = processor.shape[0]
+        y_roi, x_roi = roi[0] if roi is not None else slice(None), roi[1] if roi is not None else slice(None)
+        H = processor[0,y_roi,0].shape[0]
+        W = processor[0,0,x_roi].shape[0]
         # imgs = holography_full_recon(processor[z_slice:,roi[0] if roi is not None else slice(None),roi[1] if roi is not None else slice(None)], np.array([y,x]), w, h)
         # packet.set_array(imgs)
         # process and stream to the packet's HDF5 file
         ds = packet.prepare_dataset(
-            (imgs.shape[0], imgs.shape[1], imgs.shape[2]),
+            (Z - z_slice, H, W),
             dtype=np.complex64,
             data_set=dset,
         )
 
-        Z, H, W = imgs.shape
         cen = np.array([y, x])  # shape (2, Z)
         batch_size = _estimate_batch_size(H, W)
 
-        for start in range(0, Z, batch_size):
+        for start in range(z_slice, Z, batch_size):
             t1 = time.time()
             end = min(start + batch_size, Z)
-            _, images = _process_batch(
-                imgs[start:end],
+            images = _process_batch(
+                processor[start:end, y_roi, x_roi],
                 cen[0, start:end],
                 cen[1, start:end],
                 w,
@@ -218,31 +219,27 @@ def use_processor(log):
             packet = Dem2SweepPacket(
                 str(DATA_PATH / FILE_NAME)[:-3] + "_oct_recon.h5", "1", processor.get_attributes()
             )
-            log.info("Reading full file from disk...")
             packet.open_file()
-            # If you can keep the slice in RAM; otherwise pass the h5py Dataset directly
-            imgs = processor[:,:,:]
-            Z, H, W = imgs.shape
-            dz = imgs.shape[0] // 2 if padding is None else padding
+            Z, H, W = processor.shape
+            dz = Z // 2 if padding is None else padding
             if dz != 0:
                 Z += dz * 2
             # process and stream to the packet's HDF5 file
             ds = packet.prepare_dataset(
                 (Z, H, W),
                 dtype=np.complex64,
+                chunks=(Z, 1, W),
                 data_set="1",
             )
             packet._frame_count = Z
             batch_size = _estimate_batch_size(Z, W)
 
-            log.info("Beginning reconstruction... this'll take a while...")
+            log.info(f"Beginning reconstruction... Final file size estimate: {int((Z*H*W*8)/1e9)} GB.")
             for start in range(0, H, batch_size):
                 t1 = time.time()
                 end = min(start + batch_size, H)
                 images = _process_batch_along_z(
-                    imgs[:,start:end,:],
-                    W,
-                    Z,
+                    processor[:,start:end,:],
                     dz
                 )
                 packet.write_batch(start, cp.asnumpy(images), data_set="1", axis=1)
