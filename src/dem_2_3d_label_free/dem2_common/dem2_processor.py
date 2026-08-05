@@ -241,7 +241,7 @@ class Dem2Processor(Dem2SweepPacket):
         if plot:
             self._log.info("Plotting...")
             self._prep_plot(arr, "Intensity Hologram", roi=roi)
-            self._prep_plot(ft_arr, "FFT of Hologram", gamma=0.05)
+            self._prep_plot(ft_arr, "FFT of Hologram", gamma=0.05, point=self.centre)
             self._prep_plot(cft_arr, "Cropped & Centred FFT", gamma=0.05)
             self._prep_plot(recon_arr, "Reconstructed Intensity")
             self._prep_plot(recon_arr, "Reconstructed Phase", cmap="hsv")
@@ -264,7 +264,8 @@ class Dem2Processor(Dem2SweepPacket):
         roi: tuple[slice, slice] | None = None,
         gamma: float | None = None,
         cmap: str = "gray",
-        unwrap: bool = False
+        unwrap: bool = False,
+        point: tuple[int,int] = None
     ):
         """
         Prepare plots.
@@ -287,6 +288,19 @@ class Dem2Processor(Dem2SweepPacket):
             if gamma is not None:
                 array = array**gamma
         im = plt.imshow(array, cmap=cmap)
+
+        if point is not None:
+            row, col = point
+
+            if (
+                isinstance(row, (int, np.integer))
+                and isinstance(col, (int, np.integer))
+                and 0 <= row < array.shape[0]
+                and 0 <= col < array.shape[1]
+            ):
+                # imshow uses x=column and y=row
+                plt.scatter(col, row, c="red", marker="x", s=80, linewidths=2)
+
         if cmap == "hsv":
             plt.colorbar(fraction=0.046, pad=0.04)
         plt.title(title)

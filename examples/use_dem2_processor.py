@@ -33,6 +33,8 @@ def prep_zernike(processor: Dem2Processor, array: np.ndarray, centre: tuple[int,
     return processor.get_zernike_coeffs(array, (cy, cx), r)
 
 
+SEE_ZS = None # [0, 45, 99, 140, 340, 400, 422]
+
 def determine_properties(processor, centre, w, h, z_slice):
     roi_bool = input("Roi? y/n: ")
     roi = None
@@ -175,6 +177,8 @@ def recon_zs(log, processor, centre, w, h, z_slice: int = 0, cuda_version: bool 
         return
     rng = processor.shape[0] - z_slice
     for i in range(rng):
+        if SEE_ZS is not None:
+            if z_slice + i not in SEE_ZS: continue
         t1 = time.time()
         packet.append_frame(
             abs(
@@ -183,7 +187,7 @@ def recon_zs(log, processor, centre, w, h, z_slice: int = 0, cuda_version: bool 
                     centre=(y[i],x[i]),
                     width=w,
                     height=h,
-                    plot=False,
+                    plot=True if z_slice + i in SEE_ZS else False,
                     z_slice=z_slice + i,
                 )
             )
