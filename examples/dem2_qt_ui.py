@@ -165,6 +165,7 @@ class ProcessingWorker(QObject):
         self._fft_enabled = False
         self._fft_track = False
         self._gamma = 0.3
+        self._oct_mode = False
         # ROIs: (tl_x, tl_y, br_x, br_y)
         self._cam_roi = (0, 0, 0, 0)
         # FFT ROI now stored as (cx, cy, width, height)
@@ -175,6 +176,9 @@ class ProcessingWorker(QObject):
 
     def set_running(self, running: bool):
         self._running = running
+
+    def set_oct_mode(self, oct_mode: bool):
+        self._oct_mode = oct_mode
 
     def set_fft_enabled(self, enabled: bool):
         self._fft_enabled = enabled
@@ -200,6 +204,10 @@ class ProcessingWorker(QObject):
                 QThread.msleep(20)
                 continue
             image_array = self.controller.camera.get_image(self.controller.camera.image)
+
+            # todo oct recon struct
+            if self._oct_mode:
+
             if image_array is None:
                 continue
             # Normalize to uint8 for display / ROI drawing

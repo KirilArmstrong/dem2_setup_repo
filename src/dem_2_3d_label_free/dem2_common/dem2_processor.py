@@ -212,7 +212,7 @@ class Dem2Processor(Dem2SweepPacket):
         :param z_slice: Which z index to use, i.e. image in image stack.
         :return: Reconstructed array (size of roi if provided.)
         """
-        self._log.info("Beginning reconstruction...")
+        self._log.info(f"Beginning reconstruction for z={z_slice}")
         arr = array if array is not None else self[z_slice, :, :]
         arr = (
             arr if arr.ndim == 2 else arr[z_slice, :, :]
