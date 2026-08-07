@@ -10,6 +10,7 @@ from src.dem_2_3d_label_free.dem2_common.dem2_helper import (
     setup_directories,
     setup_root_logger,
     collect_h5_contents,
+    oct_reconstruct,
 )
 from src.dem_2_3d_label_free.dem2_common.dem2_processor import Dem2Processor
 from src.dem_2_3d_label_free.__globals__ import __datapath__

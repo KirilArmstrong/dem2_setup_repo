@@ -18,7 +18,10 @@ from PySide6.QtWidgets import (
 from src.dem_2_3d_label_free.dem2_common.dem2_bscan_pattern import Dem2BScanPattern  # noqa: F401
 from src.dem_2_3d_label_free.dem2_common.dem2_constants import Dem2State, Dem2LaserMode, Dem2CameraMode
 from src.dem_2_3d_label_free.dem2_common.dem2_errors import Dem2Errors
-from src.dem_2_3d_label_free.dem2_common.dem2_helper import setup_root_logger
+from src.dem_2_3d_label_free.dem2_common.dem2_helper import (
+    setup_root_logger,
+    oct_reconstruct,
+)
 from src.dem_2_3d_label_free.dem2_common.dem2_sweep_experiment import Dem2SweepPacket
 from src.dem_2_3d_label_free.dem2_components.dem2_capturer import Dem2Capturer
 from src.dem_2_3d_label_free.dem2_components.dem2_controller import Dem2Controller
@@ -165,7 +168,9 @@ class ProcessingWorker(QObject):
         self._fft_enabled = False
         self._fft_track = False
         self._gamma = 0.3
+        self._oct_recon_y_level = 0
         self._oct_mode = False
+        self._padding = 0
         # ROIs: (tl_x, tl_y, br_x, br_y)
         self._cam_roi = (0, 0, 0, 0)
         # FFT ROI now stored as (cx, cy, width, height)
@@ -179,6 +184,12 @@ class ProcessingWorker(QObject):
 
     def set_oct_mode(self, oct_mode: bool):
         self._oct_mode = oct_mode
+
+    def set_oct_recon_y_level(self, oct_recon_y_level: bool):
+        self._oct_recon_y_level = oct_recon_y_level
+
+    def set_padding(self, padding: int):
+        self._padding = padding
 
     def set_fft_enabled(self, enabled: bool):
         self._fft_enabled = enabled
@@ -203,10 +214,17 @@ class ProcessingWorker(QObject):
             if self.controller.camera.state != Dem2State.RUNNING:
                 QThread.msleep(20)
                 continue
-            image_array = self.controller.camera.get_image(self.controller.camera.image)
 
-            # todo oct recon struct
             if self._oct_mode:
+                lambdas = controller.calculator.lambdas_array(
+                    controller.laser.wavelength_min,
+                    controller.laser.wavelength_max,
+                    int(controller.camera.samples_a_scan),
+                )
+                packet = controller.run_multiple_lambdas(str(DATA_PATH / "image_discrete.h5"),lambdas,False)
+                image_array = oct_reconstruct(abs(packet[:,self._oct_recon_y_level,:]),self._padding)
+            else:
+                image_array = self.controller.camera.get_image(self.controller.camera.image)
 
             if image_array is None:
                 continue
@@ -215,6 +233,15 @@ class ProcessingWorker(QObject):
                 display_arr = (np.clip(image_array, 0, 1) * 255).astype(np.uint8)
             else:
                 display_arr = image_array.astype(np.uint8)
+            # Build RGB display image and draw camera ROI if active
+            if display_arr.ndim == 2:
+                display_rgb = np.stack([display_arr, display_arr, display_arr], axis=-1)
+            else:
+                display_rgb = np.ascontiguousarray(display_arr)
+
+            if self._oct_mode:
+                self.frame_ready.emit(display_rgb, None, None)
+                return
             h, w = display_arr.shape[:2]
             # Camera ROI (clamped independently of GUI spin max)
             tl_x, tl_y, br_x, br_y = self._cam_roi
@@ -225,11 +252,6 @@ class ProcessingWorker(QObject):
             cx2 = max(cx1, cx2)
             cy2 = max(cy1, cy2)
             has_cam_roi = (cx2 > cx1) and (cy2 > cy1)
-            # Build RGB display image and draw camera ROI if active
-            if display_arr.ndim == 2:
-                display_rgb = np.stack([display_arr, display_arr, display_arr], axis=-1)
-            else:
-                display_rgb = np.ascontiguousarray(display_arr)
             color = [255, 255, 255]
             if has_cam_roi:
                 thickness = 2
@@ -311,9 +333,6 @@ class ProcessingWorker(QObject):
                     rgb_fft[cy_c, x_start:x_end] = cp.asarray(color)
                     rgb_fft[y_start:y_end, cx_c] = cp.asarray(color)
                 fft_img = rgb_fft
-            else:
-                fft_img = None
-                phase_rgb = None
             self.frame_ready.emit(display_rgb, fft_img.get() if fft_img is not None else fft_img, phase_rgb.get() if phase_rgb is not None else phase_rgb)
 
 

@@ -124,7 +124,9 @@ def get_current_timestamp() -> str:
     return datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
 
 
-def load_config_file(config_filepath: str = os.path.join(__configpath__, "config.yml")) -> dict:
+def load_config_file(
+    config_filepath: str = os.path.join(__configpath__, "config.yml"),
+) -> dict:
     """
     Load and parse a config file in the ``config`` directory into a config dict.
     :param config_filepath: file path to config yml file.
