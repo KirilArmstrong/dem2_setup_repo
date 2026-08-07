@@ -7,6 +7,7 @@ from datetime import datetime
 
 import h5py
 import numpy as np
+import scipy
 from zeiss_helpers.common import setup_logging, ConfigurationFile
 
 from src.dem_2_3d_label_free.__globals__ import (
@@ -16,6 +17,7 @@ from src.dem_2_3d_label_free.__globals__ import (
     __template_path__,
 )
 
+
 def collect_attrs(obj, lines, indent=""):
     """Collect all attributes of an HDF5 object into lines."""
     if len(obj.attrs) == 0:
@@ -23,6 +25,7 @@ def collect_attrs(obj, lines, indent=""):
     lines.append(f"{indent}Attributes:")
     for key, val in obj.attrs.items():
         lines.append(f"{indent}  {key}: {val}")
+
 
 def collect_dataset_data(ds, lines, indent="", max_elements=50):
     """
@@ -40,7 +43,10 @@ def collect_dataset_data(ds, lines, indent="", max_elements=50):
     if flat.size <= max_elements:
         lines.append(f"{indent}  Data (all {flat.size} elements): {flat}")
     else:
-        lines.append(f"{indent}  Data (first {max_elements} of {flat.size} elements): {flat[:max_elements]}")
+        lines.append(
+            f"{indent}  Data (first {max_elements} of {flat.size} elements): {flat[:max_elements]}"
+        )
+
 
 def collect_h5_contents(filename, log=None, max_elements=0) -> str:
     """
@@ -73,7 +79,9 @@ def collect_h5_contents(filename, log=None, max_elements=0) -> str:
                 collect_attrs(obj, lines, indent=indent + "  ")
 
                 if max_elements > 0:
-                    collect_dataset_data(obj, lines, indent=indent + "  ", max_elements=max_elements)
+                    collect_dataset_data(
+                        obj, lines, indent=indent + "  ", max_elements=max_elements
+                    )
 
         # Walk the file tree
         f.visititems(visitor)
@@ -83,16 +91,34 @@ def collect_h5_contents(filename, log=None, max_elements=0) -> str:
         log.info(strs)
     return strs
 
+
+def oct_reconstruct(
+    array: np.ndarray,
+    pad: int | None = None,
+) -> np.ndarray:
+    dy = array.shape[0] // 2 if pad is None else pad
+    if dy != 0:
+        pad_top = np.zeros((dy, array.shape[1]), dtype=array.dtype)
+        pad_bottom = np.zeros((dy, array.shape[1]), dtype=array.dtype)
+        arr_padded = np.vstack([pad_top, array, pad_bottom])
+        return scipy.fft.fftshift(scipy.fft.fft(arr_padded, axis=0), axes=0)
+    return scipy.fft.fftshift(scipy.fft.fft(array, axis=0), axes=0)
+
+
 def convert_to_hex(decimal: float) -> str:
     hexcode = hex(int(decimal))[2:]  # ignore the "0x" in front
-    while len(hexcode) < 4: hexcode = "0" + hexcode
+    while len(hexcode) < 4:
+        hexcode = "0" + hexcode
     return hexcode
+
 
 def hex_to_decimal(hex_string: str) -> float:
     return float(int("0x" + hex_string, 16))
 
+
 def wavelength_to_hex(lam: float, min_lam: float, resolution: float) -> str:
-    return convert_to_hex((lam-min_lam) * resolution)
+    return convert_to_hex((lam - min_lam) * resolution)
+
 
 def get_current_timestamp() -> str:
     return datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
@@ -138,6 +164,7 @@ def setup_root_logger(root_file=__file__) -> Logger:
     # Return the root logger
     return logging.getLogger(os.path.basename(root_file))
 
+
 def noll_to_nm(j: int):
     """Convert Noll index j (1-based) to (n, m)."""
     n = int(np.ceil((-3 + np.sqrt(9 + 8 * (j - 1))) / 2))
@@ -148,18 +175,24 @@ def noll_to_nm(j: int):
         m = -m
     return n, m
 
+
 def radial_poly(n: int, m: int, r: np.ndarray):
     """Radial Zernike polynomial R_n^m(r)."""
     m = abs(m)
     R = np.zeros_like(r, dtype=float)
     for k in range((n - m) // 2 + 1):
-        c = ((-1) ** k *
-             np.math.factorial(n - k) /
-             (np.math.factorial(k) *
-              np.math.factorial((n + m) // 2 - k) *
-              np.math.factorial((n - m) // 2 - k)))
+        c = (
+            (-1) ** k
+            * np.math.factorial(n - k)
+            / (
+                np.math.factorial(k)
+                * np.math.factorial((n + m) // 2 - k)
+                * np.math.factorial((n - m) // 2 - k)
+            )
+        )
         R += c * r ** (n - 2 * k)
     return R
+
 
 def zernike_noll(j: int, r: np.ndarray, theta: np.ndarray):
     """
