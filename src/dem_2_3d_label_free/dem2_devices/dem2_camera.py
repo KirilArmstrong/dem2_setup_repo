@@ -21,6 +21,11 @@ class Dem2Camera(Thread, xiapi.Camera):
         self._mode = Dem2CameraMode(self._cfg["mode"])
         xiapi.Camera.__init__(self, self._cfg["device_id"])
 
+        self._roi_offset = (int(self._cfg["roi_offset_y"]), int(self._cfg["roi_offset_x"]))
+        self._roi_size = (int(self._cfg["roi_height"]), int(self._cfg["roi_width"]))
+        self._increments = (0, 0)
+        self._max_res = (0, 0)
+
         # Save config exposure time.
         self._t_exp = self._cfg["time_exposure"]
         if self._t_exp < 0.1:
@@ -62,6 +67,8 @@ class Dem2Camera(Thread, xiapi.Camera):
         self._state = Dem2State.CONNECTED
         self._log.info("Connected to the Camera.")
         self.set_exposure(self._t_exp * 1000)
+        self._increments = (self.get_height_increment(), self.get_width_increment())
+        self._max_res = (self.get_height_maximum(), self.get_width_maximum())
 
     def disconnect(self):
         """Disconnect the camera."""
@@ -82,7 +89,11 @@ class Dem2Camera(Thread, xiapi.Camera):
 
 
     def initialize(self):
-        """Initialize the Camera."""
+        """
+        Initialize the Camera.
+        :param roi_offset: Camera ROI offset (y,x)
+        :param roi_size: Camera ROI distance from offset, determines size (y,x)
+        """
         self._log.info("Initialising the Camera in mode: " + str(self._mode) + "...")
         if self._state != Dem2State.CONNECTED:
             raise Dem2Errors.CameraError("Must be connected to initialize!")
@@ -92,6 +103,11 @@ class Dem2Camera(Thread, xiapi.Camera):
         self.set_exposure(self._t_exp * 1000)  # convert ms to us
         self._log.info("Exposure initialized to " + str(self._t_exp * 1000) + " us.")
         self.set_imgdataformat("XI_MONO8")
+        if self._roi_offset != (0, 0) and self._roi_size != (0, 0):
+            self.roi_size = self._roi_size
+            self.roi_offset = self._roi_offset
+            self._log.info(f"Camera roi settings set as: Offsets (y,x): {self.get_offsetY()}, {self.get_offsetX()}. "
+                           f"Size (h,w): {self.get_height()}, {self.get_width()}")
 
         match self._mode:
             case Dem2CameraMode.MONO: # Default Load in Mono mode
@@ -162,21 +178,14 @@ class Dem2Camera(Thread, xiapi.Camera):
 
     def toggle_live_images(self) -> str:
         """Acquire live images while Dem2State is RUNNING. Stop with ``stop_acquisition()``."""
-        if self._mode != Dem2CameraMode.MONO:
-            raise Dem2Errors.CameraError("Camera must be in MONO (0) mode for live image acquisition!")
+        # if self._mode != Dem2CameraMode.MONO:
+        #     raise Dem2Errors.CameraError("Camera must be in MONO (0) mode for live image acquisition!")
         if self._state == Dem2State.RUNNING:
             self.stop_acquisition()
             return "OFF"
         if self._state != Dem2State.RUNNING:
             self.start_acquisition()
         self._log.info("Now acquiring Images live...")
-        # self.acquire_images()
-        # self.target = self.acquire_images
-        # self.target_args = ()
-        # if self.is_alive():
-        #     self.join()
-        # self.run()
-        # self.executor.submit(self.acquire_images)
         return self.state.name
 
     def acquire_images(self):
@@ -247,6 +256,50 @@ class Dem2Camera(Thread, xiapi.Camera):
         if self._state != Dem2State.DISCONNECTED:
             self.set_exposure(self._t_exp * 1000)
 
+
+    @property
+    def roi_offset(self):
+        """Get camera offset in px."""
+        return self._roi_offset
+
+    @roi_offset.setter
+    def roi_offset(self, offset: tuple[int, int]):
+        """Set camera offset in px (y, x). Disable with (0, 0). NOTE: Must be set AFTER roi_size!"""
+        self._log.info(f"Setting camera roi offset to {offset}...")
+        if self._state != Dem2State.DISCONNECTED:
+            if offset[1] % self._increments[1] or offset[0] % self._increments[0]:
+                raise Dem2Errors.CameraError(f"Offsets ({offset[0]}, {offset[1]}) must be multiples of increments "
+                                             f"({self._increments[0]}, {self._increments[1]})")
+            self.set_offsetY(offset[0])
+            self.set_offsetX(offset[1])
+        else:
+            self._log.warning("Ensure roi offset x and y are divisible by the cameras width and height increment "
+                              "values. To check this, connect to the camera first, then set roi_offset.")
+
+        self._roi_offset = offset
+
+
+    @property
+    def roi_size(self):
+        """Get camera offset in px."""
+        return self._roi_offset
+
+    @roi_size.setter
+    def roi_size(self, size: tuple[int, int]):
+        """Set camera offset in px (y, x). Disable with (0, 0). NOTE: Must be set BEFORE roi_offset!"""
+        self._log.info(f"Setting camera roi size to {size}...")
+        if self._state != Dem2State.DISCONNECTED:
+            if size[1] % self._increments[1] or size[0] % self._increments[0]:
+                raise Dem2Errors.CameraError(f"ROI dimensions must be divisible by increments ({self._increments[1]}, {self._increments[0]})!")
+            if size[0] != 0: self.set_height(size[0])
+            else: self.set_height(self._max_res[0])
+            if size[1] != 0: self.set_width(size[1])
+            else: self.set_width(self._max_res[1])
+        else:
+            self._log.warning("Ensure roi size w and h are divisible by the cameras width and height increment values. To check this, connect to the camera first, then set roi_size.")
+
+        self._roi_size = size
+
     @property
     def settings(self) -> dict:
         _dict = {}
@@ -258,4 +311,8 @@ class Dem2Camera(Thread, xiapi.Camera):
         _dict["time_idle"] = self.t_idle
         _dict["frames"] = self.samples_a_scan
         _dict["fps"] = self._fps
+        _dict["roi_offset_x"] = self._roi_offset[1]
+        _dict["roi_offset_y"] = self._roi_offset[0]
+        _dict["roi_width"] = self._roi_size[1]
+        _dict["roi_height"] = self._roi_size[0]
         return _dict

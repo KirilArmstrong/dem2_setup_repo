@@ -147,7 +147,7 @@ class Dem2Controller:
             # create new dataset for current position in scan pattern.
             sweep_exp.data_set = str(pos)
             self._log.info(f"Running sweep {i + 1} of {bsp.a_scans_b_scan + 1}...")
-            self.run_single_sweep(sweep_exp)
+            self.run_single_sweep(packet=sweep_exp)
             sweep_exp.set_attributes(self.settings)
             pos += 1
             eta = (
@@ -158,24 +158,27 @@ class Dem2Controller:
             )
         return sweep_exp
 
-    def run_single_sweep(self, packet: Dem2SweepPacket):
+    def run_single_sweep(self, filename: str = "", packet: Dem2SweepPacket|None = None) -> Dem2SweepPacket|np.ndarray:
         """
         Run a single laser sweep (single a-scan).
-        :param packet: packet to save measurements to.
+        :param filename: packet filename to save too. Set empty to get back an array.
         """
         self._log.info("Preparing capturer...")
         self.cam_capturer = Dem2Capturer(
-            self.camera, packet, int(self.camera.samples_a_scan)
+            self.camera, packet if packet is not None else (Dem2SweepPacket(filename) if filename else None), int(self.camera.samples_a_scan)
         )
         # start camera and set it to listen for laser HIGH.
         self.cam_capturer.start()
+        #wait until camera is ready.
+        while not self.cam_capturer.waiting:
+            continue
         # turn laser on.
         self.laser.toggle_emission()
-        self._log.info("Laser on.")
         # wait until laser finished and camera saved everything to h5
         if self.cam_capturer.is_alive():
             self.cam_capturer.join()
         self._log.info("Capture finished.")
+        return self.cam_capturer.packet if filename else self.cam_capturer.array_stack
 
     def run_multiple_lambdas(self, filename, lambdas: np.ndarray, increment_data_set: bool = True) -> Dem2SweepPacket:
         """

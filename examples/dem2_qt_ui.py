@@ -134,6 +134,7 @@ class SystemState:
         self.isCaptBurst = False
         self.fftEnabled = False
         self.saveEnabled = False
+        self.octEnabled = False
 
 
 STATUS_MAP = {
@@ -175,6 +176,7 @@ class ProcessingWorker(QObject):
         self._cam_roi = (0, 0, 0, 0)
         # FFT ROI now stored as (cx, cy, width, height)
         self._fft_roi = (0, 0, 0, 0)
+        self._log = logging.getLogger(self.__class__.__name__)
 
     def stop(self):
         self._active = False
@@ -214,15 +216,14 @@ class ProcessingWorker(QObject):
             if self.controller.camera.state != Dem2State.RUNNING:
                 QThread.msleep(20)
                 continue
-
+            t0= datetime.now()
             if self._oct_mode:
-                lambdas = controller.calculator.lambdas_array(
-                    controller.laser.wavelength_min,
-                    controller.laser.wavelength_max,
-                    int(controller.camera.samples_a_scan),
-                )
-                packet = controller.run_multiple_lambdas(str(DATA_PATH / "image_discrete.h5"),lambdas,False)
-                image_array = oct_reconstruct(abs(packet[:,self._oct_recon_y_level,:]),self._padding)
+                image_array = controller.run_single_sweep()
+                if image_array is None:
+                    continue
+                image_array = image_array[:,self._oct_recon_y_level,:]
+                image_array = abs(image_array)
+                image_array = oct_reconstruct(image_array,self._padding)
             else:
                 image_array = self.controller.camera.get_image(self.controller.camera.image)
 
@@ -241,7 +242,8 @@ class ProcessingWorker(QObject):
 
             if self._oct_mode:
                 self.frame_ready.emit(display_rgb, None, None)
-                return
+                self._log.info(f"FPS: {1/(datetime.now() - t0).total_seconds()}.")
+                continue
             h, w = display_arr.shape[:2]
             # Camera ROI (clamped independently of GUI spin max)
             tl_x, tl_y, br_x, br_y = self._cam_roi
@@ -455,6 +457,7 @@ class MainWindow(QMainWindow):
         self.btn_cam_capture = QPushButton("Capture")
         self.chk_fft = QCheckBox("FFT 2D")
         self.chk_save = QCheckBox("Save")
+        self.chk_oct = QCheckBox("OCT Mode")
         self.gamma_spin = QDoubleSpinBox()
         self.frames = QLabel("1")
         self.frames2 = QLabel("1")
@@ -479,7 +482,8 @@ class MainWindow(QMainWindow):
         grid_camctrl_mono.addWidget(self.frames, 1, 2)
         grid_camctrl_burst.addWidget(self.frames2, 0, 1)
         grid_camctrl_mono.addWidget(self.chk_fft, 1, 0)
-        grid_camctrl_mono.addWidget(self.chk_save, 1, 1)
+        grid_camctrl_mono.addWidget(self.chk_save, 2, 2)
+        grid_camctrl_mono.addWidget(self.chk_oct, 1, 1)
         grid_camctrl_mono.addWidget(self.btn_cam_capture, 0, 0)
         grid_camctrl_mono.addWidget(self.btn_cam_live, 0, 1)
         grid_camctrl_burst.addWidget(self.btn_cam_burst, 0, 0)
@@ -872,6 +876,7 @@ class MainWindow(QMainWindow):
         self.btn_cam_burst.clicked.connect(lambda: self._with_wait(self._start_burst))
         self.chk_fft.stateChanged.connect(self._update_flags)
         self.chk_save.stateChanged.connect(self._update_flags)
+        self.chk_oct.stateChanged.connect(self._update_flags)
         # Camera ROI
         self.btn_cam_roi_apply.clicked.connect(self._apply_cam_roi)
         # FFT ROI
@@ -989,9 +994,11 @@ class MainWindow(QMainWindow):
     def _update_flags(self):
         self.state.fftEnabled = self.chk_fft.isChecked()
         self.state.saveEnabled = self.chk_save.isChecked()
+        self.state.octEnabled = self.chk_oct.isChecked()
         # propagate FFT flag to worker
         if self.proc_worker is not None:
             self.proc_worker.set_fft_enabled(self.state.fftEnabled)
+            self.proc_worker.set_oct_mode(self.state.octEnabled)
 
     def _update_fft_tracking(self):
         if self.proc_worker is not None:
@@ -1031,9 +1038,9 @@ class MainWindow(QMainWindow):
         # camera
         cam = self.state.devices["camera"]
         is_mono = cam["mode"] == 0
+        self.chk_fft.setEnabled(is_mono)
         self.btn_cam_burst.setEnabled(not is_mono)
         self.btn_cam_capture.setEnabled(is_mono)
-        self.btn_cam_live.setEnabled(is_mono)
         label, color = STATUS_MAP.get(cam["status"], STATUS_MAP[99])
         self.cam_status_label.setText(f"STATUS: {label} | MODE: {MODES['camera'][cam['mode']]}")
         self.btn_cam_connect.setEnabled(cam["status"] == 0)
@@ -1049,6 +1056,9 @@ class MainWindow(QMainWindow):
         self.btn_laser_init.setEnabled(laser["status"] == 1)
         self.laser_mode_combo.setCurrentIndex(laser["mode"])
         is_cw = laser["mode"] == 0
+        is_single_burst = not is_mono and not is_cw
+        self.btn_cam_live.setEnabled(is_mono or is_single_burst)
+        self.chk_oct.setEnabled(is_single_burst)
         self.spin_laser_cw.setEnabled(is_cw)
         self.btn_cam_disc_sweep.setEnabled(is_mono and is_cw)
         # self.spin_laser_min.setEnabled(not is_cw)
@@ -1207,6 +1217,7 @@ class MainWindow(QMainWindow):
             # ensure worker uses current gamma and FFT flag
             self.proc_worker.set_gamma(float(self.gamma_spin.value()))
             self.proc_worker.set_fft_enabled(self.state.fftEnabled)
+            self.proc_worker.set_oct_mode(self.state.octEnabled)
 
     def _start_burst(self):
         self.start_trigger_capturing()
