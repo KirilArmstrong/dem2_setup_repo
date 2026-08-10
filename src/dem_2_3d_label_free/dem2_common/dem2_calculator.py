@@ -9,6 +9,7 @@ class Dem2SystemCalculator:
     def __init__(self):
         # Non-root logging. See dem2_helper.setup_root_logger() documentation.
         self._log = logging.getLogger(self.__class__.__name__)
+        self._ln2overpi = (2 * math.log(2) / math.pi)
 
     def sample_no(self,lambda_min, lambda_max, z_max):
         """
@@ -44,11 +45,25 @@ class Dem2SystemCalculator:
     def axial_bandwidth(self,lambda_0,lambda_range):
         """
         Calculate axial bandwidth for specific swept source.
+        :param lambda_0: Central lambda in nm.
+        :param lambda_range: Delta lambda in nm. (Full sweep range)
         :return: Axial bandwidth in um.
         """
-        return ((2 * math.log(2)) * (pow(lambda_0 / 1000, 2))) / (
+        return (self._ln2overpi * (pow(lambda_0 / 1000, 2))) / (
             lambda_range / 1000
         )
+
+
+    def signal_roll_off_depth(self, lambda_0, lambda_instant):
+        """
+        Calculate signal roll off depth in um. (Coherence length / 2)
+        :param lambda_0: Central lambda in nm.
+        :param lambda_instant: delta lambda in nm. (Instant bandwidth or bandwidth for 1 image)
+        :return: Signal roll off in um.
+        """
+        return ((self._ln2overpi * (pow(lambda_0 / 1000, 2))) / (
+            lambda_instant / 1000
+        )) / 2
 
 
     def exposure_lambda_range(self, t_exp, sweep_speed):
