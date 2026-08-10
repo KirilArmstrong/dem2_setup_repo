@@ -59,6 +59,6 @@ The chosen FT SROI will then be cropped out, the chosen centre XY will be shifte
 
 ---
 
-Tags: #GUI | Quick Links: [[Home]](https://github.com/myleneamstutz/3d_label_free_dem_2/blob/dev/dem2_doc_vault/Home.md)
+Tags: #GUI | Quick Links: [[Home]](https://github.com/myleneamstutz/3d_label_free_dem_2/blob/dev/dem2_doc_vault/Home.md) | [[Set_Up]](https://github.com/myleneamstutz/3d_label_free_dem_2/blob/dev/dem2_doc_vault/Set_Up.md)
 
 ---

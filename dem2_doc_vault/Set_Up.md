@@ -24,3 +24,8 @@ PCB GND > Yellow (Ground) --> Red  > Camera
 PCB OUT > Green (Out)     --> Blue > Camera
 ```
 
+---
+
+Tags: # | Quick Links: [[Home]](https://github.com/myleneamstutz/3d_label_free_dem_2/blob/dev/dem2_doc_vault/Home.md) | [[How_to_use_GUI]](https://github.com/myleneamstutz/3d_label_free_dem_2/blob/dev/dem2_doc_vault/How_to_use_GUI.md)
+
+---
