@@ -57,6 +57,16 @@ This is the ROI to crop out the first order. Choose a centre X and Y point (with
 
 The chosen FT SROI will then be cropped out, the chosen centre XY will be shifted to the zero freq. point (0, 0). It will be zero padded to the size of the camera SROI. It will then be iFFTed, and the resulting phase shown in the third image.
 
+#### Hardware ROI (HROI)
+
+The camera has the ability to choose a ROI too. This can be set in the `config.yml` file and will apply to all camera modes.
+
+The offset tells the starting pixel (top left corner) and the width/height controls the HROIs width and height.
+
+Note: Read time is increased by lowering the amount of vertical pixels (Height), and data transfer is increased by lowering the amount of horizontal pixels (Width)
+
+Note: You cant select any random number for these values. They must be a multiple of the `increment` parameter of the camera. This is printed in the logs when connecting to the camera. For Demonstrator 2, the increments for X and Y are 32 and 2 respectively.
+
 ---
 
 Tags: #GUI | Quick Links: [[Home]](https://github.com/myleneamstutz/3d_label_free_dem_2/blob/dev/dem2_doc_vault/Home.md) | [[Set_Up]](https://github.com/myleneamstutz/3d_label_free_dem_2/blob/dev/dem2_doc_vault/Set_Up.md)
