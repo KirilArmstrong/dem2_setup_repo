@@ -39,6 +39,7 @@ def numpy_to_qpixmap(array: np.ndarray) -> QPixmap:
 
 
 def normalize_to_255(array: np.ndarray):
+    """Normalise an array to 0-255."""
     # normalize to 0–255
     array = array - array.min()
     if array.max() > 0:
@@ -47,12 +48,14 @@ def normalize_to_255(array: np.ndarray):
 
 
 def compute_fft(image_array: cp.ndarray) -> cp.ndarray:
+    """Compute the 2D FFT of an array."""
     ft_array = cp.fft.fft2(image_array)
     ft_array = cp.fft.fftshift(ft_array)
     return ft_array
 
 
 def covert_fft_to_img(ft_array: cp.ndarray, gamma: float) -> cp.ndarray:
+    """Convert a complex array into a normalized to 255 image array with a gamma factor."""
     ft_array = np.abs(ft_array)
     ft_array = ft_array**gamma
     return normalize_to_255(ft_array)
@@ -187,6 +190,7 @@ def oct_reconstruct(
     array: np.ndarray,
     pad: int | None = None,
 ) -> np.ndarray:
+    """Apply a 1D FFT over a image/volume."""
     dy = array.shape[0] // 2 if pad is None else pad
     if dy != 0:
         pad_top = np.zeros((dy, array.shape[1]), dtype=array.dtype)
@@ -197,6 +201,7 @@ def oct_reconstruct(
 
 
 def convert_to_hex(decimal: float) -> str:
+    """Convert a decimal value to hex code."""
     hexcode = hex(int(decimal))[2:]  # ignore the "0x" in front
     while len(hexcode) < 4:
         hexcode = "0" + hexcode
@@ -204,14 +209,17 @@ def convert_to_hex(decimal: float) -> str:
 
 
 def hex_to_decimal(hex_string: str) -> float:
+    """Convert hex code to decimal."""
     return float(int("0x" + hex_string, 16))
 
 
 def wavelength_to_hex(lam: float, min_lam: float, resolution: float) -> str:
+    """Convert a wavelength to hex code."""
     return convert_to_hex((lam - min_lam) * resolution)
 
 
 def get_current_timestamp() -> str:
+    """Get the current formatted timestamp."""
     return datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
 
 
