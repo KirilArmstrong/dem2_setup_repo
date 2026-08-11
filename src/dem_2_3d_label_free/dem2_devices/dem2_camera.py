@@ -46,20 +46,11 @@ class Dem2Camera(Thread, xiapi.Camera):
         self.samples_a_scan: int | None = None
         self._fps = None
 
-        self._buffer_offset = None
-
         self.image = xiapi.Image()
-        self._image_buffer: list[np.ndarray] = []
 
         # Threading
 
         self.executor = ThreadPoolExecutor(max_workers=1)
-
-    def _append_to_buffer(self, data: np.ndarray) -> None:
-        """Append image data to buffer. If longer than 10, discard it. (for software live imaging)"""
-        if len(self._image_buffer) < 10:
-            self._image_buffer.append(data)  # Throw away frame
-        return
 
     def connect(self):
         """Connect to Camera."""
@@ -102,8 +93,6 @@ class Dem2Camera(Thread, xiapi.Camera):
         self._log.info("Initialising the Camera in mode: " + str(self._mode) + "...")
         if self._state != Dem2State.CONNECTED:
             raise Dem2Errors.CameraError("Must be connected to initialize!")
-        # if self.samples_a_scan is None:
-        #     raise Dem2Errors.CameraError("Number of images must be set to initialize!")
 
         # Set settings
         self.set_exposure(self._t_exp * 1000)  # convert ms to us
@@ -125,8 +114,6 @@ class Dem2Camera(Thread, xiapi.Camera):
                 Dem2CameraMode.FRAME_BURST_EXT_TRIGGER
             ):  # External triggering frame burst
                 self._log.info("mode: " + str(self._mode))
-                # if self.samples_a_scan is None or self.samples_a_scan < 2:
-                #     raise Dem2Errors.CameraError("Camera must have a specified number of frames for frame burst mode. It must be >1 and not None.")
                 self.set_gpi_selector("XI_GPI_PORT2")  # Adjust to your actual port
                 self.set_gpi_mode("XI_GPI_TRIGGER")
                 self.set_trigger_source(
@@ -197,7 +184,6 @@ class Dem2Camera(Thread, xiapi.Camera):
         # self.set_exposure(self._t_exp * 1000)
         time.sleep(((self._t_exp + self.t_read) / 1000) + 0.1)
         data = self.get_image(self.image)
-        self._append_to_buffer(data)
         self._log.info("Acquired single Image.")
         if toggle_aqc:
             self.stop_acquisition()
@@ -214,39 +200,6 @@ class Dem2Camera(Thread, xiapi.Camera):
             self.start_acquisition()
         self._log.info("Now acquiring Images live...")
         return self.state.name
-
-    def acquire_images(self):
-        while self._state == Dem2State.RUNNING:
-            self._append_to_buffer(self.get_image(self.image))
-        self._log.info("No longer acquiring Images live.")
-
-    def pop_image_in_buffer(
-        self, ft: bool = False, index: int = 0
-    ) -> np.ndarray | None:
-        """Pop an image from the image buffer list and return it.
-        :param index: Index of the image to pop.
-        :param ft: If ``ft`` is ``True``, return 3D ndarray with z=0 as image, and z=1 as ft of image, else z=1 is all zeros.
-        :returns: Image as 3D numpy array."""
-        if len(self._image_buffer) == 0:
-            self._log.warning("No images in buffer, returning None!")
-            return None
-        i = index
-        if len(self._image_buffer) <= i:
-            i = len(self._image_buffer) - 1
-            self._log.warning(
-                "Index out of range, using the highest possible index of "
-                + str(len(self._image_buffer) - 1)
-                + "."
-            )
-        data = self._image_buffer.pop(i)
-        if not ft:
-            return np.stack((data, np.zeros(data)), axis=-1)
-        return np.stack((data, np.fft.fftshift(np.fft.fft2(data))), axis=-1)
-
-    # Thread
-
-    # def run(self):
-    #     self.target(*self.target_args)
 
     # Properties
 

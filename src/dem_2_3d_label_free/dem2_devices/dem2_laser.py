@@ -34,7 +34,6 @@ class Dem2Laser:
 
         self._total_sweep_time = None
         self._sweep_speed = None
-        # self.total_sweep_time = 21.15 # default
 
     def connect(self):
         """Connect to laser source via serial."""

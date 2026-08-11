@@ -42,11 +42,9 @@ class Dem2Capturer(Thread):
             )
         if self._expected_frames < 1:
             raise Dem2Errors.CameraError("Camera capturer must expect >0 frames.")
-        # img = xiapi.Image()
         imgs = []
 
         is_capturing = False
-        # timeout = int(self._cam.concat_amm*(self._cam.t_exp+1))+1
         timeout = int(self._cam.t_frame + 1)
         self._log.info(f"Capturer Thread: Timeout set to {timeout} ms.")
 
