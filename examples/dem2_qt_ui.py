@@ -1,3 +1,11 @@
+"""
+Main GUI for Dem2. Broken down into 3 classes:
+- SystemState - Object for storing global states for the set up.
+- ProcessingWorker - This is a background processor that runs a separate thread so the GUI doesnt lock up when
+running long experiments, or live.
+- MainWindow - The GUI and its functions.
+"""
+
 import logging
 import sys
 from datetime import datetime
@@ -8,19 +16,44 @@ import cupy as cp
 from PIL import Image  # noqa: F401 (kept as in original)
 from io import BytesIO  # noqa: F401 (kept as in original)
 from PySide6.QtCore import Qt, QTimer, QThread, QObject, Signal
-from PySide6.QtGui import QImage, QPixmap, QFont
+from PySide6.QtGui import QFont
 from PySide6.QtWidgets import (
-    QApplication, QMainWindow, QWidget, QLabel, QPushButton, QVBoxLayout,
-    QHBoxLayout, QGridLayout, QGroupBox, QTableWidget, QTableWidgetItem,
-    QSpinBox, QDoubleSpinBox, QComboBox, QMessageBox, QCheckBox, QLineEdit,
-    QSizePolicy, QTabWidget,
+    QApplication,
+    QMainWindow,
+    QWidget,
+    QLabel,
+    QPushButton,
+    QVBoxLayout,
+    QHBoxLayout,
+    QGridLayout,
+    QGroupBox,
+    QTableWidget,
+    QTableWidgetItem,
+    QSpinBox,
+    QDoubleSpinBox,
+    QComboBox,
+    QMessageBox,
+    QCheckBox,
+    QSizePolicy,
+    QTabWidget,
 )
 from src.dem_2_3d_label_free.dem2_common.dem2_bscan_pattern import Dem2BScanPattern  # noqa: F401
-from src.dem_2_3d_label_free.dem2_common.dem2_constants import Dem2State, Dem2LaserMode, Dem2CameraMode
+from src.dem_2_3d_label_free.dem2_common.dem2_constants import (
+    Dem2State,
+    Dem2LaserMode,
+    Dem2CameraMode,
+    STATUS_MAP,
+    MODES,
+)
 from src.dem_2_3d_label_free.dem2_common.dem2_errors import Dem2Errors
 from src.dem_2_3d_label_free.dem2_common.dem2_helper import (
     setup_root_logger,
     oct_reconstruct,
+    compute_fft,
+    covert_fft_to_img,
+    numpy_to_qpixmap,
+    crop_centre_ifft,
+    phase_to_hsv,
 )
 from src.dem_2_3d_label_free.dem2_common.dem2_sweep_experiment import Dem2SweepPacket
 from src.dem_2_3d_label_free.dem2_components.dem2_capturer import Dem2Capturer
@@ -30,95 +63,8 @@ from src.dem_2_3d_label_free.__globals__ import __config__, __datapath__
 DATA_PATH = Path(__datapath__)
 default_config = __config__
 
-# Single shared controller – same as in Flask backend
+# Single shared controller
 controller = Dem2Controller(default_config)
-
-
-def numpy_to_qpixmap(array: np.ndarray) -> QPixmap:
-    """Convert 2D/3D np.uint8 or float [0,1] array to QPixmap."""
-    # Handle float arrays in [0,1] range
-    if array.dtype in (np.float32, np.float64):
-        array = (np.clip(array, 0, 1) * 255).astype(np.uint8)
-    if array.ndim == 2:
-        h, w = array.shape
-        img = QImage(array.data, w, h, w, QImage.Format_Grayscale8)
-    elif array.ndim == 3 and array.shape[2] == 3:
-        h, w, c = array.shape
-        # RGB image - ensure contiguous for QImage
-        array = np.ascontiguousarray(array)
-        img = QImage(array.data, w, h, w * c, QImage.Format_RGB888)
-    else:
-        raise ValueError(f"Unsupported array shape: {array.shape}")
-    return QPixmap.fromImage(img.copy())
-
-
-def normalize_to_255(array: np.ndarray):
-    # normalize to 0–255
-    array = array - array.min()
-    if array.max() > 0:
-        array = array / array.max()
-    return (array * 255).astype(np.uint8)
-
-
-def compute_fft(image_array: cp.ndarray) -> cp.ndarray:
-    ft_array = cp.fft.fft2(image_array)
-    ft_array = cp.fft.fftshift(ft_array)
-    return ft_array
-
-
-def covert_fft_to_img(ft_array: cp.ndarray, gamma: float) -> cp.ndarray:
-    ft_array = np.abs(ft_array)
-    ft_array = ft_array ** gamma
-    return normalize_to_255(ft_array)
-
-
-def phase_to_hsv(array: cp.ndarray) -> cp.ndarray:
-    """Convert -pi to pi to 0 - 1."""
-    from matplotlib.colors import hsv_to_rgb
-    hue = (cp.angle(array) + cp.pi) / (2 * cp.pi)
-    hsv = cp.zeros((*array.shape, 3), dtype=cp.float32)
-    hsv[:, :, 0] = hue
-    hsv[:, :, 1] = 1.0
-    hsv[:, :, 2] = 1.0
-    rgb = cp.array(hsv_to_rgb(hsv.get()))
-    return (rgb * 255).astype(cp.uint8)
-
-
-def crop_centre_ifft(ft_array: cp.ndarray, top_left, bottom_right) -> cp.ndarray:
-    """
-    Extract ft_array[top_left:bottom_right], place it in the centre of a
-    zero-padded array of the same size as ft_array, then ifftshift + ifft2.
-    top_left and bottom_right are (x, y) i.e. (column, row).
-    """
-    x1, y1 = top_left
-    x2, y2 = bottom_right
-
-    # Make coords even (round down) so centre alignment is unambiguous
-    x1 = x1 - (x1 % 2)
-    y1 = y1 - (y1 % 2)
-    x2 = x2 - (x2 % 2)
-    y2 = y2 - (y2 % 2)
-
-    w = x2 - x1  # width  (cols)
-    h = y2 - y1  # height (rows)
-
-    if h <= 0 or w <= 0:
-        ft_centred = ft_array
-    else:
-        ft_centred = cp.zeros_like(ft_array)
-        ch = ft_array.shape[0] // 2
-        cw = ft_array.shape[1] // 2
-
-        row_start = ch - h // 2
-        col_start = cw - w // 2
-
-        # Target slice exactly matches source shape (h, w)
-        ft_centred[row_start:row_start + h, col_start:col_start + w] = \
-            ft_array[y1:y2, x1:x2]
-
-    ft_unshifted = cp.fft.ifftshift(ft_centred)
-    img_iffted = cp.fft.ifft2(ft_unshifted)
-    return img_iffted
 
 
 class SystemState:
@@ -137,35 +83,20 @@ class SystemState:
         self.octEnabled = False
 
 
-STATUS_MAP = {
-    0: ("DISCONNECTED", "red"),
-    1: ("CONNECTED", "yellow"),
-    2: ("INITIALISED", "blue"),
-    3: ("READY", "green"),
-    4: ("RUNNING", "cyan"),
-    99: ("WAITING...", "gray"),
-}
-
-MODES = {
-    "camera": ["MONO", "BURST"],
-    "laser": ["CW", "SINGLE", "CONTINUOUS"],
-    "stage": ["MANUAL", "PATTERN"],
-}
-
-
 class ProcessingWorker(QObject):
     """
     Worker that acquires frames from the camera and performs FFT/iFFT/phase
     computation off the GUI thread. Emits numpy arrays ready for display.
     """
+
     frame_ready = Signal(object, object, object)  # display_rgb, fft_img_u8, phase_rgb
-    fft_roi_moved = Signal(int, int)              # new cx, cy
+    fft_roi_moved = Signal(int, int)  # new cx, cy
 
     def __init__(self, controller, parent=None):
         super().__init__(parent)
         self.controller = controller
-        self._active = True       # overall loop flag
-        self._running = False     # live flag
+        self._active = True  # overall loop flag
+        self._running = False  # live flag
         self._fft_enabled = False
         self._fft_track = False
         self._gamma = 0.3
@@ -216,16 +147,18 @@ class ProcessingWorker(QObject):
             if self.controller.camera.state != Dem2State.RUNNING:
                 QThread.msleep(20)
                 continue
-            t0= datetime.now()
+            t0 = datetime.now()
             if self._oct_mode:
                 image_array = controller.run_single_sweep()
                 if image_array is None:
                     continue
-                image_array = image_array[:,self._oct_recon_y_level,:]
+                image_array = image_array[:, self._oct_recon_y_level, :]
                 image_array = abs(image_array)
-                image_array = oct_reconstruct(image_array,self._padding)
+                image_array = oct_reconstruct(image_array, self._padding)
             else:
-                image_array = self.controller.camera.get_image(self.controller.camera.image)
+                image_array = self.controller.camera.get_image(
+                    self.controller.camera.image
+                )
 
             if image_array is None:
                 continue
@@ -242,7 +175,7 @@ class ProcessingWorker(QObject):
 
             if self._oct_mode:
                 self.frame_ready.emit(display_rgb, None, None)
-                self._log.info(f"FPS: {1/(datetime.now() - t0).total_seconds()}.")
+                self._log.info(f"FPS: {1 / (datetime.now() - t0).total_seconds()}.")
                 continue
             h, w = display_arr.shape[:2]
             # Camera ROI (clamped independently of GUI spin max)
@@ -257,10 +190,14 @@ class ProcessingWorker(QObject):
             color = [255, 255, 255]
             if has_cam_roi:
                 thickness = 2
-                display_rgb[cy1:min(cy1 + thickness, cy2 + 1), cx1:cx2 + 1] = color
-                display_rgb[max(cy2 - thickness + 1, cy1):cy2 + 1, cx1:cx2 + 1] = color
-                display_rgb[cy1:cy2 + 1, cx1:min(cx1 + thickness, cx2 + 1)] = color
-                display_rgb[cy1:cy2 + 1, max(cx2 - thickness + 1, cx1):cx2 + 1] = color
+                display_rgb[cy1 : min(cy1 + thickness, cy2 + 1), cx1 : cx2 + 1] = color
+                display_rgb[max(cy2 - thickness + 1, cy1) : cy2 + 1, cx1 : cx2 + 1] = (
+                    color
+                )
+                display_rgb[cy1 : cy2 + 1, cx1 : min(cx1 + thickness, cx2 + 1)] = color
+                display_rgb[cy1 : cy2 + 1, max(cx2 - thickness + 1, cx1) : cx2 + 1] = (
+                    color
+                )
             # Crop to camera ROI for FFT processing
             proc_array = display_arr[cy1:cy2, cx1:cx2] if has_cam_roi else display_arr
             fft_img = None
@@ -287,7 +224,7 @@ class ProcessingWorker(QObject):
                 x2 = max(x1, x2)
                 y2 = max(y1, y2)
 
-                # TRACKING: find brightest spot inside current ROI
+                # TRACKING: find the brightest spot inside current ROI
                 if self._fft_track and (x2 > x1) and (y2 > y1):
                     roi_slice = ft_arr[y1:y2, x1:x2]
                     if roi_slice.size > 0:
@@ -319,13 +256,17 @@ class ProcessingWorker(QObject):
                 rgb_fft = cp.stack([fft_img_u8, fft_img_u8, fft_img_u8], axis=-1)
                 if x2 > x1 and y2 > y1:
                     th = 2
-                    rgb_fft[y1:min(y1 + th, y2), x1:x2] = cp.asarray(color)
-                    rgb_fft[max(y2 - th, y1):y2, x1:x2] = cp.asarray(color)
-                    rgb_fft[y1:y2, x1:min(x1 + th, x2)] = cp.asarray(color)
-                    rgb_fft[y1:y2, max(x2 - th, x1):x2] = cp.asarray(color)
+                    rgb_fft[y1 : min(y1 + th, y2), x1:x2] = cp.asarray(color)
+                    rgb_fft[max(y2 - th, y1) : y2, x1:x2] = cp.asarray(color)
+                    rgb_fft[y1:y2, x1 : min(x1 + th, x2)] = cp.asarray(color)
+                    rgb_fft[y1:y2, max(x2 - th, x1) : x2] = cp.asarray(color)
 
                     # Red cross at centre
-                    arm = max(5, min(roi_w, roi_h) // 4) if roi_w > 0 and roi_h > 0 else 10
+                    arm = (
+                        max(5, min(roi_w, roi_h) // 4)
+                        if roi_w > 0 and roi_h > 0
+                        else 10
+                    )
                     cx_c = max(0, min(cx, fw - 1))
                     cy_c = max(0, min(cy, fh - 1))
                     x_start = max(0, cx_c - arm)
@@ -335,7 +276,11 @@ class ProcessingWorker(QObject):
                     rgb_fft[cy_c, x_start:x_end] = cp.asarray(color)
                     rgb_fft[y_start:y_end, cx_c] = cp.asarray(color)
                 fft_img = rgb_fft
-            self.frame_ready.emit(display_rgb, fft_img.get() if fft_img is not None else fft_img, phase_rgb.get() if phase_rgb is not None else phase_rgb)
+            self.frame_ready.emit(
+                display_rgb,
+                fft_img.get() if fft_img is not None else fft_img,
+                phase_rgb.get() if phase_rgb is not None else phase_rgb,
+            )
 
 
 class MainWindow(QMainWindow):
@@ -428,9 +373,9 @@ class MainWindow(QMainWindow):
             lbl.setStyleSheet("background-color: black; color: #64748b;")
             lbl.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
             lbl.setMinimumSize(200, 150)
-        images_row_layout.addWidget(self.label_cam_live)      # main view
-        images_row_layout.addWidget(self.label_cam_fft)       # FT view
-        images_row_layout.addWidget(self.label_cam_phase)     # captured view
+        images_row_layout.addWidget(self.label_cam_live)  # main view
+        images_row_layout.addWidget(self.label_cam_fft)  # FT view
+        images_row_layout.addWidget(self.label_cam_phase)  # captured view
         cam_layout.addLayout(images_row_layout)
         # Cam control
         camctrl_group = QGroupBox("CAMERA CTRL")
@@ -507,8 +452,12 @@ class MainWindow(QMainWindow):
         self.spin_cam_roi_tl_y = QSpinBox()
         self.spin_cam_roi_br_x = QSpinBox()
         self.spin_cam_roi_br_y = QSpinBox()
-        for s in (self.spin_cam_roi_tl_x, self.spin_cam_roi_tl_y,
-                  self.spin_cam_roi_br_x, self.spin_cam_roi_br_y):
+        for s in (
+            self.spin_cam_roi_tl_x,
+            self.spin_cam_roi_tl_y,
+            self.spin_cam_roi_br_x,
+            self.spin_cam_roi_br_y,
+        ):
             s.setRange(0, 10000)
         self.btn_cam_roi_apply = QPushButton("Apply")
         grid_camctrl_roi.addWidget(QLabel("CAM TL X"), 0, 0)
@@ -773,7 +722,9 @@ class MainWindow(QMainWindow):
         elif device == "camera":
             controller.camera.change_mode(Dem2CameraMode(new_mode))
         elif device == "stage":
-            controller.stage.change_mode(Dem2LaserMode(new_mode))  # same as your backend
+            controller.stage.change_mode(
+                Dem2LaserMode(new_mode)
+            )  # same as your backend
 
     def set_laser_properties(self):
         controller.laser.wavelength = float(self.spin_laser_cw.value())
@@ -798,6 +749,7 @@ class MainWindow(QMainWindow):
             return
         self._stage_generation += 1
         gen = self._stage_generation
+
         def _run_move():
             try:
                 if focus:
@@ -811,6 +763,7 @@ class MainWindow(QMainWindow):
                 # Only clear the thread reference if we are the most recent generation
                 if self._stage_generation == gen:
                     self._stage_thread = None
+
         self._stage_thread = threading.Thread(target=_run_move, daemon=True)
         self._stage_thread.start()
 
@@ -832,14 +785,20 @@ class MainWindow(QMainWindow):
         attrs = controller.settings
         centre_time_offset = controller.camera.t_exp / 2.0
         centre_lambdas = []
-        self._log.info("Calculating centre lambdas for each frame assuming linear lambda sweep.")
+        self._log.info(
+            "Calculating centre lambdas for each frame assuming linear lambda sweep."
+        )
         for i in range(int(controller.camera.samples_a_scan)):
-            time = (centre_time_offset + (controller.camera.t_frame * i)) / 1000 # convert to seconds
-            centre_lambdas.append(controller.laser.wavelength_min + (controller.laser.sweep_speed * time))
+            time = (
+                centre_time_offset + (controller.camera.t_frame * i)
+            ) / 1000  # convert to seconds
+            centre_lambdas.append(
+                controller.laser.wavelength_min + (controller.laser.sweep_speed * time)
+            )
         attrs["centre_lambdas"] = centre_lambdas
         controller.cam_capturer = Dem2Capturer(
             controller.camera,
-            Dem2SweepPacket(str(DATA_PATH / "image_cont.h5"),attributes=attrs),
+            Dem2SweepPacket(str(DATA_PATH / "image_cont.h5"), attributes=attrs),
             int(controller.camera.samples_a_scan),
         )
         controller.cam_capturer.start()
@@ -859,20 +818,36 @@ class MainWindow(QMainWindow):
     # ------------------------------------------------------------------
     def _connect_signals(self):
         # controller
-        self.btn_ctrl_connect.clicked.connect(lambda: self._with_wait(self._connect_controller))
-        self.btn_ctrl_init.clicked.connect(lambda: self._with_wait(self._init_controller))
-        self.btn_ctrl_disc.clicked.connect(lambda: self._with_wait(self._disc_controller))
+        self.btn_ctrl_connect.clicked.connect(
+            lambda: self._with_wait(self._connect_controller)
+        )
+        self.btn_ctrl_init.clicked.connect(
+            lambda: self._with_wait(self._init_controller)
+        )
+        self.btn_ctrl_disc.clicked.connect(
+            lambda: self._with_wait(self._disc_controller)
+        )
         # camera
-        self.btn_cam_connect.clicked.connect(lambda: self._with_wait(self._connect_camera))
+        self.btn_cam_connect.clicked.connect(
+            lambda: self._with_wait(self._connect_camera)
+        )
         self.btn_cam_init.clicked.connect(lambda: self._with_wait(self._init_camera))
         self.btn_cam_disc.clicked.connect(lambda: self._with_wait(self._disc_camera))
         self.cam_mode_combo.currentIndexChanged.connect(
             lambda idx: self._with_wait(lambda: self.set_mode("camera", idx))
         )
-        self.btn_cam_capture.clicked.connect(lambda: self._with_wait(self._get_single_image))
-        self.btn_cam_disc_sweep.clicked.connect(lambda: self._with_wait(self._run_discrete_sweep))
-        self.btn_cam_set_int.clicked.connect(lambda: self._with_wait(self._set_integration_time))
-        self.btn_cam_live.clicked.connect(lambda: self._with_wait(self._toggle_live_clicked))
+        self.btn_cam_capture.clicked.connect(
+            lambda: self._with_wait(self._get_single_image)
+        )
+        self.btn_cam_disc_sweep.clicked.connect(
+            lambda: self._with_wait(self._run_discrete_sweep)
+        )
+        self.btn_cam_set_int.clicked.connect(
+            lambda: self._with_wait(self._set_integration_time)
+        )
+        self.btn_cam_live.clicked.connect(
+            lambda: self._with_wait(self._toggle_live_clicked)
+        )
         self.btn_cam_burst.clicked.connect(lambda: self._with_wait(self._start_burst))
         self.chk_fft.stateChanged.connect(self._update_flags)
         self.chk_save.stateChanged.connect(self._update_flags)
@@ -886,7 +861,9 @@ class MainWindow(QMainWindow):
         # gamma to worker
         self.gamma_spin.valueChanged.connect(self._update_worker_gamma)
         # laser
-        self.btn_laser_connect.clicked.connect(lambda: self._with_wait(self._connect_laser))
+        self.btn_laser_connect.clicked.connect(
+            lambda: self._with_wait(self._connect_laser)
+        )
         self.btn_laser_init.clicked.connect(lambda: self._with_wait(self._init_laser))
         self.btn_laser_disc.clicked.connect(lambda: self._with_wait(self._disc_laser))
         self.laser_mode_combo.currentIndexChanged.connect(
@@ -895,12 +872,20 @@ class MainWindow(QMainWindow):
         self.spin_laser_min.valueChanged.connect(self._update_sweep_speed)
         self.spin_laser_max.valueChanged.connect(self._update_sweep_speed)
         self.spin_laser_sweep.valueChanged.connect(self._update_sweep_speed)
-        self.btn_laser_on.clicked.connect(lambda: self._with_wait(self._toggle_emission_clicked))
-        self.btn_laser_off.clicked.connect(lambda: self._with_wait(self._toggle_emission_clicked))
+        self.btn_laser_on.clicked.connect(
+            lambda: self._with_wait(self._toggle_emission_clicked)
+        )
+        self.btn_laser_off.clicked.connect(
+            lambda: self._with_wait(self._toggle_emission_clicked)
+        )
         # stage
-        self.btn_stage_connect.clicked.connect(lambda: self._with_wait(self._connect_stage))
+        self.btn_stage_connect.clicked.connect(
+            lambda: self._with_wait(self._connect_stage)
+        )
         self.btn_stage_init.clicked.connect(lambda: self._with_wait(self._init_stage))
-        self.btn_stage_calib.clicked.connect(lambda: self._with_wait(self._calibrate_stage))
+        self.btn_stage_calib.clicked.connect(
+            lambda: self._with_wait(self._calibrate_stage)
+        )
         self.btn_stage_disc.clicked.connect(lambda: self._with_wait(self._disc_stage))
         self.stage_mode_combo.currentIndexChanged.connect(
             lambda idx: self._with_wait(lambda: self.set_mode("stage", idx))
@@ -917,7 +902,9 @@ class MainWindow(QMainWindow):
         self.btn_stage_focus_move.clicked.connect(
             lambda: self._with_wait(lambda: self.set_stage_properties(True, True))
         )
-        self.btn_stage_estop.clicked.connect(lambda: self._with_wait(self.emergency_stop))
+        self.btn_stage_estop.clicked.connect(
+            lambda: self._with_wait(self.emergency_stop)
+        )
 
     def _with_wait(self, func):
         try:
@@ -952,7 +939,7 @@ class MainWindow(QMainWindow):
                 self.state.devices[key]["mode"] = value
 
     def _update_properties(self):
-         _= self.get_properties()
+        _ = self.get_properties()
 
     def _update_laser_properties(self):
         if self.state.devices["laser"]["status"] == 0:
@@ -961,11 +948,16 @@ class MainWindow(QMainWindow):
         self.spin_laser_max.setValue(info["max"])
         self.spin_laser_min.setValue(info["min"])
         self.spin_laser_cw.setValue(info["wavelength"])
-        self.spin_laser_sweep.setValue(info["total_time"] if info["total_time"] is not None else 0.0)
+        self.spin_laser_sweep.setValue(
+            info["total_time"] if info["total_time"] is not None else 0.0
+        )
         self._update_sweep_speed()
 
     def _update_stage_properties(self):
-        if self.state.devices["stage"]["status"] < 2 or self.state.devices["stage"]["status"] == 99:
+        if (
+            self.state.devices["stage"]["status"] < 2
+            or self.state.devices["stage"]["status"] == 99
+        ):
             return
         info = self.get_stage_properties()
         self.spin_stage_x.setValue(info["x"])
@@ -989,7 +981,11 @@ class MainWindow(QMainWindow):
         except Dem2Errors.PropertyNotSetError:
             self._log.warning("Property sweep_speed not set.")
             self.spin_laser_sweep_speed.setValue(0.0)
-        self.spin_laser_sweep.setValue(controller.laser.total_sweep_time if controller.laser.total_sweep_time is not None else 0.0)
+        self.spin_laser_sweep.setValue(
+            controller.laser.total_sweep_time
+            if controller.laser.total_sweep_time is not None
+            else 0.0
+        )
 
     def _update_flags(self):
         self.state.fftEnabled = self.chk_fft.isChecked()
@@ -1042,14 +1038,16 @@ class MainWindow(QMainWindow):
         self.btn_cam_burst.setEnabled(not is_mono)
         self.btn_cam_capture.setEnabled(is_mono)
         label, color = STATUS_MAP.get(cam["status"], STATUS_MAP[99])
-        self.cam_status_label.setText(f"STATUS: {label} | MODE: {MODES['camera'][cam['mode']]}")
+        self.cam_status_label.setText(
+            f"STATUS: {label} | MODE: {MODES['camera'][cam['mode']]}"
+        )
         self.btn_cam_connect.setEnabled(cam["status"] == 0)
         self.btn_cam_disc.setEnabled(cam["status"] not in (0, 99))
         self.btn_cam_init.setEnabled(cam["status"] == 1)
         self.cam_mode_combo.setCurrentIndex(cam["mode"])
         # laser
         laser = self.state.devices["laser"]
-        label, _= STATUS_MAP.get(laser["status"], STATUS_MAP[99])
+        label, _ = STATUS_MAP.get(laser["status"], STATUS_MAP[99])
         self.laser_status_label.setText(f"STATUS: {label}")
         self.btn_laser_connect.setEnabled(laser["status"] == 0)
         self.btn_laser_disc.setEnabled(laser["status"] not in (0, 99))
@@ -1069,7 +1067,7 @@ class MainWindow(QMainWindow):
         self.laser_mode_combo.setEnabled(laser["status"] <= 1)
         # stage
         stage = self.state.devices["stage"]
-        label, _= STATUS_MAP.get(stage["status"], STATUS_MAP[99])
+        label, _ = STATUS_MAP.get(stage["status"], STATUS_MAP[99])
         self.stage_status_label.setText(f"STATUS: {label}")
         self.btn_stage_connect.setEnabled(stage["status"] == 0)
         self.btn_stage_disc.setEnabled(stage["status"] not in (0, 99))
@@ -1179,18 +1177,22 @@ class MainWindow(QMainWindow):
         if has_cam_roi:
             thickness = 2
             color = [255, 255, 255]
-            display_rgb[cy1:min(cy1 + thickness, cy2 + 1), cx1:cx2 + 1] = color
-            display_rgb[max(cy2 - thickness + 1, cy1):cy2 + 1, cx1:cx2 + 1] = color
-            display_rgb[cy1:cy2 + 1, cx1:min(cx1 + thickness, cx2 + 1)] = color
-            display_rgb[cy1:cy2 + 1, max(cx2 - thickness + 1, cx1):cx2 + 1] = color
+            display_rgb[cy1 : min(cy1 + thickness, cy2 + 1), cx1 : cx2 + 1] = color
+            display_rgb[max(cy2 - thickness + 1, cy1) : cy2 + 1, cx1 : cx2 + 1] = color
+            display_rgb[cy1 : cy2 + 1, cx1 : min(cx1 + thickness, cx2 + 1)] = color
+            display_rgb[cy1 : cy2 + 1, max(cx2 - thickness + 1, cx1) : cx2 + 1] = color
         qpix = numpy_to_qpixmap(display_rgb)
         self.label_cam_live.setPixmap(
-            qpix.scaled(self.label_cam_live.size(), Qt.KeepAspectRatio, Qt.SmoothTransformation)
+            qpix.scaled(
+                self.label_cam_live.size(), Qt.KeepAspectRatio, Qt.SmoothTransformation
+            )
         )
         # Crop to camera ROI for FFT processing (exclusive BR, no zero-padding)
         proc_array = display_arr[cy1:cy2, cx1:cx2] if has_cam_roi else display_arr
         if self.state.saveEnabled:
-            filepath=str(DATA_PATH / f"image_{datetime.now().strftime('%Y-%m-%dT%H-%M-%S')}.h5")
+            filepath = str(
+                DATA_PATH / f"image_{datetime.now().strftime('%Y-%m-%dT%H-%M-%S')}.h5"
+            )
             results = Dem2SweepPacket(
                 filepath,
                 "1",
@@ -1224,8 +1226,14 @@ class MainWindow(QMainWindow):
         self.state.isCaptBurst = True
 
     def _run_discrete_sweep(self):
-        lambdas = controller.calculator.lambdas_array(controller.laser.wavelength_min, controller.laser.wavelength_max,int(controller.camera.samples_a_scan))
-        controller.run_multiple_lambdas(str(DATA_PATH / "image_discrete.h5"),lambdas,False)
+        lambdas = controller.calculator.lambdas_array(
+            controller.laser.wavelength_min,
+            controller.laser.wavelength_max,
+            int(controller.camera.samples_a_scan),
+        )
+        controller.run_multiple_lambdas(
+            str(DATA_PATH / "image_discrete.h5"), lambdas, False
+        )
 
     def _set_integration_time(self):
         controller.camera.t_exp = float(self.int_time_spin.value())
@@ -1305,9 +1313,7 @@ class MainWindow(QMainWindow):
         qpix_phase = numpy_to_qpixmap(phase_hsv)
         self.label_cam_phase.setPixmap(
             qpix_phase.scaled(
-                self.label_cam_phase.size(),
-                Qt.KeepAspectRatio,
-                Qt.SmoothTransformation
+                self.label_cam_phase.size(), Qt.KeepAspectRatio, Qt.SmoothTransformation
             )
         )
 
@@ -1321,7 +1327,12 @@ class MainWindow(QMainWindow):
         self.spin_fft_roi_cy.setMaximum(max(0, fh - 1))
         self.spin_fft_roi_w.setMaximum(max(0, fw))
         self.spin_fft_roi_h.setMaximum(max(0, fh))
-        cx, cy, roi_w, roi_h = self.fft_roi_cx, self.fft_roi_cy, self.fft_roi_w, self.fft_roi_h
+        cx, cy, roi_w, roi_h = (
+            self.fft_roi_cx,
+            self.fft_roi_cy,
+            self.fft_roi_w,
+            self.fft_roi_h,
+        )
         x1 = cx - roi_w // 2
         y1 = cy - roi_h // 2
         x2 = x1 + roi_w
@@ -1336,10 +1347,10 @@ class MainWindow(QMainWindow):
         if x2 > x1 and y2 > y1:
             th = 2
             color = [255, 255, 255]
-            rgb[y1:min(y1 + th, y2), x1:x2] = color
-            rgb[max(y2 - th, y1):y2, x1:x2] = color
-            rgb[y1:y2, x1:min(x1 + th, x2)] = color
-            rgb[y1:y2, max(x2 - th, x1):x2] = color
+            rgb[y1 : min(y1 + th, y2), x1:x2] = color
+            rgb[max(y2 - th, y1) : y2, x1:x2] = color
+            rgb[y1:y2, x1 : min(x1 + th, x2)] = color
+            rgb[y1:y2, max(x2 - th, x1) : x2] = color
             # Red cross at centre
             arm = max(5, min(roi_w, roi_h) // 4) if roi_w > 0 and roi_h > 0 else 10
             cx_c = max(0, min(cx, fw - 1))
@@ -1352,7 +1363,9 @@ class MainWindow(QMainWindow):
             rgb[y_start:y_end, cx_c] = color
         qpix = numpy_to_qpixmap(rgb)
         self.label_cam_fft.setPixmap(
-            qpix.scaled(self.label_cam_fft.size(), Qt.KeepAspectRatio, Qt.SmoothTransformation)
+            qpix.scaled(
+                self.label_cam_fft.size(), Qt.KeepAspectRatio, Qt.SmoothTransformation
+            )
         )
 
     def _update_from_worker(self, display_rgb, fft_img, phase_rgb):
@@ -1360,17 +1373,29 @@ class MainWindow(QMainWindow):
         if display_rgb is not None:
             qpix_live = numpy_to_qpixmap(display_rgb)
             self.label_cam_live.setPixmap(
-                qpix_live.scaled(self.label_cam_live.size(), Qt.KeepAspectRatio, Qt.SmoothTransformation)
+                qpix_live.scaled(
+                    self.label_cam_live.size(),
+                    Qt.KeepAspectRatio,
+                    Qt.SmoothTransformation,
+                )
             )
         if fft_img is not None:
             qpix_fft = numpy_to_qpixmap(fft_img)
             self.label_cam_fft.setPixmap(
-                qpix_fft.scaled(self.label_cam_fft.size(), Qt.KeepAspectRatio, Qt.SmoothTransformation)
+                qpix_fft.scaled(
+                    self.label_cam_fft.size(),
+                    Qt.KeepAspectRatio,
+                    Qt.SmoothTransformation,
+                )
             )
         if phase_rgb is not None:
             qpix_phase = numpy_to_qpixmap(phase_rgb)
             self.label_cam_phase.setPixmap(
-                qpix_phase.scaled(self.label_cam_phase.size(), Qt.KeepAspectRatio, Qt.SmoothTransformation)
+                qpix_phase.scaled(
+                    self.label_cam_phase.size(),
+                    Qt.KeepAspectRatio,
+                    Qt.SmoothTransformation,
+                )
             )
 
     def _update_worker_gamma(self, val):

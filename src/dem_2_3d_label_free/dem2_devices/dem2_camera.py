@@ -11,19 +11,25 @@ import xiapi
 
 import numpy as np
 
+
 class Dem2Camera(Thread, xiapi.Camera):
     """Camera control script."""
 
     def __init__(self, config: dict):
+        # Control settings
         self._cfg = config
         self._log = logging.getLogger(self.__class__.__name__)
         self._state = Dem2State.DISCONNECTED
         self._mode = Dem2CameraMode(self._cfg["mode"])
         xiapi.Camera.__init__(self, self._cfg["device_id"])
 
-        self._roi_offset = (int(self._cfg["roi_offset_y"]), int(self._cfg["roi_offset_x"]))
+        # Camera ROI settings
+        self._roi_offset = (
+            int(self._cfg["roi_offset_y"]),
+            int(self._cfg["roi_offset_x"]),
+        )
         self._roi_size = (int(self._cfg["roi_height"]), int(self._cfg["roi_width"]))
-        self._increments = (0, 0)
+        self._increments = (0, 0)  # Camera increment amount
         self._max_res = (0, 0)
 
         # Save config exposure time.
@@ -34,7 +40,7 @@ class Dem2Camera(Thread, xiapi.Camera):
         if self._t_idle < 0:
             raise Dem2Errors.CameraError("Minimum idle time is 0 us.")
         self.t_read = self._cfg["time_readout"]
-        self.lateral_size = (self._cfg["lateral_size_x"],self._cfg["lateral_size_y"])
+        self.lateral_size = (self._cfg["lateral_size_x"], self._cfg["lateral_size_y"])
 
         # Number of images per a-scan.
         self.samples_a_scan: int | None = None
@@ -52,7 +58,7 @@ class Dem2Camera(Thread, xiapi.Camera):
     def _append_to_buffer(self, data: np.ndarray) -> None:
         """Append image data to buffer. If longer than 10, discard it. (for software live imaging)"""
         if len(self._image_buffer) < 10:
-            self._image_buffer.append(data) # Throw away frame
+            self._image_buffer.append(data)  # Throw away frame
         return
 
     def connect(self):
@@ -78,21 +84,20 @@ class Dem2Camera(Thread, xiapi.Camera):
         else:
             self.close_device()
             self._log.info("Disconnected from the camera.")
-        self.__init__(self._cfg)
+        self.__init__(self._cfg)  # Reset object
 
     def change_mode(self, mode: Dem2CameraMode) -> None:
         """Change camera mode."""
         if self._state not in (Dem2State.DISCONNECTED, Dem2State.CONNECTED):
-            raise Dem2Errors.CameraError("Must be disconnected or uninitialize to change mode!")
+            raise Dem2Errors.CameraError(
+                "Must be disconnected or uninitialize to change mode!"
+            )
         self._mode = mode
         self._log.info("Changed mode to " + str(self._mode))
-
 
     def initialize(self):
         """
         Initialize the Camera.
-        :param roi_offset: Camera ROI offset (y,x)
-        :param roi_size: Camera ROI distance from offset, determines size (y,x)
         """
         self._log.info("Initialising the Camera in mode: " + str(self._mode) + "...")
         if self._state != Dem2State.CONNECTED:
@@ -100,32 +105,44 @@ class Dem2Camera(Thread, xiapi.Camera):
         # if self.samples_a_scan is None:
         #     raise Dem2Errors.CameraError("Number of images must be set to initialize!")
 
+        # Set settings
         self.set_exposure(self._t_exp * 1000)  # convert ms to us
         self._log.info("Exposure initialized to " + str(self._t_exp * 1000) + " us.")
         self.set_imgdataformat("XI_MONO8")
+        # Cam ROI
         if self._roi_offset != (0, 0) and self._roi_size != (0, 0):
             self.roi_size = self._roi_size
             self.roi_offset = self._roi_offset
-            self._log.info(f"Camera roi settings set as: Offsets (y,x): {self.get_offsetY()}, {self.get_offsetX()}. "
-                           f"Size (h,w): {self.get_height()}, {self.get_width()}")
+            self._log.info(
+                f"Camera roi settings set as: Offsets (y,x): {self.get_offsetY()}, {self.get_offsetX()}. "
+                f"Size (h,w): {self.get_height()}, {self.get_width()}"
+            )
 
         match self._mode:
-            case Dem2CameraMode.MONO: # Default Load in Mono mode
+            case Dem2CameraMode.MONO:  # Default Load in Mono mode. Single imaging
                 self._log.info("mode: " + str(self._mode))
-            case Dem2CameraMode.FRAME_BURST_EXT_TRIGGER: # Experiment mode
+            case (
+                Dem2CameraMode.FRAME_BURST_EXT_TRIGGER
+            ):  # External triggering frame burst
                 self._log.info("mode: " + str(self._mode))
                 # if self.samples_a_scan is None or self.samples_a_scan < 2:
                 #     raise Dem2Errors.CameraError("Camera must have a specified number of frames for frame burst mode. It must be >1 and not None.")
-                self.set_gpi_selector('XI_GPI_PORT2') # Adjust to your actual port
-                self.set_gpi_mode('XI_GPI_TRIGGER')
-                self.set_trigger_source("XI_TRG_EDGE_FALLING")  # trigger when laser rises
-                self.set_trigger_selector("XI_TRG_SEL_FRAME_BURST_START") # while pulse high, it continuously exposes.
+                self.set_gpi_selector("XI_GPI_PORT2")  # Adjust to your actual port
+                self.set_gpi_mode("XI_GPI_TRIGGER")
+                self.set_trigger_source(
+                    "XI_TRG_EDGE_FALLING"
+                )  # trigger when laser rises
+                self.set_trigger_selector(
+                    "XI_TRG_SEL_FRAME_BURST_START"
+                )  # when pulse high, it bursts.
                 self.set_acq_frame_burst_count(int(self.samples_a_scan))
                 self._log.info("Samples/a_scan: " + str(int(self.samples_a_scan)))
                 self.set_acq_timing_mode("XI_ACQ_TIMING_MODE_FRAME_RATE_LIMIT")
                 self._fps = 1 / (self.t_frame / 1000)
                 if not 0.01 < self._fps < 10000:
-                    raise Dem2Errors.CameraError(f"Camera fps must be between 0.01 and 10,000 fps. Yours:{self._fps} fps.")
+                    raise Dem2Errors.CameraError(
+                        f"Camera fps must be between 0.01 and 10,000 fps. Yours:{self._fps} fps."
+                    )
                 self.set_framerate(self._fps)
                 self._log.info(f"Frame rate on. set to {self._fps} fps.")
 
@@ -139,7 +156,9 @@ class Dem2Camera(Thread, xiapi.Camera):
         """Start camera acquisition."""
         self._log.info("Beginning acquisition...")
         if self._state != Dem2State.READY:
-            raise Dem2Errors.CameraError("Camera must be initialised and not already running.")
+            raise Dem2Errors.CameraError(
+                "Camera must be initialised and not already running."
+            )
         self._state = Dem2State.RUNNING
         super().start_acquisition()
         self._log.info("Acquisition started.")
@@ -153,10 +172,16 @@ class Dem2Camera(Thread, xiapi.Camera):
         super().stop_acquisition()
         self._log.info("Acquisition stopped.")
 
-    def get_image(self, image: xiapi.Image|None = None, timeout: int = 5000, return_numpy: bool = True) -> np.ndarray|None:
+    def get_image(
+        self,
+        image: xiapi.Image | None = None,
+        timeout: int = 5000,
+        return_numpy: bool = True,
+    ) -> np.ndarray | None:
         """Override ``xiapi.Camera.get_image()`` to also return as numpy array.
         :param image: Image as xiapi.Image.
         :param timeout: Timeout in ms.
+        :param return_numpy: Toggle converting and returning a numpy array.
         :returns: Image as numpy array."""
         super().get_image(image, timeout)
         if return_numpy:
@@ -164,16 +189,18 @@ class Dem2Camera(Thread, xiapi.Camera):
         else:
             return None
 
-    def acquire_single_image(self, toggle_aqc: bool = True) -> np.ndarray :
+    def acquire_single_image(self, toggle_aqc: bool = True) -> np.ndarray:
         """Acquire single image and return it.
         :returns: Image as numpy array."""
-        if toggle_aqc: self.start_acquisition()
+        if toggle_aqc:
+            self.start_acquisition()
         # self.set_exposure(self._t_exp * 1000)
-        time.sleep(((self._t_exp+self.t_read)/1000)+0.1)
+        time.sleep(((self._t_exp + self.t_read) / 1000) + 0.1)
         data = self.get_image(self.image)
         self._append_to_buffer(data)
         self._log.info("Acquired single Image.")
-        if toggle_aqc: self.stop_acquisition()
+        if toggle_aqc:
+            self.stop_acquisition()
         return data
 
     def toggle_live_images(self) -> str:
@@ -193,7 +220,9 @@ class Dem2Camera(Thread, xiapi.Camera):
             self._append_to_buffer(self.get_image(self.image))
         self._log.info("No longer acquiring Images live.")
 
-    def pop_image_in_buffer(self, ft: bool = False, index: int = 0) -> np.ndarray | None:
+    def pop_image_in_buffer(
+        self, ft: bool = False, index: int = 0
+    ) -> np.ndarray | None:
         """Pop an image from the image buffer list and return it.
         :param index: Index of the image to pop.
         :param ft: If ``ft`` is ``True``, return 3D ndarray with z=0 as image, and z=1 as ft of image, else z=1 is all zeros.
@@ -204,7 +233,11 @@ class Dem2Camera(Thread, xiapi.Camera):
         i = index
         if len(self._image_buffer) <= i:
             i = len(self._image_buffer) - 1
-            self._log.warning("Index out of range, using the highest possible index of " + str(len(self._image_buffer) - 1) + ".")
+            self._log.warning(
+                "Index out of range, using the highest possible index of "
+                + str(len(self._image_buffer) - 1)
+                + "."
+            )
         data = self._image_buffer.pop(i)
         if not ft:
             return np.stack((data, np.zeros(data)), axis=-1)
@@ -232,7 +265,7 @@ class Dem2Camera(Thread, xiapi.Camera):
     @property
     def t_frame(self):
         """Get time for 1 frame in ms. t_epx + t_idle"""
-        return (self.t_exp if self.t_exp > self.t_read else self.t_read)+self._t_idle
+        return (self.t_exp if self.t_exp > self.t_read else self.t_read) + self._t_idle
 
     @property
     def t_exp(self):
@@ -251,11 +284,12 @@ class Dem2Camera(Thread, xiapi.Camera):
         """Set camera integration time in ms."""
 
         if value < 0.1:
-            raise Dem2Errors.CameraError("Camera integration time must be more than 100 us!")
+            raise Dem2Errors.CameraError(
+                "Camera integration time must be more than 100 us!"
+            )
         self._t_exp = value
         if self._state != Dem2State.DISCONNECTED:
             self.set_exposure(self._t_exp * 1000)
-
 
     @property
     def roi_offset(self):
@@ -268,16 +302,19 @@ class Dem2Camera(Thread, xiapi.Camera):
         self._log.info(f"Setting camera roi offset to {offset}...")
         if self._state != Dem2State.DISCONNECTED:
             if offset[1] % self._increments[1] or offset[0] % self._increments[0]:
-                raise Dem2Errors.CameraError(f"Offsets ({offset[0]}, {offset[1]}) must be multiples of increments "
-                                             f"({self._increments[0]}, {self._increments[1]})")
+                raise Dem2Errors.CameraError(
+                    f"Offsets ({offset[0]}, {offset[1]}) must be multiples of increments "
+                    f"({self._increments[0]}, {self._increments[1]})"
+                )
             self.set_offsetY(offset[0])
             self.set_offsetX(offset[1])
         else:
-            self._log.warning("Ensure roi offset x and y are divisible by the cameras width and height increment "
-                              "values. To check this, connect to the camera first, then set roi_offset.")
+            self._log.warning(
+                "Ensure roi offset x and y are divisible by the cameras width and height increment "
+                "values. To check this, connect to the camera first, then set roi_offset."
+            )
 
         self._roi_offset = offset
-
 
     @property
     def roi_size(self):
@@ -290,13 +327,21 @@ class Dem2Camera(Thread, xiapi.Camera):
         self._log.info(f"Setting camera roi size to {size}...")
         if self._state != Dem2State.DISCONNECTED:
             if size[1] % self._increments[1] or size[0] % self._increments[0]:
-                raise Dem2Errors.CameraError(f"ROI dimensions must be divisible by increments ({self._increments[1]}, {self._increments[0]})!")
-            if size[0] != 0: self.set_height(size[0])
-            else: self.set_height(self._max_res[0])
-            if size[1] != 0: self.set_width(size[1])
-            else: self.set_width(self._max_res[1])
+                raise Dem2Errors.CameraError(
+                    f"ROI dimensions must be divisible by increments ({self._increments[1]}, {self._increments[0]})!"
+                )
+            if size[0] != 0:
+                self.set_height(size[0])
+            else:
+                self.set_height(self._max_res[0])
+            if size[1] != 0:
+                self.set_width(size[1])
+            else:
+                self.set_width(self._max_res[1])
         else:
-            self._log.warning("Ensure roi size w and h are divisible by the cameras width and height increment values. To check this, connect to the camera first, then set roi_size.")
+            self._log.warning(
+                "Ensure roi size w and h are divisible by the cameras width and height increment values. To check this, connect to the camera first, then set roi_size."
+            )
 
         self._roi_size = size
 

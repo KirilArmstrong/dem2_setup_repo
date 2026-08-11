@@ -26,7 +26,8 @@ class Dem2Processor(Dem2SweepPacket):
         self,
         file_path: Path | None = None,
         data_path: Path = Path(__datapath__),
-        dataset_name: str = "1",attributes: dict|None = None
+        dataset_name: str = "1",
+        attributes: dict | None = None,
     ):
         # Non-root logging. See dem2_helper.setup_root_logger() documentation.
         self._log = logging.getLogger(self.__class__.__name__)
@@ -34,7 +35,7 @@ class Dem2Processor(Dem2SweepPacket):
         self._file_path: Path | None = file_path
         self._data_path: Path = data_path
         self._path_override: Path | None = None
-        super().__init__(str(self.path), dataset_name,attributes)
+        super().__init__(str(self.path), dataset_name, attributes)
 
     def convert_tif_to_h5(self, path: Path = Path("")):
         """
@@ -265,7 +266,7 @@ class Dem2Processor(Dem2SweepPacket):
         gamma: float | None = None,
         cmap: str = "gray",
         unwrap: bool = False,
-        point: tuple[int,int] = None
+        point: tuple[int, int] = None,
     ):
         """
         Prepare plots.
@@ -341,8 +342,8 @@ class Dem2Processor(Dem2SweepPacket):
         :return: Zernike coefficients array.
         """
         array = array[
-            centre[0] - radius - 1: centre[0] + radius,
-            centre[1] - radius - 1: centre[1] + radius,
+            centre[0] - radius - 1 : centre[0] + radius,
+            centre[1] - radius - 1 : centre[1] + radius,
         ]
         # U: complex array, result of your holography reconstruction
         phase = np.angle(array)
@@ -476,7 +477,7 @@ class Dem2Processor(Dem2SweepPacket):
             Z_full = np.zeros_like(r_norm)
             Z_full_inside = zernike_noll(j, r_norm[inside], theta[inside])
             Z_full[inside] = Z_full_inside
-            wave += a[k] * Z_full   # sum contribution
+            wave += a[k] * Z_full  # sum contribution
 
         return wave, inside
 
@@ -486,7 +487,7 @@ class Dem2Processor(Dem2SweepPacket):
         full_array: np.ndarray | None = None,
         pixel_pos_no: int = 100,
         z_slice: int = 1,
-        just_similarity: bool = True
+        just_similarity: bool = True,
     ):
         """
         Determine the speckle size and plot.
@@ -520,21 +521,6 @@ class Dem2Processor(Dem2SweepPacket):
             correlations_y.append(np.corrcoef(arr.ravel(), a.ravel())[0, 1])
         result = np.array([correlations_x, correlations_y])
         return np.abs(result) if just_similarity else result
-
-    def oct_reconstruct(self,
-        array: np.ndarray,
-                        pad: int | None = None,
-    ) -> np.ndarray:
-        # array =
-        dy = array.shape[0] // 2 if pad is None else pad
-        if dy != 0:
-            pad_top = np.zeros((dy, array.shape[1]), dtype=array.dtype)
-            pad_bottom = np.zeros((dy, array.shape[1]), dtype=array.dtype)
-            arr_padded = np.vstack([pad_top, array, pad_bottom])
-            return scipy.fft.fftshift(scipy.fft.fft(arr_padded, axis=0),axes=0)
-        return scipy.fft.fftshift(scipy.fft.fft(array, axis=0),axes=0)
-
-
 
     @property
     def path(self) -> Path:

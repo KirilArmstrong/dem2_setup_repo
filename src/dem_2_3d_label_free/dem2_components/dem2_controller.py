@@ -67,7 +67,9 @@ class Dem2Controller:
             self.camera.t_frame,
             self.camera.samples_a_scan,
         )
-        self._log.info(f"update_burst_properties: total_sweep_time: {self.laser.total_sweep_time} for t_frame: {self.camera.t_frame}")
+        self._log.info(
+            f"update_burst_properties: total_sweep_time: {self.laser.total_sweep_time} for t_frame: {self.camera.t_frame}"
+        )
 
     def connect(self):
         """Connect all devices."""
@@ -103,7 +105,7 @@ class Dem2Controller:
                 "Stage must be calibrated for Controller to use it! Min stage_wait_time = 0"
             )
         self.stage.initialize(calibration_wait_time=stage_wait_time)
-        self.camera.initialize() # First camera to set laser sweep time!
+        self.camera.initialize()  # First camera to set laser sweep time!
         self.laser.initialize()
         self._state = Dem2State.INITIALIZED
         self._log.info("Demonstrator 2 ready! 🎉")
@@ -158,18 +160,24 @@ class Dem2Controller:
             )
         return sweep_exp
 
-    def run_single_sweep(self, filename: str = "", packet: Dem2SweepPacket|None = None) -> Dem2SweepPacket|np.ndarray:
+    def run_single_sweep(
+        self, filename: str = "", packet: Dem2SweepPacket | None = None
+    ) -> Dem2SweepPacket | np.ndarray:
         """
         Run a single laser sweep (single a-scan).
         :param filename: packet filename to save too. Set empty to get back an array.
         """
         self._log.info("Preparing capturer...")
         self.cam_capturer = Dem2Capturer(
-            self.camera, packet if packet is not None else (Dem2SweepPacket(filename) if filename else None), int(self.camera.samples_a_scan)
+            self.camera,
+            packet
+            if packet is not None
+            else (Dem2SweepPacket(filename) if filename else None),
+            int(self.camera.samples_a_scan),
         )
         # start camera and set it to listen for laser HIGH.
         self.cam_capturer.start()
-        #wait until camera is ready.
+        # wait until camera is ready.
         while not self.cam_capturer.waiting:
             continue
         # turn laser on.
@@ -180,7 +188,9 @@ class Dem2Controller:
         self._log.info("Capture finished.")
         return self.cam_capturer.packet if filename else self.cam_capturer.array_stack
 
-    def run_multiple_lambdas(self, filename, lambdas: np.ndarray, increment_data_set: bool = True) -> Dem2SweepPacket:
+    def run_multiple_lambdas(
+        self, filename, lambdas: np.ndarray, increment_data_set: bool = True
+    ) -> Dem2SweepPacket:
         """
         Capture single images at multiple CW wavelengths.
         :param filename: File to save data to.
@@ -188,14 +198,18 @@ class Dem2Controller:
         :param increment_data_set: Increment the data set for each wavelength.
         :return: Data packet.
         """
-        self._log.info(f"Running multiple lambdas... increment_data_set={increment_data_set}")
+        self._log.info(
+            f"Running multiple lambdas... increment_data_set={increment_data_set}"
+        )
         packet = Dem2SweepPacket(filename)
         for i in range(lambdas.size):
-            self._log.info(f"Running lambda {lambdas[i]} ({i+1} of {lambdas.size})...")
+            self._log.info(
+                f"Running lambda {lambdas[i]} ({i + 1} of {lambdas.size})..."
+            )
             if increment_data_set or i == 0:
                 if not increment_data_set:
                     self.camera.start_acquisition()
-                packet.data_set = str(i+1)
+                packet.data_set = str(i + 1)
                 packet.open_file()
             self.laser.send_cw(lambdas[i])
             self.laser.toggle_emission()
@@ -237,7 +251,9 @@ class Dem2Controller:
         try:
             return (self.camera.t_exp / 1000) * self.laser.sweep_speed
         except Dem2Errors.PropertyNotSetError:
-            self._log.warning(f"Property sweep_speed not set in camera, exposure_lambda_range incalculable.")
+            self._log.warning(
+                "Property sweep_speed not set in camera, exposure_lambda_range incalculable."
+            )
             return None
 
     @property
@@ -246,7 +262,9 @@ class Dem2Controller:
         Calculate the lateral FOV.
         :return: Lateral FOV in mm.
         """
-        return self.camera.lateral_size[0] / self.mag, self.camera.lateral_size[1] / self.mag
+        return self.camera.lateral_size[0] / self.mag, self.camera.lateral_size[
+            1
+        ] / self.mag
 
     @property
     def lateral_spacing(self) -> tuple[float, float]:

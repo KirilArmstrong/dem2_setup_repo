@@ -5,6 +5,8 @@ import os
 from logging import Logger
 from datetime import datetime
 
+import cupy as cp
+from PySide6.QtGui import QImage, QPixmap
 import h5py
 import numpy as np
 import scipy
@@ -16,6 +18,95 @@ from src.dem_2_3d_label_free.__globals__ import (
     __root__,
     __template_path__,
 )
+
+
+def numpy_to_qpixmap(array: np.ndarray) -> QPixmap:
+    """Convert 2D/3D np.uint8 or float [0,1] array to QPixmap."""
+    # Handle float arrays in [0,1] range
+    if array.dtype in (np.float32, np.float64):
+        array = (np.clip(array, 0, 1) * 255).astype(np.uint8)
+    if array.ndim == 2:
+        h, w = array.shape
+        img = QImage(array.data, w, h, w, QImage.Format_Grayscale8)
+    elif array.ndim == 3 and array.shape[2] == 3:
+        h, w, c = array.shape
+        # RGB image - ensure contiguous for QImage
+        array = np.ascontiguousarray(array)
+        img = QImage(array.data, w, h, w * c, QImage.Format_RGB888)
+    else:
+        raise ValueError(f"Unsupported array shape: {array.shape}")
+    return QPixmap.fromImage(img.copy())
+
+
+def normalize_to_255(array: np.ndarray):
+    # normalize to 0–255
+    array = array - array.min()
+    if array.max() > 0:
+        array = array / array.max()
+    return (array * 255).astype(np.uint8)
+
+
+def compute_fft(image_array: cp.ndarray) -> cp.ndarray:
+    ft_array = cp.fft.fft2(image_array)
+    ft_array = cp.fft.fftshift(ft_array)
+    return ft_array
+
+
+def covert_fft_to_img(ft_array: cp.ndarray, gamma: float) -> cp.ndarray:
+    ft_array = np.abs(ft_array)
+    ft_array = ft_array**gamma
+    return normalize_to_255(ft_array)
+
+
+def phase_to_hsv(array: cp.ndarray) -> cp.ndarray:
+    """Convert -pi to pi to 0 - 1."""
+    from matplotlib.colors import hsv_to_rgb
+
+    hue = (cp.angle(array) + cp.pi) / (2 * cp.pi)
+    hsv = cp.zeros((*array.shape, 3), dtype=cp.float32)
+    hsv[:, :, 0] = hue
+    hsv[:, :, 1] = 1.0
+    hsv[:, :, 2] = 1.0
+    rgb = cp.array(hsv_to_rgb(hsv.get()))
+    return (rgb * 255).astype(cp.uint8)
+
+
+def crop_centre_ifft(ft_array: cp.ndarray, top_left, bottom_right) -> cp.ndarray:
+    """
+    Extract ft_array[top_left:bottom_right], place it in the centre of a
+    zero-padded array of the same size as ft_array, then ifftshift + ifft2.
+    top_left and bottom_right are (x, y) i.e. (column, row).
+    """
+    x1, y1 = top_left
+    x2, y2 = bottom_right
+
+    # Make coords even (round down) so centre alignment is unambiguous
+    x1 = x1 - (x1 % 2)
+    y1 = y1 - (y1 % 2)
+    x2 = x2 - (x2 % 2)
+    y2 = y2 - (y2 % 2)
+
+    w = x2 - x1  # width  (cols)
+    h = y2 - y1  # height (rows)
+
+    if h <= 0 or w <= 0:
+        ft_centred = ft_array
+    else:
+        ft_centred = cp.zeros_like(ft_array)
+        ch = ft_array.shape[0] // 2
+        cw = ft_array.shape[1] // 2
+
+        row_start = ch - h // 2
+        col_start = cw - w // 2
+
+        # Target slice exactly matches source shape (h, w)
+        ft_centred[row_start : row_start + h, col_start : col_start + w] = ft_array[
+            y1:y2, x1:x2
+        ]
+
+    ft_unshifted = cp.fft.ifftshift(ft_centred)
+    img_iffted = cp.fft.ifft2(ft_unshifted)
+    return img_iffted
 
 
 def collect_attrs(obj, lines, indent=""):

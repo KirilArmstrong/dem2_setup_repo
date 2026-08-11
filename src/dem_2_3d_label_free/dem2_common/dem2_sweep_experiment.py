@@ -4,18 +4,16 @@ from pathlib import Path
 
 import h5py
 import numpy as np
-import yaml
 
-from src.dem_2_3d_label_free.__globals__ import __datapath__
-from src.dem_2_3d_label_free.dem2_common.dem2_bscan_pattern import Dem2BScanPattern
-from src.dem_2_3d_label_free.dem2_common.dem2_calculator import Dem2SystemCalculator
 from src.dem_2_3d_label_free.dem2_common.dem2_helper import collect_h5_contents
 
 
 class Dem2SweepPacket:
     """IO for a single sweep (burst of images). Appends directly to HDF5 incrementally."""
 
-    def __init__(self, filepath: str, data_set: str = "1", attributes: dict|None = None):
+    def __init__(
+        self, filepath: str, data_set: str = "1", attributes: dict | None = None
+    ):
         self._log = logging.getLogger(self.__class__.__name__)
         self.filepath = filepath
         self.data_set: str = data_set
@@ -25,11 +23,10 @@ class Dem2SweepPacket:
         self._data = None
         self._frame_count = 0
 
-
     def open_file(self):
         """Prepares the HDF5 file to receive streaming frames."""
         os.makedirs(os.path.dirname(self.filepath), exist_ok=True)
-        self._h5_file = h5py.File(self.filepath, 'w')
+        self._h5_file = h5py.File(self.filepath, "w")
         self._data = None
         self._frame_count = 0
 
@@ -54,7 +51,7 @@ class Dem2SweepPacket:
             shape=data.shape,  # Initial shape is the full array
             maxshape=(None, h, w),  # Allow expansion in the first dimension only
             dtype=data.dtype,
-            chunks=(1, h, w)  # One frame per chunk
+            chunks=(1, h, w),  # One frame per chunk
         )
 
         # Write the data
@@ -76,18 +73,19 @@ class Dem2SweepPacket:
                 shape=(1, h, w),
                 maxshape=(None, h, w),
                 dtype=frame_data.dtype,
-                chunks=(1, h, w)
+                chunks=(1, h, w),
             )
             self._data[0] = frame_data
         else:
             # Expand dataset and write new frame
-            self._data.resize((self._frame_count + 1, self._data.shape[1], self._data.shape[2]))
+            self._data.resize(
+                (self._frame_count + 1, self._data.shape[1], self._data.shape[2])
+            )
             if self._data[self._frame_count].shape == frame_data.shape:
                 self._data[self._frame_count] = frame_data
             else:
-                self._log.error(
-                    f"Frame shape mismatch for frame {self._frame_count}. ")
-            
+                self._log.error(f"Frame shape mismatch for frame {self._frame_count}. ")
+
         self._frame_count += 1
 
     def close_file(self):
@@ -95,7 +93,12 @@ class Dem2SweepPacket:
         if self._h5_file is not None:
             self._h5_file.close()
             self._h5_file = None
-            self._log.info("Saved %d frames to %s in dataset %s", self._frame_count, self.filepath, self.data_set)
+            self._log.info(
+                "Saved %d frames to %s in dataset %s",
+                self._frame_count,
+                self.filepath,
+                self.data_set,
+            )
 
     def __getitem__(self, key):
         """
@@ -158,7 +161,7 @@ class Dem2SweepPacket:
 
             return dset[slice_key]
 
-    def __getattr__(self, name, dset: str|None = None):
+    def __getattr__(self, name, dset: str | None = None):
         """
         Get attribute if exists. Usage: ``self.some_attr`` or ``self.__getattr__("some_attr",dset="other_dataset")``.
         :param name: Attribute name.
@@ -210,7 +213,6 @@ class Dem2SweepPacket:
 
             f[dset].attrs[name] = value
 
-
     def set_attributes(
         self, attributes: dict | None = None, data_set: str | None = None
     ):
@@ -220,13 +222,15 @@ class Dem2SweepPacket:
         :param attributes: Dictionary of attributes to replace current one with.
         """
         dset = self.data_set if data_set is None else data_set
-        target_data = attributes if attributes is not None else getattr(self, '_attributes', {})
+        target_data = (
+            attributes if attributes is not None else getattr(self, "_attributes", {})
+        )
 
         with h5py.File(self.filepath, "r+") as f:
             dataset = f[dset]
             dataset.attrs.clear()
 
-            def flatten(d, parent_key='', sep='__'):
+            def flatten(d, parent_key="", sep="__"):
                 items = []
                 for k, v in d.items():
                     new_key = f"{parent_key}{sep}{k}" if parent_key else k
@@ -249,12 +253,12 @@ class Dem2SweepPacket:
                     dataset.attrs[key] = value
                 except Exception as e:
                     # Fallback to string if specific type fails
-                    self._log.warning(f"Failed to set attr {key} ({type(value)}), storing as string: {e}")
+                    self._log.warning(
+                        f"Failed to set attr {key} ({type(value)}), storing as string: {e}"
+                    )
                     dataset.attrs[key] = str(value)
 
-    def get_attributes(
-        self, data_set: str | None = None
-    )-> dict:
+    def get_attributes(self, data_set: str | None = None) -> dict:
         """
         Get attributes for the current or another data set.
         :param data_set: Dataset. Defaults to current loaded one.
@@ -269,7 +273,7 @@ class Dem2SweepPacket:
                 return {}
 
             # Helper to reconstruct nested dict
-            def unflatten(flat_dict: dict, sep: str = '__') -> dict:
+            def unflatten(flat_dict: dict, sep: str = "__") -> dict:
                 result = {}
                 for key, value in flat_dict.items():
                     parts = key.split(sep)
@@ -290,7 +294,7 @@ class Dem2SweepPacket:
 
                 return result
 
-            reconstructed = unflatten(raw_attrs, sep='__')
+            reconstructed = unflatten(raw_attrs, sep="__")
 
             # If this is the "current" dataset, update local cache
             if data_set is None:
@@ -298,7 +302,13 @@ class Dem2SweepPacket:
 
             return reconstructed
 
-    def rename_dataset(self, dataset: str, new_name: str, path: Path = Path(""), overwrite: bool = False):
+    def rename_dataset(
+        self,
+        dataset: str,
+        new_name: str,
+        path: Path = Path(""),
+        overwrite: bool = False,
+    ):
         """
         Rename a dataset in an H5 file (metadata-only, no data copy).
         """
@@ -339,12 +349,11 @@ class Dem2SweepPacket:
                 f"Target dataset name 'temp_ds' already exists in file '{self.filepath}'. Please delete or rename it."
             )
         for i in range(self.shape[0]):
-            self.append_frame(self[start+i:end,:,:], "temp_ds")
+            self.append_frame(self[start + i : end, :, :], "temp_ds")
         self.close_file()
-        self.set_attributes(self.get_attributes(data_set),"temp_ds")
+        self.set_attributes(self.get_attributes(data_set), "temp_ds")
         self.rename_dataset("temp_ds", data_set, overwrite=True)
         self._log.info(f"'{data_set}' dataset trimmed.")
-
 
     def delete_dataset(self, data_set):
         self.open_file()
@@ -353,11 +362,11 @@ class Dem2SweepPacket:
         self._log.info(f"'{data_set}' dataset deleted.")
 
     def prepare_dataset(
-            self,
-            shape,
-            dtype=None,
-            chunks=None,
-            data_set: str | None = None,
+        self,
+        shape,
+        dtype=None,
+        chunks=None,
+        data_set: str | None = None,
     ):
         if self._h5_file is None:
             raise RuntimeError("Packet is not open. Call open_file() first.")
@@ -379,7 +388,9 @@ class Dem2SweepPacket:
         self._frame_count = 0
         return self._data
 
-    def write_batch(self, start: int, data: np.ndarray, data_set: str | None = None, axis=0):
+    def write_batch(
+        self, start: int, data: np.ndarray, data_set: str | None = None, axis=0
+    ):
         """Write a contiguous batch starting at frame `start`."""
         if self._h5_file is None:
             raise RuntimeError("Packet is not open.")
@@ -388,8 +399,8 @@ class Dem2SweepPacket:
         end = start + data.shape[axis]
 
         if end > ds.shape[axis]:
-            t = (end,) + ds.shape[(1 if axis == 0 else 2):]
-            t = ds.shape[0]+t if axis == 1 else t
+            t = (end,) + ds.shape[(1 if axis == 0 else 2) :]
+            t = ds.shape[0] + t if axis == 1 else t
             ds.resize(t)
 
         if axis == 1:
@@ -398,18 +409,18 @@ class Dem2SweepPacket:
 
         ds[start:end] = data
 
-
-    def get_info(self, log_it: bool =True, max_elements=0)-> str:
+    def get_info(self, log_it: bool = True, max_elements=0) -> str:
         """
         Get info of the h5 files and print it.
         :param log_it: Print it to log.
         :param max_elements: Show elements within dataset.
         """
-        return collect_h5_contents(self.filepath, self.log if log_it else None, max_elements )
+        return collect_h5_contents(
+            self.filepath, self.log if log_it else None, max_elements
+        )
 
     @property
     def shape(self, data_set: str | None = None):
         """Returns the shape of the packet's images without loading into RAM."""
-        with h5py.File(self.filepath, 'r') as f:
+        with h5py.File(self.filepath, "r") as f:
             return f[self.data_set if data_set is None else data_set].shape
-

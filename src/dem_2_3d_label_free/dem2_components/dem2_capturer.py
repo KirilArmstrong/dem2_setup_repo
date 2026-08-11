@@ -16,7 +16,7 @@ class Dem2Capturer(Thread):
     def __init__(
         self,
         cam: Dem2Camera,
-        packet: Dem2SweepPacket|None,
+        packet: Dem2SweepPacket | None,
         expected_frames: int,
         data_set: str | None = None,
     ):
@@ -84,11 +84,15 @@ class Dem2Capturer(Thread):
                         raise  # Rethrow unexpected hardware errors
         finally:
             # Crucial cleanup
-            self._log.info("Writing frames to "+"ram" if self.packet is None else "disk" +"...")
+            self._log.info(
+                "Writing frames to " + "ram" if self.packet is None else "disk" + "..."
+            )
             arrs = None
             for i in range(len(imgs)):
                 if self._cam.state != Dem2State.RUNNING:
-                    self._log.warning("Capturer Thread: Interruption while writing: Acquisition was stopped. Aborting.")
+                    self._log.warning(
+                        "Capturer Thread: Interruption while writing: Acquisition was stopped. Aborting."
+                    )
                     break
                 arr = imgs[i].get_image_data_numpy()
                 if self.packet is not None:
@@ -99,7 +103,7 @@ class Dem2Capturer(Thread):
                         )
                 else:
                     if i == 0:
-                        arrs = np.zeros(shape=(len(imgs),)+arr.shape)
+                        arrs = np.zeros(shape=(len(imgs),) + arr.shape)
                     arrs[i] = arr
             self._log.info(f"Skipped api frames: {self._cam.get_counter_value()}")
             if self.packet is None:
