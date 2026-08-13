@@ -126,7 +126,7 @@ class Dem2Laser:
             response = ""
             try:
                 cmd = f"{command}\r\n"
-                self._log.info(f"Sending command to laser: {cmd}")
+                self._log.info(f"Sending command to laser: {cmd[:-4]}")
                 self._serial_connection.write(cmd.encode())
                 response = self._serial_connection.readline().decode().strip()
                 self._log.info(f"Laser responded with: {response}")
