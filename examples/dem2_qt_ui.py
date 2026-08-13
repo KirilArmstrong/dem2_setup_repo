@@ -154,7 +154,7 @@ class ProcessingWorker(QObject):
                     continue
                 image_array = image_array[:, self._oct_recon_y_level, :]
                 image_array = abs(image_array)
-                image_array = oct_reconstruct(image_array, self._padding)
+                image_array = oct_reconstruct(image_array, self._padding) ** self._gamma
             else:
                 image_array = self.controller.camera.get_image(
                     self.controller.camera.image
@@ -995,6 +995,7 @@ class MainWindow(QMainWindow):
         if self.proc_worker is not None:
             self.proc_worker.set_fft_enabled(self.state.fftEnabled)
             self.proc_worker.set_oct_mode(self.state.octEnabled)
+            self.proc_worker.set_padding(400)
 
     def _update_fft_tracking(self):
         if self.proc_worker is not None:
@@ -1220,6 +1221,7 @@ class MainWindow(QMainWindow):
             self.proc_worker.set_gamma(float(self.gamma_spin.value()))
             self.proc_worker.set_fft_enabled(self.state.fftEnabled)
             self.proc_worker.set_oct_mode(self.state.octEnabled)
+            self.proc_worker.set_padding(400)
 
     def _start_burst(self):
         self.start_trigger_capturing()
