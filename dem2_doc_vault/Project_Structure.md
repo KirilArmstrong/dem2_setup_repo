@@ -7,15 +7,14 @@ The following packages are required for the `dem_2_3d_label_free` project to wor
 	- [zeiss_helpers](https://python-community.zeiss.org/conda/p/jl4conda/zeiss_helpers)
 - Additional Sources
 	- [ximea API](https://www.ximea.com/support/wiki/apis/APIs)
+    - CUDA
 	- ZEISS MTB API
 ### Additional Sources
 After installing the additional software packages, ensure you add them as sources.
 #### VS Code
-In your `~/.vscode/settings.json` ensure the following is present:
+In your `~/.vscode/settings.json` ensure the following are present:
 ```json
 {
-	// ... other settings
-	
 	"python.analysis.extraPaths": [
 		"path/to/folder/containing/ximea/API/Python/v3/ximea",
 		"path/to/folder/containing/mtbapi"
@@ -24,14 +23,8 @@ In your `~/.vscode/settings.json` ensure the following is present:
 		"path/to/folder/containing/ximea/API/Python/v3/ximea",
 		"path/to/folder/containing/mtbapi"
 	]
-	
-	// ... other settings
 }
 ```
-
-> [!warning]
-> 
-> JSON doesn't support comments. Don't include them please.
 
 #### PyCharm
 Add the following directories as source roots in `File > Settings > Project Structure > + Add Content Root`.
