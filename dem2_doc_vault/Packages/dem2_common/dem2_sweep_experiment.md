@@ -58,11 +58,11 @@ packet.set_array(data: np.ndarray, dataset: str)
 #### 2. Appending
 You can append a single, or multiple frames to a dataset.
 
-> [!NOTE]
-> The frame(s) you are appending must be the same width and height as the existing frames in the dataset.
-
 > [!IMPORTANT]
 > Once a dataset is created and an append method is chosen, switching to another append method is not yet supported.
+
+> [!NOTE]
+> The frame(s) you are appending must be the same width and height as the existing frames in the dataset.
 ##### Single Frame
 Append a single frame to the end of the image stack with
 ```
