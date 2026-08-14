@@ -5,7 +5,7 @@ This is the class that handles measurement files. It uses H5 files to store meas
 
 Sample positions (C-scans) are stored in one H5 file as different Datasets. Indexing starts at 1.
 
-Each dataset is a 2- or 3-dimensional array containing images of $\text{Height }(Y)\times \text{Width }(X)$ stacked along $Z$. If a single image was taken, $Z=1$, otherwise it is the amount of images taken in a single sweep.
+Each dataset is a 2- or 3-dimensional array containing images of $\text{Height }(Y)\times \text{Width }(X)$ stacked along $Z$. If a single image was taken, then $Z=1$, otherwise it is the amount of images taken in a single sweep.
 
 The class stores the file path of the H5 it interacts with.
 ```
@@ -50,7 +50,7 @@ Overwrite a datasets data with
 packet.set_array(data: np.ndarray, dataset: str)
 ```
 
-> [!info]
+> [!NOTE]
 > This will preserve the datasets attributes. Overwrite them with `packet.set_attributes(attrs: dict)`.
 > 
  See `# Additional Functions > Attributes` on this page for more information.
@@ -58,10 +58,10 @@ packet.set_array(data: np.ndarray, dataset: str)
 #### 2. Appending
 You can append a single, or multiple frames to a dataset.
 
-> [!info]
+> [!NOTE]
 > The frame(s) you are appending must be the same width and height as the existing frames in the dataset.
 
-> [!warning]
+> [!IMPORTANT]
 > Once a dataset is created and an append method is chosen, switching to another append method is not yet supported.
 ##### Single Frame
 Append a single frame to the end of the image stack with
@@ -82,7 +82,7 @@ packet.write_batch(starting_index: int, data_batch: np.ndarray, dataset: str, ax
 ```
 where `starting_index` is the index to append to, which can be larger than the existing dataset.
 
-> [!info]
+> [!NOTE]
 > Here, `axis` is default to 0. This appends a batch over Z. If you wish to append B scans over Y (Height) then set this to 1. This can be useful for batching OCT reconstruction.
 
 ### Additional Functions
@@ -129,7 +129,7 @@ converts to:
 }
 ```
 
-> [!info]
+> [!NOTE]
 > Each dataset can have different attributes.
 
 Get a string representation of all attributes with
@@ -149,7 +149,7 @@ packet.trim_dataset(dataset: str, start: int, end: int)
 ```
 where `start` index is included and `end` index is excluded.
 
-> [!info]
+> [!NOTE]
 > This requires that no datasets in the H5 files are named `temp_ds`.
 
 #### Rename a dataset
