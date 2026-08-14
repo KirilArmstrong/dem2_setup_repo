@@ -150,7 +150,7 @@ packet.trim_dataset(dataset: str, start: int, end: int)
 where `start` index is included and `end` index is excluded.
 
 > [!NOTE]
-> This requires that no datasets in the H5 files are named `temp_ds`.
+> This requires that no datasets in the H5 files are named `"temp_ds"`.
 
 #### Rename a dataset
 Rename a dataset with
