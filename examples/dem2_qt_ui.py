@@ -13,8 +13,6 @@ from pathlib import Path
 import threading
 import numpy as np
 import cupy as cp
-from PIL import Image  # noqa: F401 (kept as in original)
-from io import BytesIO  # noqa: F401 (kept as in original)
 from PySide6.QtCore import Qt, QTimer, QThread, QObject, Signal
 from PySide6.QtGui import QFont
 from PySide6.QtWidgets import (

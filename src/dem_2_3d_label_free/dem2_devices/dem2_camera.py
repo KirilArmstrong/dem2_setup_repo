@@ -2,8 +2,6 @@
 
 import logging
 import time
-from concurrent.futures.thread import ThreadPoolExecutor
-from threading import Thread
 
 from src.dem_2_3d_label_free.dem2_common.dem2_constants import Dem2State, Dem2CameraMode
 from src.dem_2_3d_label_free.dem2_common.dem2_errors import Dem2Errors
@@ -12,7 +10,7 @@ import xiapi
 import numpy as np
 
 
-class Dem2Camera(Thread, xiapi.Camera):
+class Dem2Camera(xiapi.Camera):
     """Camera control script."""
 
     def __init__(self, config: dict):
@@ -47,10 +45,6 @@ class Dem2Camera(Thread, xiapi.Camera):
         self._fps = None
 
         self.image = xiapi.Image()
-
-        # Threading
-
-        self.executor = ThreadPoolExecutor(max_workers=1)
 
     def connect(self):
         """Connect to Camera."""
@@ -98,7 +92,7 @@ class Dem2Camera(Thread, xiapi.Camera):
         self.set_exposure(self._t_exp * 1000)  # convert ms to us
         self._log.info("Exposure initialized to " + str(self._t_exp * 1000) + " us.")
         self.set_imgdataformat("XI_MONO8")
-        # Cam ROI
+        # Cam Hardware ROI
         if self._roi_offset != (0, 0) and self._roi_size != (0, 0):
             self.roi_size = self._roi_size
             self.roi_offset = self._roi_offset

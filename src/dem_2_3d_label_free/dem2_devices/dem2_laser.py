@@ -264,6 +264,11 @@ class Dem2Laser:
         self._sweep_speed = new_speed
 
     @property
+    def wavelength_centre(self):
+        """Laser wavelength centre in nm."""
+        return self._wavelength_centre
+
+    @property
     def wavelength(self):
         """Current laser wavelength in nm."""
         return self._wavelength

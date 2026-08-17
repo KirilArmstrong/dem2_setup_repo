@@ -162,6 +162,7 @@ class Dem2Controller(Dem2SystemCalculator):
         """
         Run a single laser sweep (single a-scan).
         :param filename: packet filename to save too. Set empty to get back an array.
+        :param packet: packet to save too. Set None to get back an array.
         """
         self._log.info("Preparing capturer...")
         self.cam_capturer = Dem2Capturer(
@@ -228,8 +229,8 @@ class Dem2Controller(Dem2SystemCalculator):
         :return: Axial bandwidth in um.
         """
         return super().axial_bandwidth(
-            self.laser._wavelength_centre if lambda_0 is None else lambda_0,
-            (self.laser._wavelength_max - self.laser._wavelength_min)
+            self.laser.wavelength_centre if lambda_0 is None else lambda_0,
+            (self.laser.wavelength_max - self.laser.wavelength_min)
             if lambda_range is None
             else lambda_range,
         )
@@ -256,7 +257,7 @@ class Dem2Controller(Dem2SystemCalculator):
         :return: Lateral resolution in um.
         """
         return super().lateral_resolution(
-            self.laser._wavelength_centre if lambda_0 is None else lambda_0,
+            self.laser.wavelength_centre if lambda_0 is None else lambda_0,
             self.na if na is None else na,
         )
 

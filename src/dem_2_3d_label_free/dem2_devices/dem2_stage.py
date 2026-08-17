@@ -125,7 +125,6 @@ class Dem2Stage:
             self.stage.SetPosition(
                 position[0], position[1], self._pos_unit, self._move_mode
             )
-            # TODO see if i need to future.set_result for emergency stop.
         return self._pos_settled_future
 
     def _queue_move_focus(self, z_pos) -> Future:
@@ -149,7 +148,8 @@ class Dem2Stage:
 
     def _check_focus_drift(self):
         """Check if focus is drifting."""
-        # TODO i think there is a focus stabiliser that does this. IMTBFocusStabilizer. Check in config
+        # i think there is a focus stabiliser that does this. IMTBFocusStabilizer. Check in config
+        # looks like i dont need it
         if self.get_focus() == self._focus_set_pos:
             self.b_focus_drift_detected = False
         else:
