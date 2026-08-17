@@ -29,8 +29,8 @@ class Dem2Camera(Thread, xiapi.Camera):
             int(self._cfg["roi_offset_x"]),
         )
         self._roi_size = (int(self._cfg["roi_height"]), int(self._cfg["roi_width"]))
-        self._increments = (0, 0)  # Camera increment amount
-        self._max_res = (0, 0)
+        self._increments = (0, 0)  # Camera increment amount (y, x)
+        self._max_res = (0, 0)  # (h, w)
 
         # Save config exposure time.
         self._t_exp = self._cfg["time_exposure"]
@@ -277,20 +277,23 @@ class Dem2Camera(Thread, xiapi.Camera):
 
     @roi_size.setter
     def roi_size(self, size: tuple[int, int]):
-        """Set camera offset in px (y, x). Disable with (0, 0). NOTE: Must be set BEFORE roi_offset!"""
+        """Set camera offset in px (y, x). Disable with (0, 0). NOTE: Must be set BEFORE roi_offset as it overwrites it!"""
         self._log.info(f"Setting camera roi size to {size}...")
         if self._state != Dem2State.DISCONNECTED:
             if size[1] % self._increments[1] or size[0] % self._increments[0]:
                 raise Dem2Errors.CameraError(
                     f"ROI dimensions must be divisible by increments ({self._increments[1]}, {self._increments[0]})!"
                 )
+            self.roi_offset = (0, 0)
             if size[0] != 0:
                 self.set_height(size[0])
             else:
+                self._log.info(f"Height set to 0, using max: {self._max_res[0]}")
                 self.set_height(self._max_res[0])
             if size[1] != 0:
                 self.set_width(size[1])
             else:
+                self._log.info(f"Width set to 0, using max: {self._max_res[1]}")
                 self.set_width(self._max_res[1])
         else:
             self._log.warning(
@@ -298,6 +301,20 @@ class Dem2Camera(Thread, xiapi.Camera):
             )
 
         self._roi_size = size
+
+    @property
+    def get_max_res(self) -> tuple[int, int]:
+        """Get camera width in px."""
+        if self._max_res == (0, 0):
+            self._log.warning("Camera was never connected. Max width: Unknown.")
+        return self._max_res
+
+    @property
+    def get_increments(self) -> tuple[int, int]:
+        """Get camera x increment in px."""
+        if self._increments == (0, 0):
+            self._log.warning("Camera was never connected. Increments: Unknown.")
+        return self._increments
 
     @property
     def settings(self) -> dict:

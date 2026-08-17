@@ -291,6 +291,11 @@ class MainWindow(QMainWindow):
         self._stage_thread = None
         self._stage_generation = 0
         self._last_fft_array = None
+        # Camera Hardware ROI (H ROI) – kept as OFFSET Y/X and H/W
+        self.cam_hroi_ofs_x = 0
+        self.cam_hroi_ofs_y = 0
+        self.cam_hroi_width = 0
+        self.cam_hroi_height = 0
         # Camera ROI (pre-FFT crop) – kept as TL / BR
         self.cam_roi_tl_x = 0
         self.cam_roi_tl_y = 0
@@ -446,28 +451,28 @@ class MainWindow(QMainWindow):
         burst_layout.addLayout(grid_camctrl_burst)
         tabs_camctrl_mode.addTab(burst_widget, "Burst")
 
-        grid_camctrl_roi = QGridLayout()
+        grid_camctrl_sroi = QGridLayout()
         # Camera ROI controls (pre-FFT crop)
-        self.spin_cam_roi_tl_x = QSpinBox()
-        self.spin_cam_roi_tl_y = QSpinBox()
-        self.spin_cam_roi_br_x = QSpinBox()
-        self.spin_cam_roi_br_y = QSpinBox()
+        self.spin_cam_sroi_tl_x = QSpinBox()
+        self.spin_cam_sroi_tl_y = QSpinBox()
+        self.spin_cam_sroi_br_x = QSpinBox()
+        self.spin_cam_sroi_br_y = QSpinBox()
         for s in (
-            self.spin_cam_roi_tl_x,
-            self.spin_cam_roi_tl_y,
-            self.spin_cam_roi_br_x,
-            self.spin_cam_roi_br_y,
+            self.spin_cam_sroi_tl_x,
+            self.spin_cam_sroi_tl_y,
+            self.spin_cam_sroi_br_x,
+            self.spin_cam_sroi_br_y,
         ):
             s.setRange(0, 10000)
-        self.btn_cam_roi_apply = QPushButton("Apply")
-        grid_camctrl_roi.addWidget(QLabel("CAM TL X"), 0, 0)
-        grid_camctrl_roi.addWidget(self.spin_cam_roi_tl_x, 0, 1)
-        grid_camctrl_roi.addWidget(QLabel("CAM TL Y"), 1, 0)
-        grid_camctrl_roi.addWidget(self.spin_cam_roi_tl_y, 1, 1)
-        grid_camctrl_roi.addWidget(QLabel("CAM BR X"), 2, 0)
-        grid_camctrl_roi.addWidget(self.spin_cam_roi_br_x, 2, 1)
-        grid_camctrl_roi.addWidget(QLabel("CAM BR Y"), 3, 0)
-        grid_camctrl_roi.addWidget(self.spin_cam_roi_br_y, 3, 1)
+        self.btn_cam_sroi_apply = QPushButton("Apply")
+        grid_camctrl_sroi.addWidget(QLabel("CAM TL X"), 0, 0)
+        grid_camctrl_sroi.addWidget(self.spin_cam_sroi_tl_x, 0, 1)
+        grid_camctrl_sroi.addWidget(QLabel("CAM TL Y"), 1, 0)
+        grid_camctrl_sroi.addWidget(self.spin_cam_sroi_tl_y, 1, 1)
+        grid_camctrl_sroi.addWidget(QLabel("CAM BR X"), 2, 0)
+        grid_camctrl_sroi.addWidget(self.spin_cam_sroi_br_x, 2, 1)
+        grid_camctrl_sroi.addWidget(QLabel("CAM BR Y"), 3, 0)
+        grid_camctrl_sroi.addWidget(self.spin_cam_sroi_br_y, 3, 1)
         # FFT ROI controls (for phase calculation) – now centre + width/height
         self.spin_fft_roi_cx = QSpinBox()
         self.spin_fft_roi_cy = QSpinBox()
@@ -481,20 +486,52 @@ class MainWindow(QMainWindow):
         ):
             s.setRange(0, 10000)
         self.btn_fft_roi_apply = QPushButton("Apply")
-        grid_camctrl_roi.addWidget(QLabel("FFT Cen X"), 0, 2)
-        grid_camctrl_roi.addWidget(self.spin_fft_roi_cx, 0, 3)
-        grid_camctrl_roi.addWidget(QLabel("FFT Cen Y"), 1, 2)
-        grid_camctrl_roi.addWidget(self.spin_fft_roi_cy, 1, 3)
-        grid_camctrl_roi.addWidget(QLabel("FFT Width"), 2, 2)
-        grid_camctrl_roi.addWidget(self.spin_fft_roi_w, 2, 3)
-        grid_camctrl_roi.addWidget(QLabel("FFT Height"), 3, 2)
-        grid_camctrl_roi.addWidget(self.spin_fft_roi_h, 3, 3)
+        grid_camctrl_sroi.addWidget(QLabel("FFT Cen X"), 0, 2)
+        grid_camctrl_sroi.addWidget(self.spin_fft_roi_cx, 0, 3)
+        grid_camctrl_sroi.addWidget(QLabel("FFT Cen Y"), 1, 2)
+        grid_camctrl_sroi.addWidget(self.spin_fft_roi_cy, 1, 3)
+        grid_camctrl_sroi.addWidget(QLabel("FFT Width"), 2, 2)
+        grid_camctrl_sroi.addWidget(self.spin_fft_roi_w, 2, 3)
+        grid_camctrl_sroi.addWidget(QLabel("FFT Height"), 3, 2)
+        grid_camctrl_sroi.addWidget(self.spin_fft_roi_h, 3, 3)
         # Tracking checkbox under FFT Height
         self.chk_fft_track = QCheckBox("Track")
-        grid_camctrl_roi.addWidget(self.chk_fft_track, 4, 3)
+        grid_camctrl_sroi.addWidget(self.chk_fft_track, 4, 3)
         # Apply buttons on row 5
-        grid_camctrl_roi.addWidget(self.btn_cam_roi_apply, 5, 1)
-        grid_camctrl_roi.addWidget(self.btn_fft_roi_apply, 5, 3)
+        grid_camctrl_sroi.addWidget(self.btn_cam_sroi_apply, 5, 1)
+        grid_camctrl_sroi.addWidget(self.btn_fft_roi_apply, 5, 3)
+        # HROIS
+        grid_camctrl_hroi = QGridLayout()
+        # Camera HROI controls (pre-FFT crop)
+        self.spin_cam_hroi_ofs_x = QSpinBox()
+        self.spin_cam_hroi_ofs_y = QSpinBox()
+        self.spin_cam_hroi_width = QSpinBox()
+        self.spin_cam_hroi_height = QSpinBox()
+        self.btn_cam_hroi_apply = QPushButton("Apply")
+        for s in (
+            self.spin_cam_hroi_ofs_x,
+            self.spin_cam_hroi_ofs_y,
+            self.spin_cam_hroi_width,
+            self.spin_cam_hroi_height,
+        ):
+            s.setEnabled(False)
+            # s.setRange(0, 10000)
+        self.btn_cam_hroi_apply.setEnabled(False)
+        self.lbl_cam_hroi_ofs_x = QLabel("OFFSET X (Incr.: ?)")
+        self.lbl_cam_hroi_ofs_y = QLabel("OFFSET Y (Incr.: ?)")
+        self.lbl_cam_hroi_width = QLabel("WIDTH (Incr.: ?)")
+        self.lbl_cam_hroi_height = QLabel("HEIGHT (Incr.: ?)")
+        self.lbl_cam_hroi_info = QLabel("Connect to edit.")
+        grid_camctrl_hroi.addWidget(self.lbl_cam_hroi_ofs_x, 0, 0)
+        grid_camctrl_hroi.addWidget(self.spin_cam_hroi_ofs_x, 0, 1)
+        grid_camctrl_hroi.addWidget(self.lbl_cam_hroi_ofs_y, 1, 0)
+        grid_camctrl_hroi.addWidget(self.spin_cam_hroi_ofs_y, 1, 1)
+        grid_camctrl_hroi.addWidget(self.lbl_cam_hroi_width, 2, 0)
+        grid_camctrl_hroi.addWidget(self.spin_cam_hroi_width, 2, 1)
+        grid_camctrl_hroi.addWidget(self.lbl_cam_hroi_height, 3, 0)
+        grid_camctrl_hroi.addWidget(self.spin_cam_hroi_height, 3, 1)
+        grid_camctrl_hroi.addWidget(self.btn_cam_hroi_apply, 4, 1)
+        grid_camctrl_hroi.addWidget(self.lbl_cam_hroi_info, 4, 0)
         # --- Tabs for camera controls and ROIs ---
         tabs_camctrl = QTabWidget()
         # Control tab
@@ -502,11 +539,16 @@ class MainWindow(QMainWindow):
         control_layout = QVBoxLayout(control_widget)
         control_layout.addLayout(grid_camctrl)
         tabs_camctrl.addTab(control_widget, "Control")
-        # ROIs tab
-        rois_widget = QWidget()
-        rois_layout = QVBoxLayout(rois_widget)
-        rois_layout.addLayout(grid_camctrl_roi)
-        tabs_camctrl.addTab(rois_widget, "ROIs")
+        # SROIs tab
+        srois_widget = QWidget()
+        srois_layout = QVBoxLayout(srois_widget)
+        srois_layout.addLayout(grid_camctrl_sroi)
+        tabs_camctrl.addTab(srois_widget, "S-ROIs")
+        # HROIs tab
+        hrois_widget = QWidget()
+        hrois_layout = QVBoxLayout(hrois_widget)
+        hrois_layout.addLayout(grid_camctrl_hroi)
+        tabs_camctrl.addTab(hrois_widget, "H-ROI")
         camctrl_layout.addWidget(tabs_camctrl)
         control_layout.addWidget(tabs_camctrl_mode)
         # Laser
@@ -863,8 +905,10 @@ class MainWindow(QMainWindow):
         self.chk_fft.stateChanged.connect(self._update_flags)
         self.chk_save.stateChanged.connect(self._update_flags)
         self.chk_oct.stateChanged.connect(self._update_flags)
+        # H ROI
+        self.btn_cam_hroi_apply.clicked.connect(self._apply_cam_hroi)
         # Camera ROI
-        self.btn_cam_roi_apply.clicked.connect(self._apply_cam_roi)
+        self.btn_cam_sroi_apply.clicked.connect(self._apply_cam_roi)
         # FFT ROI
         self.btn_fft_roi_apply.clicked.connect(self._apply_fft_roi)
         # FFT tracking
@@ -980,10 +1024,11 @@ class MainWindow(QMainWindow):
         self.int_time_spin.setValue(self.state.integration_time)
 
     def _update_frames(self):
-        self.frames.setText("No. Frames: " + str(int(controller.camera.samples_a_scan)))
-        self.frames2.setText(
-            "No. Frames: " + str(int(controller.camera.samples_a_scan))
-        )
+        no_frames_str = "Unknown."
+        if controller.camera.samples_a_scan is not None:
+            no_frames_str = str(int(controller.camera.samples_a_scan))
+        self.frames.setText("No. Frames: " + no_frames_str)
+        self.frames2.setText("No. Frames: " + no_frames_str)
 
     def _update_sweep_speed(self):
         # controller.laser.wavelength_min = self.spin_laser_min.value()
@@ -1046,6 +1091,40 @@ class MainWindow(QMainWindow):
         self.btn_ctrl_disc.setEnabled(ctrl_status not in (0, 99))
         self.btn_ctrl_init.setEnabled(ctrl_status == 1)
         # camera
+        _inc, _res = controller.camera.get_increments, controller.camera.get_max_res
+        res_known = _res != (0, 0)
+        spins = (
+            self.spin_cam_hroi_ofs_y,
+            self.spin_cam_hroi_ofs_x,
+            self.spin_cam_hroi_height,
+            self.spin_cam_hroi_width,
+        )
+        for i, s in enumerate(spins):
+            if res_known:
+                s.setEnabled(True)
+            else:
+                s.setEnabled(False)
+            idx = i % 2
+            s.setRange(0, _res[idx])
+            s.setSingleStep(_inc[idx])
+        if res_known:
+            self.btn_cam_hroi_apply.setEnabled(True)
+            self.lbl_cam_hroi_height.setText(
+                self.lbl_cam_hroi_height.text()[:15] + str(_inc[0]) + ")"
+            )
+            self.lbl_cam_hroi_width.setText(
+                self.lbl_cam_hroi_width.text()[:14] + str(_inc[1]) + ")"
+            )
+            self.lbl_cam_hroi_ofs_y.setText(
+                self.lbl_cam_hroi_ofs_y.text()[:17] + str(_inc[0]) + ")"
+            )
+            self.lbl_cam_hroi_ofs_x.setText(
+                self.lbl_cam_hroi_ofs_x.text()[:17] + str(_inc[1]) + ")"
+            )
+            self.lbl_cam_hroi_info.setText("Ready.")
+        else:
+            self.btn_cam_hroi_apply.setEnabled(False)
+            self.lbl_cam_hroi_info.setText("Connect to edit.")
         cam = self.state.devices["camera"]
         is_mono = cam["mode"] == 0
         self.chk_fft.setEnabled(is_mono)
@@ -1171,9 +1250,9 @@ class MainWindow(QMainWindow):
             display_arr = image_array.astype(np.uint8)
         h, w = display_arr.shape[:2]
         # Update Camera ROI bounds based on this frame
-        for s in (self.spin_cam_roi_tl_x, self.spin_cam_roi_br_x):
+        for s in (self.spin_cam_sroi_tl_x, self.spin_cam_sroi_br_x):
             s.setMaximum(max(0, w - 1))
-        for s in (self.spin_cam_roi_tl_y, self.spin_cam_roi_br_y):
+        for s in (self.spin_cam_sroi_tl_y, self.spin_cam_sroi_br_y):
             s.setMaximum(max(0, h - 1))
         # Clamp camera ROI to image bounds (exclusive BR semantics)
         cx1 = max(0, min(self.cam_roi_tl_x, w - 1))
@@ -1255,11 +1334,20 @@ class MainWindow(QMainWindow):
         controller.update_burst_properties()
         self._update_integration_time()
 
+    def _apply_cam_hroi(self):
+        self.cam_hroi_ofs_y = self.spin_cam_hroi_ofs_y.value()
+        self.cam_hroi_ofs_x = self.spin_cam_hroi_ofs_x.value()
+        self.cam_hroi_height = self.spin_cam_hroi_height.value()
+        self.cam_hroi_width = self.spin_cam_hroi_width.value()
+        controller.camera.roi_size = (self.cam_hroi_height, self.cam_hroi_width)
+        controller.camera.roi_offset = (self.cam_hroi_ofs_y, self.cam_hroi_ofs_x)
+        self.lbl_cam_hroi_info.setText("Applied.")
+
     def _apply_cam_roi(self):
-        self.cam_roi_tl_x = self.spin_cam_roi_tl_x.value()
-        self.cam_roi_tl_y = self.spin_cam_roi_tl_y.value()
-        self.cam_roi_br_x = self.spin_cam_roi_br_x.value()
-        self.cam_roi_br_y = self.spin_cam_roi_br_y.value()
+        self.cam_roi_tl_x = self.spin_cam_sroi_tl_x.value()
+        self.cam_roi_tl_y = self.spin_cam_sroi_tl_y.value()
+        self.cam_roi_br_x = self.spin_cam_sroi_br_x.value()
+        self.cam_roi_br_y = self.spin_cam_sroi_br_y.value()
         if self.proc_worker is not None:
             self.proc_worker.set_cam_roi(
                 self.cam_roi_tl_x,
