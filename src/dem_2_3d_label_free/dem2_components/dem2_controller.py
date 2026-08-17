@@ -238,9 +238,8 @@ class Dem2Controller:
         Calculate axial bandwidth for specific swept source.
         :return: Axial bandwidth in um.
         """
-        return ((2 * math.log(2)) * (pow(self.laser._wavelength_centre / 1000, 2))) / (
-            self.laser._wavelength_centre / 1000
-        )
+        return self.calculator.axial_bandwidth(self.laser._wavelength_centre, self.laser._wavelength_max-self.laser._wavelength_min)
+
 
     @property
     def exposure_lambda_range(self):
@@ -249,7 +248,7 @@ class Dem2Controller:
         :return: Lambda bandwidth over exposure time in nm.
         """
         try:
-            return (self.camera.t_exp / 1000) * self.laser.sweep_speed
+            return self.calculator.exposure_lambda_range(self.camera.t_exp, self.laser.sweep_speed)
         except Dem2Errors.PropertyNotSetError:
             self._log.warning(
                 "Property sweep_speed not set in camera, exposure_lambda_range incalculable."
@@ -262,9 +261,7 @@ class Dem2Controller:
         Calculate the lateral FOV.
         :return: Lateral FOV in mm.
         """
-        return self.camera.lateral_size[0] / self.mag, self.camera.lateral_size[
-            1
-        ] / self.mag
+        return self.calculator.lateral_fov(self.camera.lateral_size[0], self.mag),self.calculator.lateral_fov(self.camera.lateral_size[1], self.mag)
 
     @property
     def lateral_spacing(self) -> tuple[float, float]:
@@ -280,9 +277,7 @@ class Dem2Controller:
             raise Dem2Errors.ControllerError(
                 "B_scan_pattern's no_of_a_scans is set to 0. Minimum 1 for lateral_spacing calculation."
             )
-        return (self.lateral_fov[0] * 1000) / self.bscan_pattern.a_scans_b_scan, (
-            self.lateral_fov[1] * 1000
-        ) / self.bscan_pattern.a_scans_b_scan
+        return self.calculator.lateral_spacing(self.lateral_fov[0], self.bscan_pattern.a_scans_b_scan),self.calculator.lateral_spacing(self.lateral_fov[1], self.bscan_pattern.a_scans_b_scan)
 
     @property
     def lateral_resolution(self):
@@ -290,9 +285,7 @@ class Dem2Controller:
         Calculate the lateral resolution.
         :return: Lateral resolution in um.
         """
-        # for full field OCT 0.61
-        constant = 0.61
-        return (constant * (self.laser._wavelength_centre / 1000)) / self.na
+        return self.calculator.lateral_resolution(self.laser._wavelength_centre, self.na)
 
     @property
     def settings(self) -> dict:
