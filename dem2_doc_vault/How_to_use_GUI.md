@@ -29,7 +29,8 @@ Laser Mode: Single
 4) Click "Camera Burst". This will set the camera to wait for hardware trigger.
 5) Toggle Laser.
 
-**NOTE:** The images are saved into a h5 file called `images.h5` in the `data/` folder. Running multiple times will overwrite previous `images.h5` files.
+> [!NOTE] 
+> The images are saved into a h5 file called `images.h5` in the `data/` folder. Running multiple times will overwrite previous `images.h5` files.
 
 #### Discrete Sweep
 Camera Mode: Mono
@@ -40,7 +41,8 @@ Laser Mode: CW
 3) Initialise controller OR Initialise camera **then** Laser.
 4) Click "Discrete Sweep". **NOTE:** This will automatically turn the laser on and off over the sweep.
 
-**NOTE:** The images are saved into a h5 file called `images.h5` in the `data/` folder. Running multiple times will overwrite previous `images.h5` files.
+> [!NOTE] 
+> The images are saved into a h5 file called `images.h5` in the `data/` folder. Running multiple times will overwrite previous `images.h5` files.
 
 ### Additional Information
 
@@ -63,9 +65,13 @@ The camera has the ability to choose a ROI too. This can be set in the `config.y
 
 The offset tells the starting pixel (top left corner) and the width/height controls the HROIs width and height.
 
-Note: Read time is increased by lowering the amount of vertical pixels (Height), and data transfer is increased by lowering the amount of horizontal pixels (Width)
+You can also set this in the GUI, within the `H-ROI` tab, as long as you are connected to the camera.  
 
-Note: You cant select any random number for these values. They must be a multiple of the `increment` parameter of the camera. This is printed in the logs when connecting to the camera. For Demonstrator 2, the increments for X and Y are 32 and 2 respectively.
+> [!IMPORTANT]
+> You cant select any random number for these values. They must be a multiple of the `increment` parameter of the camera. This is printed in the logs when connecting to the camera. For Demonstrator 2, the increments for X and Y are 32 and 2 respectively.
+
+> [!NOTE]
+> Read time is increased by lowering the amount of vertical pixels (Height), and data transfer is increased by lowering the amount of horizontal pixels (Width)
 
 ---
 
