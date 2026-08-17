@@ -76,15 +76,16 @@ class Dem2Laser:
         self._mode = mode
         self._log.info("Changed mode to " + str(self._mode))
 
-    def initialize(self):
-        """Initialize the laser source."""
+    def initialize(self, wake_up: bool = True):
+        """Initialize the laser source.
+        :param wake_up: Wake up laser after initialization. Default True."""
         self._log.info("Initialising the laser source...")
         if (
             (self._state != Dem2State.CONNECTED and self._state != Dem2State.READY)
             or not self._serial_connection
             or not self._serial_connection.is_open
         ):
-            raise Dem2Errors.LaserError("Must be connected ande not running!")
+            raise Dem2Errors.LaserError("Must be connected and not running!")
 
         self._base_wavelength = hex_to_decimal(self.send_command(LS_PRM_CONST_BWL)[3:])
         self.send_command(LS_CMD_CTRL_MODE_USB)  # usb control mode
@@ -106,11 +107,12 @@ class Dem2Laser:
                 self.send_lambda_min_max(self._wavelength_min, self._wavelength_max)
                 self.send_sweep_speed(self._sweep_speed)
 
-        self.send_command(LS_CMD_WAKE_UP)  # wake pump source
         self.send_command(LS_CMD_CTRL_MODE)
 
-        self._state = Dem2State.READY
+        self._state = Dem2State.INITIALIZED
         self._log.info("Initialized the laser source.")
+        if wake_up:
+            self.wake_up()
 
     def queue_command(self, command):
         """Queue a command to the laser device and return the response as a future object."""
@@ -147,6 +149,7 @@ class Dem2Laser:
     def send_lambda_min_max(
         self, min_lambda, max_lambda, base_lambda=None, resolution=100
     ):
+        """Send command to set min and max wavelengths."""
         base = base_lambda if base_lambda is not None else self._base_wavelength
         self._log.info(
             f"Sending wavelength min {min_lambda} wavelength max {max_lambda}  with base wavelength as {base}..."
@@ -159,6 +162,7 @@ class Dem2Laser:
         )
 
     def send_cw(self, wavelength=None):
+        """Send command set cw."""
         if wavelength is not None:
             self.wavelength = wavelength
         self._log.info(f"Sending CW to laser: {wavelength}")
@@ -173,6 +177,7 @@ class Dem2Laser:
         return future.result(timeout=1)
 
     def send_sweep_speed(self, sweep_speed):
+        """Send command sweep speed."""
         # convert sweep speed into hex and send
         sweep_speed_hex = format(int(sweep_speed * 10), "06X")
         self._log.info(f"Sending sweep speed to laser: {sweep_speed}")
@@ -182,23 +187,41 @@ class Dem2Laser:
         """Read operation mode [I]."""
         return self.send_command(LS_DEVICE_INFO)
 
+    def wake_up(self):
+        """
+        Wake up laser.
+        """
+        self._log.info("Waking up laser...")
+        if self._state == Dem2State.INITIALIZED:
+            self.send_command(LS_CMD_WAKE_UP) # start pump source (no emission yet)
+            self._state = Dem2State.READY
+            self._log.info("Laser awake and ready.")
+            return
+        raise Dem2Errors.LaserError("Laser must be initialised to wake up.")
+
     def toggle_emission(self):
         if self._state != Dem2State.READY and self._state != Dem2State.RUNNING:
-            self._log.warning("Laser must be initialised to toggle emission!")
+            self._log.warning("Laser must be awake to toggle emission!")
             return
         if self._state == Dem2State.READY:
-            # self.send_command(LS_CMD_WAKE_UP) # start pump source (no emission yet)
             self.send_command(LS_TOGGLE_EMISSION)  # toggle emission
             self._state = Dem2State.RUNNING
             return
         self.kill_emission()
 
-    def kill_emission(self):
+    def kill_emission(self, shutdown: bool = False):
+        """Kill laser emission.
+
+        NOTE: This objects state must be set to Dem2State.RUNNING for it to work.
+        :param shutdown: Shutdown swept source. Default False.
+        """
         if self._state != Dem2State.RUNNING:
             self._log.warning("Laser must be running to kill emission!")
             return
         self.send_command(LS_TOGGLE_EMISSION)  # toggle emission
-        # self.send_command(LS_CMD_SHUTDOWN) # kill pump source
+        if shutdown:
+            self.send_command(LS_CMD_SHUTDOWN) # kill pump source
+            self._mode = Dem2State.INITIALIZED
         self._state = Dem2State.READY
 
     # Properties
@@ -313,6 +336,7 @@ class Dem2Laser:
 
     @property
     def settings(self) -> dict:
+        """Collect current laser settings."""
         _dict = {}
         _dict.update(self._cfg)
         if self._state == Dem2State.DISCONNECTED:

@@ -4,16 +4,19 @@ import logging
 import math
 import numpy as np
 
+_2_LN2_OVR_PI = 2 * math.log(2) / math.pi
 
 class Dem2SystemCalculator:
     def __init__(self):
         # Non-root logging. See dem2_helper.setup_root_logger() documentation.
         self._log = logging.getLogger(self.__class__.__name__)
-        self._ln2overpi = 2 * math.log(2) / math.pi
 
     def sample_no(self, lambda_min, lambda_max, z_max):
         """
         Calculate amount of images for lambda range.
+        :param lambda_min: Lambda min in nm.
+        :param lambda_max: Lambda max in nm.
+        :param z_max: Max depth in um.
         :return: No of images (samples).
         """
         # k-range over k-interval (satisfying Nyquist criterion)
@@ -23,6 +26,8 @@ class Dem2SystemCalculator:
     def total_time(self, t_frame, sample_no):
         """
         Calculate total time.
+        :param t_frame: Frame time in ms.
+        :param sample_no: Number of images per a scan.
         :return: Total time in seconds.
         """
         return (t_frame / 1000) * sample_no
@@ -30,6 +35,8 @@ class Dem2SystemCalculator:
     def sweep_speed(self, lambda_range, total_time):
         """
         Calculate speed to sweep at.
+        :param lambda_range: Wavelength range in nm.
+        :param total_time: Total sweep time in seconds.
         :return: Sweep speed in nm/s
         """
         return lambda_range / total_time
@@ -41,7 +48,7 @@ class Dem2SystemCalculator:
         :param lambda_range: Delta lambda in nm. (Full sweep range)
         :return: Axial bandwidth in um.
         """
-        return (self._ln2overpi * (pow(lambda_0 / 1000, 2))) / (lambda_range / 1000)
+        return (_2_LN2_OVR_PI * (pow(lambda_0 / 1000, 2))) / (lambda_range / 1000)
 
     def signal_roll_off_depth(self, lambda_0, lambda_instant):
         """
@@ -51,12 +58,14 @@ class Dem2SystemCalculator:
         :return: Signal roll off in um.
         """
         return (
-            (self._ln2overpi * (pow(lambda_0 / 1000, 2))) / (lambda_instant / 1000)
+                (_2_LN2_OVR_PI * (pow(lambda_0 / 1000, 2))) / (lambda_instant / 1000)
         ) / 2
 
     def exposure_lambda_range(self, t_exp, sweep_speed):
         """
         Calculate the change the lambda bandwidth over the exposure time.
+        :param t_exp: Exposure time in ms.
+        :param sweep_speed: Sweep speed in nm/s.
         :return: Lambda bandwidth over exposure time in nm.
         """
         return (t_exp / 1000) * sweep_speed
@@ -64,6 +73,8 @@ class Dem2SystemCalculator:
     def lateral_fov(self, cam_width, mag):
         """
         Calculate the lateral FOV.
+        :param cam_width: Camera size in mm.
+        :param mag: Magnification.
         :return: Lateral FOV in mm.
         """
         return cam_width / mag
@@ -71,6 +82,8 @@ class Dem2SystemCalculator:
     def lateral_spacing(self, lateral_fov, a_scans):
         """
         Calculate amount of spacing between A-scans.
+        :param lateral_fov: Lateral field of view in mm.
+        :param a_scans: Number of a scans per b scan.
         :return: Lateral spacing in um.
         """
         return lateral_fov * 1000 / a_scans
@@ -78,6 +91,8 @@ class Dem2SystemCalculator:
     def lateral_resolution(self, lambda_0, na):
         """
         Calculate the lateral resolution.
+        :param lambda_0: Central wavelength in nm.
+        :param na: Numerical Aperture.
         :return: Lateral resolution in um.
         """
         # for full field OCT 0.61

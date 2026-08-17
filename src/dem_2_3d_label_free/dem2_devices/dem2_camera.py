@@ -178,6 +178,7 @@ class Dem2Camera(Thread, xiapi.Camera):
 
     def acquire_single_image(self, toggle_aqc: bool = True) -> np.ndarray:
         """Acquire single image and return it.
+        :param toggle_aqc: Start and stop camera acquisition before and after capture. Default True.
         :returns: Image as numpy array."""
         if toggle_aqc:
             self.start_acquisition()
@@ -300,6 +301,7 @@ class Dem2Camera(Thread, xiapi.Camera):
 
     @property
     def settings(self) -> dict:
+        """Collect current camera settings."""
         _dict = {}
         _dict.update(self._cfg)
         if self._state == Dem2State.DISCONNECTED:

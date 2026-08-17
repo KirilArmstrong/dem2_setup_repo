@@ -1,6 +1,6 @@
 """
 Main GUI for Dem2. Broken down into 3 classes:
-- SystemState - Object for storing global states for the set up.
+- SystemState - Object for storing global states for the set-up.
 - ProcessingWorker - This is a background processor that runs a separate thread so the GUI doesnt lock up when
 running long experiments, or live.
 - MainWindow - The GUI and its functions.
@@ -714,7 +714,22 @@ class MainWindow(QMainWindow):
             controller.initialize(0)
 
     def calibrate_stage(self):
-        controller.stage.calibrate(0)
+        if self._stage_thread is not None and self._stage_thread.is_alive():
+            return
+
+        def _run_calibration():
+            try:
+                controller.stage.calibrate(0)
+            except Exception as exc:
+                self._log.exception("Stage calibration failed: %s", exc)
+            finally:
+                self._stage_thread = None
+
+        self._stage_thread = threading.Thread(
+            target=_run_calibration,
+            daemon=True,
+        )
+        self._stage_thread.start()
 
     def set_mode(self, device: str, new_mode: int):
         if device == "laser":
@@ -806,11 +821,7 @@ class MainWindow(QMainWindow):
     def emergency_stop(self):
         controller.laser.kill_emission()
         controller.stage.stop_moving()
-        # Invalidate the old generation so its finally-block can't wipe out a future thread
         self._stage_generation += 1
-        # Give the old move a moment to die cleanly, then force-unlock the GUI
-        if self._stage_thread is not None:
-            self._stage_thread.join(timeout=2.0)
         self._stage_thread = None
 
     # ------------------------------------------------------------------
