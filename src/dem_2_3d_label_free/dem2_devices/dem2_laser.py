@@ -4,7 +4,8 @@ import concurrent.futures
 import serial
 import logging
 
-from src.dem_2_3d_label_free.dem2_common.dem2_constants import *
+from src.dem_2_3d_label_free.dem2_common.dem2_constants import Dem2State, Dem2LaserMode
+from src.dem_2_3d_label_free.dem2_common.dem2_laser_defs import *
 from src.dem_2_3d_label_free.dem2_common.dem2_errors import Dem2Errors
 from src.dem_2_3d_label_free.dem2_common.dem2_helper import (
     wavelength_to_hex,
