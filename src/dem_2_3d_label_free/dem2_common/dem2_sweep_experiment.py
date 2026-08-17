@@ -342,7 +342,10 @@ class Dem2SweepPacket:
         :param start: Start k index.
         :param end: End k index (does not include)
         """
-        self.open_file()
+        close_after = False
+        if self._h5_file is None:
+            close_after = True
+            self.open_file()
         if "temp_ds" in self._h5_file:
             self.close_file()
             raise KeyError(
@@ -350,15 +353,20 @@ class Dem2SweepPacket:
             )
         for i in range(self.shape[0]):
             self.append_frame(self[start + i : end, :, :], "temp_ds")
-        self.close_file()
+        if close_after:
+            self.close_file()
         self.set_attributes(self.get_attributes(data_set), "temp_ds")
         self.rename_dataset("temp_ds", data_set, overwrite=True)
         self._log.info(f"'{data_set}' dataset trimmed.")
 
     def delete_dataset(self, data_set):
-        self.open_file()
+        close_after = False
+        if self._h5_file is None:
+            close_after = True
+            self.open_file()
         del self._h5_file[data_set]
-        self.close_file()
+        if close_after:
+            self.close_file()
         self._log.info(f"'{data_set}' dataset deleted.")
 
     def prepare_dataset(

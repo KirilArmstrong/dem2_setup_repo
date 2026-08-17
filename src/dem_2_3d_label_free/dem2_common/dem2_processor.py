@@ -490,12 +490,12 @@ class Dem2Processor(Dem2SweepPacket):
         just_similarity: bool = True,
     ):
         """
-        Determine the speckle size and plot.
+        Determine the speckle size in both X adn Y desperately and plot.
         :param full_array: Full array
         :param roi: ROI to correlate (y:y,x:x)
         :param pixel_pos_no: Number of sample points.
         :param z_slice: z slice in image stack.
-        :param just_similarity: Whether to absolute the resulting coefs to just show similarity.
+        :param just_similarity: Whether to absolute the resulting coeffs to just show similarity.
         :return: Coef array for x and y shape=(2,`pixel_pos_no`), 0=x & 1=y
         """
         arr = np.abs(

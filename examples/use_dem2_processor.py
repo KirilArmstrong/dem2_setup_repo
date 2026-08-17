@@ -212,6 +212,16 @@ def use_processor(log):
     log.info(collect_h5_contents(processor.path))
 
     # start_pos = ()
+    if input("Only convert to f32? (y/n): ").lower() == "y":
+        packet = Dem2SweepPacket(str(DATA_PATH / FILE_NAME)[:-3] + "_f32.h5", "1", processor.get_attributes())
+        packet.open_file()
+        for i in range(processor.shape[0]):
+            packet.append_frame(np.abs(processor[i,:,:]).astype(np.float32))
+            if i % (processor.shape[0]//10) == 0:
+                log.info(f"{i/processor.shape[0]*100}%")
+        packet.close_file()
+        packet.get_info()
+        return
 
     if OCT_RECON:
         padding = input("padding (auto/0/#): ")
