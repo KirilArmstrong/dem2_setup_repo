@@ -980,8 +980,10 @@ class MainWindow(QMainWindow):
         self.int_time_spin.setValue(self.state.integration_time)
 
     def _update_frames(self):
-        self.frames.setText(str(int(controller.camera.samples_a_scan)))
-        self.frames2.setText(str(int(controller.camera.samples_a_scan)))
+        self.frames.setText("No. Frames: " + str(int(controller.camera.samples_a_scan)))
+        self.frames2.setText(
+            "No. Frames: " + str(int(controller.camera.samples_a_scan))
+        )
 
     def _update_sweep_speed(self):
         # controller.laser.wavelength_min = self.spin_laser_min.value()

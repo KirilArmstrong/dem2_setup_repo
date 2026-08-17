@@ -1,3 +1,4 @@
+# ruff: noqa: F403, F405
 """Swept Source Laser control script."""
 
 import concurrent.futures
@@ -129,7 +130,7 @@ class Dem2Laser:
             response = ""
             try:
                 cmd = f"{command}\r\n"
-                self._log.info(f"Sending command to laser: {cmd[:-4]}")
+                self._log.info(f"Sending command to laser: {cmd[:-1]}")
                 self._serial_connection.write(cmd.encode())
                 response = self._serial_connection.readline().decode().strip()
                 self._log.info(f"Laser responded with: {response}")
@@ -193,7 +194,7 @@ class Dem2Laser:
         """
         self._log.info("Waking up laser...")
         if self._state == Dem2State.INITIALIZED:
-            self.send_command(LS_CMD_WAKE_UP) # start pump source (no emission yet)
+            self.send_command(LS_CMD_WAKE_UP)  # start pump source (no emission yet)
             self._state = Dem2State.READY
             self._log.info("Laser awake and ready.")
             return
@@ -220,7 +221,7 @@ class Dem2Laser:
             return
         self.send_command(LS_TOGGLE_EMISSION)  # toggle emission
         if shutdown:
-            self.send_command(LS_CMD_SHUTDOWN) # kill pump source
+            self.send_command(LS_CMD_SHUTDOWN)  # kill pump source
             self._mode = Dem2State.INITIALIZED
         self._state = Dem2State.READY
 
