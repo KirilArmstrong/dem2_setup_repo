@@ -1,14 +1,12 @@
 """Control class for the Demonstrator 2."""
 
 import logging
-import math
 import time
 from datetime import datetime, timedelta
 from pathlib import Path
 
 import numpy as np
 
-import xiapi
 from src.dem_2_3d_label_free.dem2_common.dem2_bscan_pattern import Dem2BScanPattern
 from src.dem_2_3d_label_free.dem2_common.dem2_calculator import Dem2SystemCalculator
 from src.dem_2_3d_label_free.dem2_common.dem2_constants import Dem2State
@@ -26,7 +24,7 @@ from src.dem_2_3d_label_free.dem2_devices.dem2_stage import Dem2Stage
 from src.dem_2_3d_label_free.__globals__ import __datapath__
 
 
-class Dem2Controller:
+class Dem2Controller(Dem2SystemCalculator):
     """Control class for the Demonstrator 2."""
 
     def __init__(self, config: dict):
@@ -34,6 +32,7 @@ class Dem2Controller:
         Demonstrator 2 Controller init function.
         :param config: Demonstrator 2 configuration.
         """
+        super().__init__()
         self._cfg = config
         self._log = logging.getLogger(self.__class__.__name__)
         self._state = Dem2State.DISCONNECTED
@@ -42,8 +41,6 @@ class Dem2Controller:
         self.z_max = self._cfg["system"]["depth_max"]
         self.mag: float = self._cfg["system"]["magnification"]
         self.na = self._cfg["system"]["numerical_aperture"]
-
-        self.calculator = Dem2SystemCalculator()
 
         # Device setup
         self.stage = Dem2Stage(self._cfg["stage"])
@@ -54,16 +51,15 @@ class Dem2Controller:
         self.update_burst_properties()
 
         self.bscan_pattern: Dem2BScanPattern | None = None
-        self._buffer = xiapi.Image()
 
         self.capture_next_live_frame = False
 
     def update_burst_properties(self):
-        self.camera.samples_a_scan = self.calculator.sample_no(
+        self.camera.samples_a_scan = self.sample_no(
             self.laser.wavelength_min, self.laser.wavelength_max, self.z_max
         )
         self._log.info(f"update_burst_properties: Frames: {self.camera.samples_a_scan}")
-        self.laser.total_sweep_time = self.calculator.total_time(
+        self.laser.total_sweep_time = self.total_time(
             self.camera.t_frame,
             self.camera.samples_a_scan,
         )
@@ -226,6 +222,44 @@ class Dem2Controller:
         self._log.info(f"Finished and saved to {filename}.")
         return packet
 
+    def axial_bandwidth(self, lambda_0=None, lambda_range=None) -> float:
+        """
+        Calculate axial bandwidth for specific swept source.
+        :return: Axial bandwidth in um.
+        """
+        return super().axial_bandwidth(
+            self.laser._wavelength_centre if lambda_0 is None else lambda_0,
+            (self.laser._wavelength_max - self.laser._wavelength_min)
+            if lambda_range is None
+            else lambda_range,
+        )
+
+    def exposure_lambda_range(self, t_exp=None, sweep_speed=None):
+        """
+        Calculate the change the lambda bandwidth over the exposure time.
+        :return: Lambda bandwidth over exposure time in nm.
+        """
+        try:
+            return super().exposure_lambda_range(
+                self.camera.t_exp if t_exp is None else t_exp,
+                self.laser.sweep_speed if sweep_speed is None else sweep_speed,
+            )
+        except Dem2Errors.PropertyNotSetError:
+            self._log.warning(
+                "Property sweep_speed not set in camera, exposure_lambda_range incalculable."
+            )
+            return None
+
+    def lateral_resolution(self, lambda_0=None, na=None) -> float:
+        """
+        Calculate the lateral resolution.
+        :return: Lateral resolution in um.
+        """
+        return super().lateral_resolution(
+            self.laser._wavelength_centre if lambda_0 is None else lambda_0,
+            self.na if na is None else na,
+        )
+
     # Properties
 
     @property
@@ -233,38 +267,17 @@ class Dem2Controller:
         return self._state
 
     @property
-    def axial_bandwidth(self):
-        """
-        Calculate axial bandwidth for specific swept source.
-        :return: Axial bandwidth in um.
-        """
-        return self.calculator.axial_bandwidth(self.laser._wavelength_centre, self.laser._wavelength_max-self.laser._wavelength_min)
-
-
-    @property
-    def exposure_lambda_range(self):
-        """
-        Calculate the change the lambda bandwidth over the exposure time.
-        :return: Lambda bandwidth over exposure time in nm.
-        """
-        try:
-            return self.calculator.exposure_lambda_range(self.camera.t_exp, self.laser.sweep_speed)
-        except Dem2Errors.PropertyNotSetError:
-            self._log.warning(
-                "Property sweep_speed not set in camera, exposure_lambda_range incalculable."
-            )
-            return None
-
-    @property
-    def lateral_fov(self) -> tuple[float, float]:
+    def lateral_fov_as_tuple(self) -> tuple[float, float]:
         """
         Calculate the lateral FOV.
         :return: Lateral FOV in mm.
         """
-        return self.calculator.lateral_fov(self.camera.lateral_size[0], self.mag),self.calculator.lateral_fov(self.camera.lateral_size[1], self.mag)
+        return super().lateral_fov(
+            self.camera.lateral_size[0], self.mag
+        ), super().lateral_fov(self.camera.lateral_size[1], self.mag)
 
     @property
-    def lateral_spacing(self) -> tuple[float, float]:
+    def lateral_spacing_as_tuple(self) -> tuple[float, float]:
         """
         Calculate amount of spacing between A-scans.
         :return: Lateral spacing in um.
@@ -277,15 +290,10 @@ class Dem2Controller:
             raise Dem2Errors.ControllerError(
                 "B_scan_pattern's no_of_a_scans is set to 0. Minimum 1 for lateral_spacing calculation."
             )
-        return self.calculator.lateral_spacing(self.lateral_fov[0], self.bscan_pattern.a_scans_b_scan),self.calculator.lateral_spacing(self.lateral_fov[1], self.bscan_pattern.a_scans_b_scan)
-
-    @property
-    def lateral_resolution(self):
-        """
-        Calculate the lateral resolution.
-        :return: Lateral resolution in um.
-        """
-        return self.calculator.lateral_resolution(self.laser._wavelength_centre, self.na)
+        lat_fov = self.lateral_fov_as_tuple
+        return super().lateral_spacing(
+            lat_fov[0], self.bscan_pattern.a_scans_b_scan
+        ), super().lateral_spacing(lat_fov[1], self.bscan_pattern.a_scans_b_scan)
 
     @property
     def settings(self) -> dict:
