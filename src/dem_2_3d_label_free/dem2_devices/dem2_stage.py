@@ -47,7 +47,7 @@ class Dem2Stage:
 
         self.b_focus_drift_detected = False
 
-        self._b_scan_pattern: None|Dem2BScanPattern = None
+        self._b_scan_pattern: None | Dem2BScanPattern = None
         self._bsp_current_index = 0
 
     # Initialization.
@@ -56,7 +56,9 @@ class Dem2Stage:
         # create an instant of the event sink class
         self._stage_sink = MTB.Api.MTBStageEventSink()
         # Create an instance of the handler type
-        settle_handler = MTB.Api.MTBStagePositionSettledHandler(self._my_pos_settled_handler)
+        settle_handler = MTB.Api.MTBStagePositionSettledHandler(
+            self._my_pos_settled_handler
+        )
         # Set the handler instance on the event sink handler
         self._stage_sink.MTBPositionSettledEvent += settle_handler
         # Register the event sink handler with the device interface
@@ -73,7 +75,9 @@ class Dem2Stage:
         # create an instant of the event sink class
         self._focus_sink = MTB.Api.MTBContinualEventSink()
         # Create an instance of the handler type
-        handler2 = MTB.Api.MTBContinualPositionSettledHandler(self._focus_settled_handler)
+        handler2 = MTB.Api.MTBContinualPositionSettledHandler(
+            self._focus_settled_handler
+        )
         # Set the handler instance on the event sink handler
         self._focus_sink.MTBPositionSettledEvent += handler2
         # Register the event sink handler with the device interface
@@ -235,16 +239,18 @@ class Dem2Stage:
         # Calibrate focus:
         self._calibrate_axis(self.focus)
         self._log.info(
-            "Focus: " + self._focus_settled_future.result() if isinstance(self._focus_settled_future.result(),
-                                                                          str) else "Focus: Calibrated."
+            "Focus: " + self._focus_settled_future.result()
+            if isinstance(self._focus_settled_future.result(), str)
+            else "Focus: Calibrated."
         )  # wait for calibration to finish.
         # Calibrate axis:
         self._log.info("Calibrating the stage...")
         for ax in range(len(self._axis)):
             self._calibrate_axis(self._axis[ax])
             self._log.info(
-                f"{ax} axis: " + self._pos_settled_future.result() if isinstance(self._pos_settled_future.result(),
-                                                                                 str) else f"{ax} axis: Calibrated."
+                f"{ax} axis: " + self._pos_settled_future.result()
+                if isinstance(self._pos_settled_future.result(), str)
+                else f"{ax} axis: Calibrated."
             )  # wait for calibration to finish.
         time.sleep(1)
         self._set_sw_limits()
@@ -256,7 +262,9 @@ class Dem2Stage:
     def change_mode(self, mode: Dem2StageMode) -> None:
         """Change camera mode."""
         if self._state not in (Dem2State.DISCONNECTED, Dem2State.CONNECTED):
-            raise Dem2Errors.CameraError("Must be disconnected or uninitialize to change mode!")
+            raise Dem2Errors.CameraError(
+                "Must be disconnected or uninitialize to change mode!"
+            )
         self._mode = mode
         self._log.info("Changed mode to " + str(self._mode))
 
@@ -297,7 +305,7 @@ class Dem2Stage:
     def stop_moving(self):
         """Stop moving the stage."""
         if self._state == Dem2State.DISCONNECTED:
-            self._log.info("stage isnt connected to stop.")
+            self._log.warning("stage isnt connected to stop.")
             return
         # override current movement
         # self._queue_move_stage_to_pos(self.get_position(), emergency=True)
@@ -305,14 +313,16 @@ class Dem2Stage:
         self.stage.Stop()
         self._state = Dem2State.READY
         pos = self.get_position()
-        self._log.info(f"stage stopped at: {pos[0]}, {pos[1]}" )
+        self._log.info(f"stage stopped at: {pos[0]}, {pos[1]}")
 
     def move_along_scan_pattern(self):
         """Move to the next index of the scan pattern."""
         if self._state is None:
             raise Dem2Errors.StageError("Scan pattern must be set!")
-        self.move_stage(self._b_scan_pattern.x_positions[self._bsp_current_index],
-                        self._b_scan_pattern.y_positions[self._bsp_current_index])
+        self.move_stage(
+            self._b_scan_pattern.x_positions[self._bsp_current_index],
+            self._b_scan_pattern.y_positions[self._bsp_current_index],
+        )
         self.move_focus(self._b_scan_pattern.focus_positions[self._bsp_current_index])
         self._bsp_current_index += 1
         if self._b_scan_pattern.a_scans_b_scan == self._bsp_current_index:
@@ -326,8 +336,6 @@ class Dem2Stage:
         for i in range(self._b_scan_pattern.a_scans_b_scan):
             self.move_along_scan_pattern()
 
-
-
     # # Properties
 
     @property
@@ -339,13 +347,16 @@ class Dem2Stage:
         return self._mode
 
     @property
-    def b_scan_pattern(self) -> tuple[Dem2BScanPattern,int]:
+    def b_scan_pattern(self) -> tuple[Dem2BScanPattern, int]:
         """
         Get the b-scan pattern of the stage, and the current index it's at.
 
         :return: tuple of the b scan pattern object and current index.
         """
-        return self._b_scan_pattern if self._b_scan_pattern else Dem2BScanPattern(), self._bsp_current_index
+        return (
+            self._b_scan_pattern if self._b_scan_pattern else Dem2BScanPattern(),
+            self._bsp_current_index,
+        )
 
     @b_scan_pattern.setter
     def b_scan_pattern(self, b_scan_pattern: Dem2BScanPattern):
@@ -367,12 +378,12 @@ class Dem2Stage:
     def settings(self) -> dict:
         _dict = {}
         _dict.update(self._cfg)
-        _dict["a-scans"] = self.b_scan_pattern[0].a_scans_b_scan if self.b_scan_pattern[0] else 0
+        _dict["a-scans"] = (
+            self.b_scan_pattern[0].a_scans_b_scan if self.b_scan_pattern[0] else 0
+        )
         if self._state == Dem2State.DISCONNECTED:
             return _dict
         _dict["mode"] = self.mode.value
         _dict["focus_z_pos"] = self.get_focus()
         _dict["stage_pos"] = self.get_position()
         return _dict
-
-
