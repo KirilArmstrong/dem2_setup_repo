@@ -1,3 +1,4 @@
+# ruff: noqa: F405, F403
 """Swept Source Laser control script."""
 
 import concurrent.futures
@@ -155,10 +156,10 @@ class Dem2Laser:
             f"Sending wavelength min {min_lambda} wavelength max {max_lambda}  with base wavelength as {base}..."
         )
         self.send_command(
-            LS_PRM_USR_START_WL + wavelength_to_hex(min_lambda, base, resolution)
+            LS_PRM_USR_START_WL, wavelength_to_hex(min_lambda, base, resolution)
         )
         self.send_command(
-            LS_PRM_USR_STOP_WL + wavelength_to_hex(max_lambda, base, resolution)
+            LS_PRM_USR_STOP_WL, wavelength_to_hex(max_lambda, base, resolution)
         )
 
     def send_cw(self, wavelength=None):
@@ -167,13 +168,13 @@ class Dem2Laser:
             self.wavelength = wavelength
         self._log.info(f"Sending CW to laser: {wavelength}")
         self.send_command(
-            LS_PRM_USR_SINGLE_WL
-            + wavelength_to_hex(self.wavelength, self._base_wavelength, 100)
+            LS_PRM_USR_SINGLE_WL,
+            wavelength_to_hex(self.wavelength, self._base_wavelength, 100),
         )
 
-    def send_command(self, command):
+    def send_command(self, command, parameter=""):
         """Send string command and wait for response."""
-        future = self.queue_command(command)
+        future = self.queue_command(command + parameter)
         return future.result(timeout=1)
 
     def send_sweep_speed(self, sweep_speed):
@@ -181,7 +182,7 @@ class Dem2Laser:
         # convert sweep speed into hex and send
         sweep_speed_hex = format(int(sweep_speed * 10), "06X")
         self._log.info(f"Sending sweep speed to laser: {sweep_speed}")
-        return self.send_command(LS_PRM_USR_SWP_SPEED + str(sweep_speed_hex))
+        return self.send_command(LS_PRM_USR_SWP_SPEED, str(sweep_speed_hex))
 
     def get_device_info(self) -> str:
         """Read operation mode [I]."""
@@ -193,7 +194,7 @@ class Dem2Laser:
         """
         self._log.info("Waking up laser...")
         if self._state == Dem2State.INITIALIZED:
-            self.send_command(LS_CMD_WAKE_UP) # start pump source (no emission yet)
+            self.send_command(LS_CMD_WAKE_UP)  # start pump source (no emission yet)
             self._state = Dem2State.READY
             self._log.info("Laser awake and ready.")
             return
@@ -220,7 +221,7 @@ class Dem2Laser:
             return
         self.send_command(LS_TOGGLE_EMISSION)  # toggle emission
         if shutdown:
-            self.send_command(LS_CMD_SHUTDOWN) # kill pump source
+            self.send_command(LS_CMD_SHUTDOWN)  # kill pump source
             self._mode = Dem2State.INITIALIZED
         self._state = Dem2State.READY
 
