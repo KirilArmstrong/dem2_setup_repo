@@ -4,7 +4,7 @@ import concurrent.futures
 import serial
 import logging
 
-from src.dem_2_3d_label_free.dem2_common.dem2_constants import Dem2State, Dem2LaserMode
+from src.dem_2_3d_label_free.dem2_common.dem2_constants import *
 from src.dem_2_3d_label_free.dem2_common.dem2_errors import Dem2Errors
 from src.dem_2_3d_label_free.dem2_common.dem2_helper import (
     wavelength_to_hex,
@@ -58,9 +58,9 @@ class Dem2Laser:
             self._log.warning("Laser already disconnected! Continuing...")
         else:
             self.kill_emission()
-            self.send_command("MT")
-            # self.send_command("MO")
-            self.send_command("MB")
+            self.send_command(LS_CMD_SWP_MODE_CW)
+            # self.send_command(LS_CMD_SHUTDOWN)
+            self.send_command(LS_CMD_CTRL_MODE_LOCAL)
         if self._serial_connection and self._serial_connection.is_open:
             self._serial_connection.close()
             self._log.info("Disconnected from the laser.")
@@ -85,12 +85,12 @@ class Dem2Laser:
         ):
             raise Dem2Errors.LaserError("Must be connected ande not running!")
 
-        self._base_wavelength = hex_to_decimal(self.send_command("P04")[3:])
-        self.send_command("MC")  # usb control mode
+        self._base_wavelength = hex_to_decimal(self.send_command(LS_PRM_CONST_BWL)[3:])
+        self.send_command(LS_CMD_CTRL_MODE_USB)  # usb control mode
 
         match self._mode:
             case Dem2LaserMode.CW:
-                self.send_command("MT")  # CW mode
+                self.send_command(LS_CMD_SWP_MODE_CW)  # CW mode
                 # set cw wavelength
                 self.send_cw()
             case Dem2LaserMode.SINGLE:
@@ -98,15 +98,15 @@ class Dem2Laser:
                     raise Dem2Errors.LaserError(
                         "total_sweep_time, and in turn sweep_speed, must be set to initialize!"
                     )
-                self.send_command("MY")  # single sweep mode
+                self.send_command(LS_CMD_SWP_MODE_SINGLE)  # single sweep mode
 
                 # convert wavelength into hex and send
-                self.send_command("P22")
+                self.send_command(LS_PRM_USR_SINGLE_WL)
                 self.send_lambda_min_max(self._wavelength_min, self._wavelength_max)
                 self.send_sweep_speed(self._sweep_speed)
 
-        self.send_command("MW")  # wake pump source
-        self.send_command("M")
+        self.send_command(LS_CMD_WAKE_UP)  # wake pump source
+        self.send_command(LS_CMD_CTRL_MODE)
 
         self._state = Dem2State.READY
         self._log.info("Initialized the laser source.")
@@ -150,15 +150,20 @@ class Dem2Laser:
         self._log.info(
             f"Sending wavelength min {min_lambda} wavelength max {max_lambda}  with base wavelength as {base}..."
         )
-        self.send_command(f"P22{wavelength_to_hex(min_lambda, base, resolution)}")
-        self.send_command(f"P23{wavelength_to_hex(max_lambda, base, resolution)}")
+        self.send_command(
+            LS_PRM_USR_START_WL + wavelength_to_hex(min_lambda, base, resolution)
+        )
+        self.send_command(
+            LS_PRM_USR_STOP_WL + wavelength_to_hex(max_lambda, base, resolution)
+        )
 
     def send_cw(self, wavelength=None):
         if wavelength is not None:
             self.wavelength = wavelength
         self._log.info(f"Sending CW to laser: {wavelength}")
         self.send_command(
-            f"P21{wavelength_to_hex(self.wavelength, self._base_wavelength, 100)}"
+            LS_PRM_USR_SINGLE_WL
+            + wavelength_to_hex(self.wavelength, self._base_wavelength, 100)
         )
 
     def send_command(self, command):
@@ -170,19 +175,19 @@ class Dem2Laser:
         # convert sweep speed into hex and send
         sweep_speed_hex = format(int(sweep_speed * 10), "06X")
         self._log.info(f"Sending sweep speed to laser: {sweep_speed}")
-        return self.send_command(f"P24{str(sweep_speed_hex)}")
+        return self.send_command(LS_PRM_USR_SWP_SPEED + str(sweep_speed_hex))
 
     def get_device_info(self) -> str:
         """Read operation mode [I]."""
-        return self.send_command("I")
+        return self.send_command(LS_DEVICE_INFO)
 
     def toggle_emission(self):
         if self._state != Dem2State.READY and self._state != Dem2State.RUNNING:
             self._log.warning("Laser must be initialised to toggle emission!")
             return
         if self._state == Dem2State.READY:
-            # self.send_command("MW") # start pump source (no emission yet)
-            self.send_command("X")  # toggle emission
+            # self.send_command(LS_CMD_WAKE_UP) # start pump source (no emission yet)
+            self.send_command(LS_TOGGLE_EMISSION)  # toggle emission
             self._state = Dem2State.RUNNING
             return
         self.kill_emission()
@@ -191,8 +196,8 @@ class Dem2Laser:
         if self._state != Dem2State.RUNNING:
             self._log.warning("Laser must be running to kill emission!")
             return
-        self.send_command("X")  # toggle emission
-        # self.send_command("MO") # kill pump source
+        self.send_command(LS_TOGGLE_EMISSION)  # toggle emission
+        # self.send_command(LS_CMD_SHUTDOWN) # kill pump source
         self._state = Dem2State.READY
 
     # Properties
