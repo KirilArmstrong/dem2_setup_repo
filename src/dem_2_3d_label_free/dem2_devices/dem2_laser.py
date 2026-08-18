@@ -225,8 +225,8 @@ class Dem2Laser:
         self._log.info("Laser awake and ready.")
 
     def toggle_emission(self):
-        if self.check_state(
-            isnt_in=(Dem2State.READY, Dem2State.RUNNING),
+        if not self.check_state(
+            is_in=(Dem2State.READY, Dem2State.RUNNING),
             fail_warning=LS_ERROR_CODES[10] + " " + LS_ERROR_CODES[203],
         ):
             return
@@ -242,7 +242,7 @@ class Dem2Laser:
         NOTE: This objects state must be set to Dem2State.RUNNING for it to work.
         :param shutdown: Shutdown swept source. Default False.
         """
-        if self.check_state(
+        if not self.check_state(
             is_in=(Dem2State.RUNNING,),
             fail_warning=LS_ERROR_CODES[9] + " " + LS_ERROR_CODES[204],
         ):

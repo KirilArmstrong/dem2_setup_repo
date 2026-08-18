@@ -1320,7 +1320,7 @@ class MainWindow(QMainWindow):
         self.state.isCaptBurst = True
 
     def _run_discrete_sweep(self):
-        lambdas = controller.calculator.lambdas_array(
+        lambdas = controller.lambdas_array(
             controller.laser.wavelength_min,
             controller.laser.wavelength_max,
             int(controller.camera.samples_a_scan),
