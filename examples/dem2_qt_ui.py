@@ -966,7 +966,9 @@ class MainWindow(QMainWindow):
             self._update_ui()
             func()
         except Exception as e:
-            QMessageBox.critical(self, "Error", str(e))
+            err = str(e)
+            self._log.error(err)
+            QMessageBox.critical(self, "Error", err)
         finally:
             self.update_all()
 

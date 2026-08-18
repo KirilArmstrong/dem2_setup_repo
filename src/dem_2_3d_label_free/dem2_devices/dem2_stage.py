@@ -255,9 +255,14 @@ class Dem2Stage:
         time.sleep(1)
         self._set_sw_limits()
         self._state = Dem2State.READY
-        self._log.info("Stage calibrated.")
         if self._focus_set_pos is not None:
             self._queue_move_focus(self._focus_set_pos)
+            self._log.info(
+                "Focus: " + self._focus_settled_future.result()
+                if isinstance(self._focus_settled_future.result(), str)
+                else "Focus: Ready."
+            )  # wait
+        self._log.info("Stage calibrated.")
 
     def change_mode(self, mode: Dem2StageMode) -> None:
         """Change camera mode."""

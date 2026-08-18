@@ -300,14 +300,14 @@ class Dem2Camera(xiapi.Camera):
     def get_max_res(self) -> tuple[int, int]:
         """Get camera width in px."""
         if self._max_res == (0, 0):
-            self._log.warning("Camera was never connected. Max width: Unknown.")
+            self._log.debug("Camera was never connected. Max width: Unknown.")
         return self._max_res
 
     @property
     def get_increments(self) -> tuple[int, int]:
         """Get camera x increment in px."""
         if self._increments == (0, 0):
-            self._log.warning("Camera was never connected. Increments: Unknown.")
+            self._log.debug("Camera was never connected. Increments: Unknown.")
         return self._increments
 
     @property

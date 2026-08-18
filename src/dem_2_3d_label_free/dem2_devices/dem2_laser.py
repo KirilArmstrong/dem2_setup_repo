@@ -74,7 +74,7 @@ class Dem2Laser:
             self._log.info(
                 f"Connected to the laser source. Device: {self.get_device_info()}"
             )
-        except serial.SerialException as e:
+        except Exception as e:
             raise Dem2Errors.LaserError(0, str(e))
 
     def disconnect(self):
@@ -190,7 +190,7 @@ class Dem2Laser:
         """Send command set cw."""
         if wavelength is not None:
             self.wavelength = wavelength
-        self._log.info(f"Sending CW to laser: {wavelength}")
+        self._log.info(f"Sending CW to laser: {self.wavelength}")
         self.send_command(
             LS_PRM_USR_SINGLE_WL,
             wavelength_to_hex(self.wavelength, self._wavelength_base, 100),
