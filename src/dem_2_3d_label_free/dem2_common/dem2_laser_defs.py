@@ -2,6 +2,35 @@
 Laser parameter definitions.
 """
 
+LS_ERROR_CODES = {
+    0: "Failed to connect.",
+    1: "Failed to initialize.",
+    2: "Failed to disconnect.",
+    3: "Failed to send command",
+    4: "Already connected.",
+    5: "Already initialized.",
+    6: "Already disconnected.",
+    7: "Must be connected.",
+    8: "Must be initialized.",
+    9: "Must be running.",
+    10: "Must be awake.",
+    11: "Must not be initialized.",
+    12: "Must not be running.",
+    100: "Device responded with error.",
+    101: "Out of bounds.",
+    200: "For mode change.",
+    201: "Queue command other than 'I'.",
+    202: "For wake up.",
+    203: "For toggle emission.",
+    204: "For kill emission.",
+    205: "total_sweep_time required.",
+    206: "For total_sweep_time change.",
+    207: "For wavelength change.",
+    208: "total_sweep_time too low.",
+    209: "wavelength out of config range.",
+}
+
+
 # Laser
 LS_DEVICE_INFO = "I"
 LS_TOGGLE_EMISSION = "X"

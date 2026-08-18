@@ -32,7 +32,7 @@ class Dem2Laser:
         self._wavelength = self._cfg["wavelength_center"]
         self._wavelength_min = self._cfg["wavelength_min"]
         self._wavelength_max = self._cfg["wavelength_max"]
-        self._base_wavelength = 0
+        self._wavelength_base = 0
 
         self._total_sweep_time = None
         self._sweep_speed = None
@@ -41,7 +41,7 @@ class Dem2Laser:
         """Connect to laser source via serial."""
         self._log.info("Connecting to the laser source...")
         if self._state != Dem2State.DISCONNECTED:
-            raise Dem2Errors.LaserError("Already been connected! Disconnect first.")
+            raise Dem2Errors.LaserError(4)
         try:
             self._serial_connection = serial.Serial(
                 self._port, baudrate=57600, timeout=1
@@ -51,13 +51,13 @@ class Dem2Laser:
             )
             self._state = Dem2State.CONNECTED
         except serial.SerialException as e:
-            raise Dem2Errors.LaserError(f"Failed to connect: {e}")
+            raise Dem2Errors.LaserError(0, str(e))
 
     def disconnect(self):
         """Disconnect the laser."""
         self._log.info("Disconnecting from the laser...")
         if self._state == Dem2State.DISCONNECTED:
-            self._log.warning("Laser already disconnected! Continuing...")
+            self._log.warning(LS_ERROR_CODES[6] + " Continuing...")
         else:
             self.kill_emission()
             self.send_command(LS_CMD_SWP_MODE_CW)
@@ -69,11 +69,9 @@ class Dem2Laser:
         self.__init__(self._cfg)
 
     def change_mode(self, mode: Dem2LaserMode) -> None:
-        """Change camera mode."""
+        """Change Laser mode."""
         if self._state not in (Dem2State.DISCONNECTED, Dem2State.CONNECTED):
-            raise Dem2Errors.CameraError(
-                "Must be disconnected or uninitialize to change mode!"
-            )
+            raise Dem2Errors.LaserError(11, 200)
         self._mode = mode
         self._log.info("Changed mode to " + str(self._mode))
 
@@ -86,9 +84,9 @@ class Dem2Laser:
             or not self._serial_connection
             or not self._serial_connection.is_open
         ):
-            raise Dem2Errors.LaserError("Must be connected and not running!")
+            raise Dem2Errors.LaserError(7, 12)
 
-        self._base_wavelength = hex_to_decimal(self.send_command(LS_PRM_CONST_BWL)[3:])
+        self._wavelength_base = hex_to_decimal(self.send_command(LS_PRM_CONST_BWL)[3:])
         self.send_command(LS_CMD_CTRL_MODE_USB)  # usb control mode
 
         match self._mode:
@@ -98,9 +96,7 @@ class Dem2Laser:
                 self.send_cw()
             case Dem2LaserMode.SINGLE:
                 if self._sweep_speed is None or self._total_sweep_time is None:
-                    raise Dem2Errors.LaserError(
-                        "total_sweep_time, and in turn sweep_speed, must be set to initialize!"
-                    )
+                    raise Dem2Errors.LaserError(1, 205)
                 self.send_command(LS_CMD_SWP_MODE_SINGLE)  # single sweep mode
 
                 # convert wavelength into hex and send
@@ -122,9 +118,7 @@ class Dem2Laser:
             or not self._serial_connection
             or not self._serial_connection.is_open
         ):
-            raise Dem2Errors.LaserError(
-                f"Must be connected to queue a command other than 'I'! Command: {command}"
-            )
+            raise Dem2Errors.LaserError(7, LS_ERROR_CODES[201] + f" Command: {command}")
 
         def task():
             response = ""
@@ -136,11 +130,12 @@ class Dem2Laser:
                 self._log.info(f"Laser responded with: {response}")
                 if "!" in response or response == "":
                     raise Dem2Errors.LaserError(
-                        f"Device responded with error: {response if response != '' else 'No Response.'}"
+                        100,
+                        "Response: " + (response if response != "" else "No Response."),
                     )
                 return response
             except Exception as e:
-                raise Dem2Errors.LaserError(f"Failed to send command: {e}")
+                raise Dem2Errors.LaserError(3, str(e))
 
         future = self._executor.submit(task)
         return future
@@ -151,7 +146,7 @@ class Dem2Laser:
         self, min_lambda, max_lambda, base_lambda=None, resolution=100
     ):
         """Send command to set min and max wavelengths."""
-        base = base_lambda if base_lambda is not None else self._base_wavelength
+        base = base_lambda if base_lambda is not None else self._wavelength_base
         self._log.info(
             f"Sending wavelength min {min_lambda} wavelength max {max_lambda}  with base wavelength as {base}..."
         )
@@ -169,7 +164,7 @@ class Dem2Laser:
         self._log.info(f"Sending CW to laser: {wavelength}")
         self.send_command(
             LS_PRM_USR_SINGLE_WL,
-            wavelength_to_hex(self.wavelength, self._base_wavelength, 100),
+            wavelength_to_hex(self.wavelength, self._wavelength_base, 100),
         )
 
     def send_command(self, command, parameter=""):
@@ -198,11 +193,11 @@ class Dem2Laser:
             self._state = Dem2State.READY
             self._log.info("Laser awake and ready.")
             return
-        raise Dem2Errors.LaserError("Laser must be initialised to wake up.")
+        raise Dem2Errors.LaserError(8, 202)
 
     def toggle_emission(self):
         if self._state != Dem2State.READY and self._state != Dem2State.RUNNING:
-            self._log.warning("Laser must be awake to toggle emission!")
+            self._log.warning(LS_ERROR_CODES[10] + " " + LS_ERROR_CODES[203])
             return
         if self._state == Dem2State.READY:
             self.send_command(LS_TOGGLE_EMISSION)  # toggle emission
@@ -217,7 +212,7 @@ class Dem2Laser:
         :param shutdown: Shutdown swept source. Default False.
         """
         if self._state != Dem2State.RUNNING:
-            self._log.warning("Laser must be running to kill emission!")
+            self._log.warning(LS_ERROR_CODES[9] + " " + LS_ERROR_CODES[204])
             return
         self.send_command(LS_TOGGLE_EMISSION)  # toggle emission
         if shutdown:
@@ -249,9 +244,7 @@ class Dem2Laser:
         :param value: Total time in seconds.
         """
         if self._state in (Dem2State.READY, Dem2State.RUNNING, Dem2State.INITIALIZED):
-            raise Dem2Errors.LaserError(
-                "sweep time can only be changed when uninitialised!"
-            )
+            raise Dem2Errors.LaserError(11, 206)
 
         self._total_sweep_time = value
         new_speed = (
@@ -259,7 +252,7 @@ class Dem2Laser:
         ) / self._total_sweep_time
         if new_speed < 0.1:
             raise Dem2Errors.LaserError(
-                f"Total sweep time is too low! Sweep speed min is 0.1 nm/s, calculated = {new_speed}"
+                101, LS_ERROR_CODES[208] + f" Min = 0.1 nm/s, calculated = {new_speed}"
             )
         self._sweep_speed = new_speed
 
@@ -286,7 +279,7 @@ class Dem2Laser:
         #         "wavelength can only be changed when uninitialised!"
         #     )
         if value < self._cfg["wavelength_min"] or value > self._cfg["wavelength_max"]:
-            raise Dem2Errors.LaserError("wavelength out of configuration range!")
+            raise Dem2Errors.LaserError(101, 209)
         self._wavelength = value
 
     @property
@@ -303,11 +296,9 @@ class Dem2Laser:
         :param value: Total time in seconds.
         """
         if self._state in (Dem2State.READY, Dem2State.RUNNING, Dem2State.INITIALIZED):
-            raise Dem2Errors.LaserError(
-                "wavelength can only be changed when uninitialised!"
-            )
+            raise Dem2Errors.LaserError(11, 207)
         if value < self._cfg["wavelength_min"] or value > self._cfg["wavelength_max"]:
-            raise Dem2Errors.LaserError("wavelength out of configuration range!")
+            raise Dem2Errors.LaserError(101, 209)
         self._wavelength_max = value
 
     @property
@@ -324,20 +315,16 @@ class Dem2Laser:
         :param value: Total time in seconds.
         """
         if self._state in (Dem2State.READY, Dem2State.RUNNING, Dem2State.INITIALIZED):
-            raise Dem2Errors.LaserError(
-                "wavelength can only be changed when uninitialised!"
-            )
+            raise Dem2Errors.LaserError(11, 207)
         if value < self._cfg["wavelength_min"] or value > self._cfg["wavelength_max"]:
-            raise Dem2Errors.LaserError("wavelength out of configuration range!")
+            raise Dem2Errors.LaserError(101, 209)
         self._wavelength_min = value
 
     @property
     def sweep_speed(self) -> float:
         """Getter for sweep speed."""
         if self._sweep_speed is None:
-            raise Dem2Errors.PropertyNotSetError(
-                "total_sweep_time, and in turn sweep_speed, was never set."
-            )
+            raise Dem2Errors.PropertyNotSetError(LS_ERROR_CODES[205])
         return self._sweep_speed
 
     @property
