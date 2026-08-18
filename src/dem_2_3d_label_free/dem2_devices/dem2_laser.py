@@ -37,28 +37,53 @@ class Dem2Laser:
         self._total_sweep_time = None
         self._sweep_speed = None
 
+    def check_state(
+        self,
+        is_in: tuple | None = None,
+        isnt_in: tuple | None = None,
+        fail_error: Dem2Errors.LaserError | str | None = None,
+        fail_warning: str | None = None,
+        force_fail: bool = False,
+    ) -> bool:
+        if is_in is not None:
+            if self._state in is_in and not force_fail:
+                return True
+        if isnt_in is not None:
+            if self._state not in isnt_in and not force_fail:
+                return True
+        if fail_warning is not None:
+            self._log.warning(fail_warning)
+        if fail_error is None:
+            return False
+        if isinstance(fail_error, str):
+            raise Dem2Errors.LaserError(reason=fail_error)
+        raise fail_error
+
     def connect(self):
         """Connect to laser source via serial."""
         self._log.info("Connecting to the laser source...")
-        if self._state != Dem2State.DISCONNECTED:
-            raise Dem2Errors.LaserError(4)
+
+        self.check_state(
+            is_in=(Dem2State.DISCONNECTED,), fail_error=Dem2Errors.LaserError(4)
+        )
         try:
             self._serial_connection = serial.Serial(
                 self._port, baudrate=57600, timeout=1
             )
+            self._state = Dem2State.CONNECTED
             self._log.info(
                 f"Connected to the laser source. Device: {self.get_device_info()}"
             )
-            self._state = Dem2State.CONNECTED
         except serial.SerialException as e:
             raise Dem2Errors.LaserError(0, str(e))
 
     def disconnect(self):
         """Disconnect the laser."""
         self._log.info("Disconnecting from the laser...")
-        if self._state == Dem2State.DISCONNECTED:
-            self._log.warning(LS_ERROR_CODES[6] + " Continuing...")
-        else:
+        if self.check_state(
+            isnt_in=(Dem2State.DISCONNECTED,),
+            fail_warning=LS_ERROR_CODES[6] + " Continuing...",
+        ):
             self.kill_emission()
             self.send_command(LS_CMD_SWP_MODE_CW)
             # self.send_command(LS_CMD_SHUTDOWN)
@@ -70,8 +95,10 @@ class Dem2Laser:
 
     def change_mode(self, mode: Dem2LaserMode) -> None:
         """Change Laser mode."""
-        if self._state not in (Dem2State.DISCONNECTED, Dem2State.CONNECTED):
-            raise Dem2Errors.LaserError(11, 200)
+        self.check_state(
+            is_in=(Dem2State.DISCONNECTED, Dem2State.CONNECTED),
+            fail_error=Dem2Errors.LaserError(11, 200),
+        )
         self._mode = mode
         self._log.info("Changed mode to " + str(self._mode))
 
@@ -79,12 +106,12 @@ class Dem2Laser:
         """Initialize the laser source.
         :param wake_up: Wake up laser after initialization. Default True."""
         self._log.info("Initialising the laser source...")
-        if (
-            (self._state != Dem2State.CONNECTED and self._state != Dem2State.READY)
-            or not self._serial_connection
-            or not self._serial_connection.is_open
-        ):
-            raise Dem2Errors.LaserError(7, 12)
+        self.check_state(
+            isnt_in=(Dem2State.DISCONNECTED,),
+            fail_error=Dem2Errors.LaserError(7, 12),
+            force_fail=not self._serial_connection
+            or not self._serial_connection.is_open,
+        )
 
         self._wavelength_base = hex_to_decimal(self.send_command(LS_PRM_CONST_BWL)[3:])
         self.send_command(LS_CMD_CTRL_MODE_USB)  # usb control mode
@@ -113,12 +140,14 @@ class Dem2Laser:
 
     def queue_command(self, command):
         """Queue a command to the laser device and return the response as a future object."""
-        if (
-            (command != "I" and self._state == Dem2State.DISCONNECTED)
-            or not self._serial_connection
-            or not self._serial_connection.is_open
-        ):
-            raise Dem2Errors.LaserError(7, LS_ERROR_CODES[201] + f" Command: {command}")
+        self.check_state(
+            isnt_in=(Dem2State.DISCONNECTED,),
+            fail_error=Dem2Errors.LaserError(
+                7, LS_ERROR_CODES[201] + f" Command: {command}"
+            ),
+            force_fail=not self._serial_connection
+            or not self._serial_connection.is_open,
+        )
 
         def task():
             response = ""
@@ -188,18 +217,20 @@ class Dem2Laser:
         Wake up laser.
         """
         self._log.info("Waking up laser...")
-        if self._state == Dem2State.INITIALIZED:
-            self.send_command(LS_CMD_WAKE_UP)  # start pump source (no emission yet)
-            self._state = Dem2State.READY
-            self._log.info("Laser awake and ready.")
-            return
-        raise Dem2Errors.LaserError(8, 202)
+        self.check_state(
+            is_in=(Dem2State.INITIALIZED,), fail_error=Dem2Errors.LaserError(8, 202)
+        )
+        self.send_command(LS_CMD_WAKE_UP)  # start pump source (no emission yet)
+        self._state = Dem2State.READY
+        self._log.info("Laser awake and ready.")
 
     def toggle_emission(self):
-        if self._state != Dem2State.READY and self._state != Dem2State.RUNNING:
-            self._log.warning(LS_ERROR_CODES[10] + " " + LS_ERROR_CODES[203])
+        if self.check_state(
+            isnt_in=(Dem2State.READY, Dem2State.RUNNING),
+            fail_warning=LS_ERROR_CODES[10] + " " + LS_ERROR_CODES[203],
+        ):
             return
-        if self._state == Dem2State.READY:
+        if self.check_state(is_in=(Dem2State.READY,)):
             self.send_command(LS_TOGGLE_EMISSION)  # toggle emission
             self._state = Dem2State.RUNNING
             return
@@ -211,8 +242,10 @@ class Dem2Laser:
         NOTE: This objects state must be set to Dem2State.RUNNING for it to work.
         :param shutdown: Shutdown swept source. Default False.
         """
-        if self._state != Dem2State.RUNNING:
-            self._log.warning(LS_ERROR_CODES[9] + " " + LS_ERROR_CODES[204])
+        if self.check_state(
+            is_in=(Dem2State.RUNNING,),
+            fail_warning=LS_ERROR_CODES[9] + " " + LS_ERROR_CODES[204],
+        ):
             return
         self.send_command(LS_TOGGLE_EMISSION)  # toggle emission
         if shutdown:
@@ -243,8 +276,10 @@ class Dem2Laser:
         Also updates sweep speed.
         :param value: Total time in seconds.
         """
-        if self._state in (Dem2State.READY, Dem2State.RUNNING, Dem2State.INITIALIZED):
-            raise Dem2Errors.LaserError(11, 206)
+        self.check_state(
+            isnt_in=(Dem2State.READY, Dem2State.RUNNING, Dem2State.INITIALIZED),
+            fail_error=Dem2Errors.LaserError(11, 206),
+        )
 
         self._total_sweep_time = value
         new_speed = (
@@ -295,8 +330,10 @@ class Dem2Laser:
         Also updates sweep speed.
         :param value: Total time in seconds.
         """
-        if self._state in (Dem2State.READY, Dem2State.RUNNING, Dem2State.INITIALIZED):
-            raise Dem2Errors.LaserError(11, 207)
+        self.check_state(
+            isnt_in=(Dem2State.READY, Dem2State.RUNNING, Dem2State.INITIALIZED),
+            fail_error=Dem2Errors.LaserError(11, 207),
+        )
         if value < self._cfg["wavelength_min"] or value > self._cfg["wavelength_max"]:
             raise Dem2Errors.LaserError(101, 209)
         self._wavelength_max = value
@@ -314,8 +351,10 @@ class Dem2Laser:
         Also updates sweep speed.
         :param value: Total time in seconds.
         """
-        if self._state in (Dem2State.READY, Dem2State.RUNNING, Dem2State.INITIALIZED):
-            raise Dem2Errors.LaserError(11, 207)
+        self.check_state(
+            isnt_in=(Dem2State.READY, Dem2State.RUNNING, Dem2State.INITIALIZED),
+            fail_error=Dem2Errors.LaserError(11, 207),
+        )
         if value < self._cfg["wavelength_min"] or value > self._cfg["wavelength_max"]:
             raise Dem2Errors.LaserError(101, 209)
         self._wavelength_min = value
