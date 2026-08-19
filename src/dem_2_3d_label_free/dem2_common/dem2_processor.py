@@ -522,6 +522,35 @@ class Dem2Processor(Dem2SweepPacket):
         result = np.array([correlations_x, correlations_y])
         return np.abs(result) if just_similarity else result
 
+    def correlate_with_stack(
+        self,
+        z_slice: int,
+        z_range: slice,
+        roi: tuple[slice, slice],
+        just_similarity: bool = True,
+        reverse_direction: bool = False,
+    ):
+        """
+        Correlate an image with a stack of images. Starting with the z_range.start.
+        :param z_slice: Z index of image to correlate stack with
+        :param z_range: Z range of image stack.
+        :param roi:  ROI to correlate (y:y,x:x)
+        :param just_similarity: Whether to absolute the resulting coeffs to just show similarity.
+        :param reverse_direction: Inverse the direction of correlation. (Start at z_range.stop to z_range.start)
+        :return: Coef array.
+        """
+        arr = np.abs(self[z_slice, roi[0], roi[1]])
+        correlations = []
+        end = self[z_range, 0, 0].shape[0] + z_range.start
+
+        for z in range(z_range.start, end):
+            a = self[z, roi[0], roi[1]]
+            correlations.append(np.corrcoef(arr.ravel(), a.ravel())[0, 1])
+        result = np.array(correlations)
+        if reverse_direction:
+            result = result[::-1]
+        return np.abs(result) if just_similarity else result
+
     @property
     def path(self) -> Path:
         """
