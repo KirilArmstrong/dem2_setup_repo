@@ -1,4 +1,5 @@
 """Example script on how to use the Demonstrator 2 Controller."""
+
 import time
 from pathlib import Path
 from matplotlib import pyplot as plt
@@ -13,7 +14,6 @@ from src.dem_2_3d_label_free.dem2_common.dem2_helper import (
     oct_reconstruct,
 )
 from src.dem_2_3d_label_free.dem2_common.dem2_processor import Dem2Processor
-from src.dem_2_3d_label_free.__globals__ import __datapath__
 from src.dem_2_3d_label_free.dem2_common.dem2_sweep_experiment import Dem2SweepPacket
 
 # DATA_PATH = Path(__datapath__)
@@ -113,20 +113,16 @@ def _process_batch(imgs_batch, cx, cy, w, h):
 
     crop = Fshift[cp.arange(B)[:, None, None], y_idx_c, x_idx_c]  # (B, h, w)
 
-    # embed the crop in the centre of a full (B, H, W) array
-    y0 = (H - h) // 2
-    x0 = (W - w) // 2
-    spectra = cp.zeros((B, H, W), dtype=Fshift.dtype)
-    spectra[:, y0 : y0 + h, x0 : x0 + w] = crop
-
-    images = cp.fft.ifft2(
-        cp.fft.ifftshift(spectra, axes=(1, 2)), axes=(1, 2)
-    )
-
-    return images
-
-
-def recon_zs(log, processor, centre, w, h, z_slice: int = 0, cuda_version: bool = False, dset: str = "1"):
+def recon_zs(
+    log,
+    processor,
+    centre,
+    w,
+    h,
+    z_slice: int = 0,
+    cuda_version: bool = False,
+    dset: str = "1",
+):
     roi, y, x = determine_properties(processor, centre, w, h, z_slice)
     log.info("Beginning full reconstruction...")
     packet = Dem2SweepPacket(
@@ -179,13 +175,14 @@ def recon_zs(log, processor, centre, w, h, z_slice: int = 0, cuda_version: bool 
     rng = processor.shape[0] - z_slice
     for i in range(rng):
         if SEE_ZS is not None:
-            if z_slice + i not in SEE_ZS: continue
+            if z_slice + i not in SEE_ZS:
+                continue
         t1 = time.time()
         packet.append_frame(
             abs(
                 processor.reconstruct(
                     roi=roi,
-                    centre=(y[i],x[i]),
+                    centre=(y[i], x[i]),
                     width=w,
                     height=h,
                     plot=True if z_slice + i in SEE_ZS else False,
@@ -207,18 +204,21 @@ def use_processor(log):
     try:
         # Convert a tif file to h5:
         processor.convert_tif_to_h5()
-    except: pass  # will error if not tif, so for demo purposes, it handles the error.
+    except:
+        pass  # will error if not tif, so for demo purposes, it handles the error.
 
     log.info(collect_h5_contents(processor.path))
 
     # start_pos = ()
     if input("Only convert to f32? (y/n): ").lower() == "y":
-        packet = Dem2SweepPacket(str(DATA_PATH / FILE_NAME)[:-3] + "_f32.h5", "1", processor.get_attributes())
+        packet = Dem2SweepPacket(
+            str(DATA_PATH / FILE_NAME)[:-3] + "_f32.h5", "1", processor.get_attributes()
+        )
         packet.open_file()
         for i in range(processor.shape[0]):
-            packet.append_frame(np.abs(processor[i,:,:]).astype(np.float32))
-            if i % (processor.shape[0]//10) == 0:
-                log.info(f"{i/processor.shape[0]*100}%")
+            packet.append_frame(np.abs(processor[i, :, :]).astype(np.float32))
+            if i % (processor.shape[0] // 10) == 0:
+                log.info(f"{i / processor.shape[0] * 100}%")
         packet.close_file()
         packet.get_info()
         return
@@ -284,21 +284,21 @@ def use_processor(log):
         recon_all_z_bool = True if recon_all_z_bool.lower() == "y" else False
         cuda_all_z_bool = input("with cuda? y/n: ")
         cuda_all_z_bool = True if cuda_all_z_bool.lower() == "y" else False
-    z_slice = input("z slice "+("(start)" if recon_all_z_bool else "")+": ")
+    z_slice = input("z slice " + ("(start)" if recon_all_z_bool else "") + ": ")
     if not z_slice:
         z_slice = 1
     else:
         z_slice = int(z_slice)
     # processor.plot_ft(z_index=z_slice)
     try:
-        if RAISE or input("Change centre? (y/n):").lower()=="y":
+        if RAISE or input("Change centre? (y/n):").lower() == "y":
             raise "Error"
         #
         #     # Reconstruct the object field and plot everything. 1st order center and width/height.
         #     # processor.reconstruct(centre=(766,758), width=600, height=600, z_slice=45)
         centre = None
-        w = None #None for off
-        h = None # None for off
+        w = None  # None for off
+        h = None  # None for off
         # centre = (y,x)
         # w = w
         # h = h
@@ -311,7 +311,9 @@ def use_processor(log):
                 centre=centre, width=w, height=h, plot=cor_bool, z_slice=z_slice
             )
         else:
-            recon_zs(log, processor, centre, w, h, z_slice, cuda_version=cuda_all_z_bool)
+            recon_zs(
+                log, processor, centre, w, h, z_slice, cuda_version=cuda_all_z_bool
+            )
             return
 
     # return
@@ -335,37 +337,75 @@ def use_processor(log):
             )
 
             ft_arr = processor.ft()
-            processor._prep_plot(ft_arr[roi[0],roi[1]], "FFTed Image", gamma=0.05)
+            processor._prep_plot(ft_arr[roi[0], roi[1]], "FFTed Image", gamma=0.05)
             plt.show()
         cx = int(input("Centre X: "))
         cy = int(input("Centre Y: "))
-        centre = (cy,cx)
+        centre = (cy, cx)
         w = int(input("Width: "))
         h = int(input("Height: "))
         if not recon_all_z_bool:
-            recon_arr = processor.reconstruct(centre=centre, width=w, height=h, plot=cor_bool, z_slice=z_slice)
+            recon_arr = processor.reconstruct(
+                centre=centre, width=w, height=h, plot=cor_bool, z_slice=z_slice
+            )
         else:
-            recon_zs(log, processor, centre, w, h, z_slice, cuda_version=cuda_all_z_bool)
+            recon_zs(
+                log, processor, centre, w, h, z_slice, cuda_version=cuda_all_z_bool
+            )
             return
     # a, N = prep_zernike(processor, recon_arr, centre=(1620, 2455), radius=1550)
     # a, N = prep_zernike(processor, recon_arr, centre=(1650, 2355), radius=150)
 
-    cor_bool = input("Correlate recon_arr? y/n: ")
+    cor_bool = input("Correlate XY recon_arr? y/n: ")
     if cor_bool.lower() == "y":
-        coefs = processor.determine_speckle_size((slice(2400,2600), slice(2330,2530)),recon_arr)
+        coefs = processor.determine_speckle_size(
+            (slice(2400, 2600), slice(2330, 2530)), recon_arr
+        )
 
         plt.figure()
-        plt.plot(coefs[0,:], label="X correlation coefs")
+        plt.plot(coefs[0, :], label="X correlation coefs")
         plt.grid()
         plt.legend()
         plt.title("X correlation coefs")
         plt.figure()
-        plt.plot(coefs[1,:], label="Y correlation coefs")
+        plt.plot(coefs[1, :], label="Y correlation coefs")
         plt.grid()
         plt.legend()
         plt.title("Y correlation coefs")
         plt.show()
 
+    corZ_bool = input("Correlate Z? y/n: ")
+    if corZ_bool:
+        z_slice = int(input(f"Z to correlate (shape[0]={processor.shape[0]}): "))
+        z_start = input("Z stack start (def. 0): ")
+        z_stop = input(f"Z stack start (def. max ({processor.shape[0]})): ")
+        z_range = slice(int(z_start) if z_start else 0, int(z_stop) if z_stop else None)
+        roi_tl_x, roi_tl_y, roi_br_x, roi_br_y = (
+            input("ROI TL X: "),
+            input("ROI TL Y: "),
+            input("ROI BR X: "),
+            input("ROI BR Y: "),
+        )
+        roi = (
+            slice(
+                int(roi_tl_y) if roi_tl_y else None, int(roi_br_y) if roi_br_y else None
+            ),
+            slice(
+                int(roi_tl_x) if roi_tl_x else None, int(roi_br_x) if roi_br_x else None
+            ),
+        )
+        rev_dir = True if input("Reverse direction? (y/n): ").lower() == "y" else False
+        j_sim = True if input("Just Similarity? (y/n): ").lower() == "y" else False
+        arr_z_coefs = processor.correlate_with_stack(
+            z_slice, z_range, roi, j_sim, rev_dir
+        )
+
+        plt.figure()
+        plt.plot(arr_z_coefs[:], label="Z correlation coefs")
+        plt.grid()
+        plt.legend()
+        plt.title(f"Z correlation coefs revv_dir={rev_dir}")
+        plt.show()
 
     zer_bool = input("Zernike estimation? y/n: ")
     if zer_bool.lower() == "y":
@@ -377,7 +417,9 @@ def use_processor(log):
         # a_no_tdf[2] = 0.0  # Noll 3  (tilt)
         # a_no_tdf[3] = 0.0  # Noll 4  (defocus)
 
-        wave_no_tdf, inside = processor.reconstruct_from_zernikes(a_no_tdf, max_noll=len(a), N=N)
+        wave_no_tdf, inside = processor.reconstruct_from_zernikes(
+            a_no_tdf, max_noll=len(a), N=N
+        )
 
         plt.figure()
         plt.imshow(wave_no_tdf, cmap="twilight", origin="lower")
