@@ -544,7 +544,7 @@ class Dem2Processor(Dem2SweepPacket):
         end = self[z_range, 0, 0].shape[0] + z_range.start
 
         for z in range(z_range.start, end):
-            a = self[z, roi[0], roi[1]]
+            a = np.abs(self[z, roi[0], roi[1]])
             correlations.append(np.corrcoef(arr.ravel(), a.ravel())[0, 1])
         result = np.array(correlations)
         if reverse_direction:
