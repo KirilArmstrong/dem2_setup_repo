@@ -488,6 +488,7 @@ class Dem2Processor(Dem2SweepPacket):
         pixel_pos_no: int = 100,
         z_slice: int = 1,
         just_similarity: bool = True,
+        plot: bool = False,
     ):
         """
         Determine the speckle size in both X adn Y desperately and plot.
@@ -503,6 +504,10 @@ class Dem2Processor(Dem2SweepPacket):
             if full_array is not None
             else self[z_slice, roi[0], roi[1]]
         )
+        if plot:
+            plt.figure()
+            plt.imshow(arr)
+            plt.show()
         correlations_x = []
         correlations_y = []
         for i in range(pixel_pos_no):
@@ -529,6 +534,7 @@ class Dem2Processor(Dem2SweepPacket):
         roi: tuple[slice, slice],
         just_similarity: bool = True,
         reverse_direction: bool = False,
+        plot: bool = False,
     ):
         """
         Correlate an image with a stack of images. Starting with the z_range.start.
@@ -540,6 +546,10 @@ class Dem2Processor(Dem2SweepPacket):
         :return: Coef array.
         """
         arr = np.abs(self[z_slice, roi[0], roi[1]])
+        if plot:
+            plt.figure()
+            plt.imshow(arr)
+            plt.show()
         correlations = []
         end = self[z_range, 0, 0].shape[0] + z_range.start
 

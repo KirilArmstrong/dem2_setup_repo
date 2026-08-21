@@ -358,9 +358,9 @@ def use_processor(log):
 
     cor_bool = input("Correlate XY recon_arr? y/n: ")
     if cor_bool.lower() == "y":
-        coefs = processor.determine_speckle_size(
-            (slice(2400, 2600), slice(2330, 2530)), recon_arr
-        )
+        roi = (slice(2400, 2600), slice(2330, 2530))
+
+        coefs = processor.determine_speckle_size(roi, plot=True)
 
         plt.figure()
         plt.plot(coefs[0, :], label="X correlation coefs")
@@ -380,12 +380,13 @@ def use_processor(log):
         z_start = input("Z stack start (def. 0): ")
         z_stop = input(f"Z stack start (def. max ({processor.shape[0]})): ")
         z_range = slice(int(z_start) if z_start else 0, int(z_stop) if z_stop else None)
-        roi_tl_x, roi_tl_y, roi_br_x, roi_br_y = (
-            input("ROI TL X: "),
-            input("ROI TL Y: "),
-            input("ROI BR X: "),
-            input("ROI BR Y: "),
-        )
+        roi_tl_x, roi_tl_y, roi_br_x, roi_br_y = 1750, 900, 2250, 1400
+        # roi_tl_x, roi_tl_y, roi_br_x, roi_br_y = (
+        #     input("ROI TL X: "),
+        #     input("ROI TL Y: "),
+        #     input("ROI BR X: "),
+        #     input("ROI BR Y: "),
+        # )
         roi = (
             slice(
                 int(roi_tl_y) if roi_tl_y else None, int(roi_br_y) if roi_br_y else None
@@ -397,7 +398,7 @@ def use_processor(log):
         rev_dir = True if input("Reverse direction? (y/n): ").lower() == "y" else False
         j_sim = True if input("Just Similarity? (y/n): ").lower() == "y" else False
         arr_z_coefs = processor.correlate_with_stack(
-            z_slice, z_range, roi, j_sim, rev_dir
+            z_slice, z_range, roi, j_sim, rev_dir, plot=True
         )
 
         plt.figure()
