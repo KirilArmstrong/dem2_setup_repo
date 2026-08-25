@@ -241,6 +241,11 @@ class Dem2SweepPacket:
                         items.append((new_key, list(v)))
                     elif isinstance(v, (list, int, float, str, bool)):
                         items.append((new_key, v))
+                    elif isinstance(v, np.ndarray):
+                        if v.dtype == object:
+                            items.append((new_key, str(v)))
+                        else:
+                            items.append((new_key, v))
                     else:
                         # Skip unsupported types or convert to string
                         items.append((new_key, str(v)))
