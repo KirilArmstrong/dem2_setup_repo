@@ -17,7 +17,7 @@ class Dem2BScanPattern:
     def __init__(self, dem2_bsp_filepath: str = ""):
         self.description: str = ""
         self._log = logging.getLogger(self.__class__.__name__)
-        self.a_scans_b_scan = 0 # No of a-scans per b-scan
+        self.a_scans_b_scan = 0  # No of a-scans per b-scan
         self._a_scans: dict = {
             "focus_positions": [],
             "x_positions": [],
@@ -35,8 +35,55 @@ class Dem2BScanPattern:
 
     # Functions
 
+    def generate_line(
+        self,
+        amount: int,
+        minimum: tuple[float, float, float],
+        maximum: tuple[float, float, float] | float,
+        speckle_size: tuple[float, float] | None = None,
+    ):
+        """
+        Generate a line scan pattern. Note: this clears this object.
+        :param amount: amount of positions.
+        :param minimum: minimum position tuple (focus, y, x) in mm.
+        :param maximum: maximum position tuple (focus, y, x) or maximum focus position float in mm. If you set as float, speckle_size must not be None.
+        :param speckle_size: size tuple (y, x) of speckle in mm.
+        """
+        self.__init__()
+        min_z, min_y, min_x = minimum
+        if isinstance(maximum, tuple):
+            max_z, max_y, max_x = maximum
+        else:
+            max_z, max_y, max_x = maximum, None, None
+            if speckle_size is None:
+                raise Dem2Errors.BScanPatternError(
+                    "Speckle size must not be None is max is set as a float."
+                )
+
+        z = np.linspace(min_z, max_z, amount)
+        if speckle_size is not None:
+            speckle_y, speckle_x = speckle_size
+            y = np.linspace(min_y, min_y + (speckle_y * (amount - 2)), amount)
+            x = np.linspace(min_x, min_x + (speckle_x * (amount - 2)), amount)
+            self.description = (
+                f"Pattern from (x={min_x},y={min_y},f={min_z}) to "
+                f"({min_x + (speckle_x * (amount - 2))},{min_y + (speckle_y * (amount - 2))},{max_z})"
+            )
+        else:
+            y = np.linspace(min_y, max_y, amount)
+            x = np.linspace(min_x, max_x, amount)
+            self.description = f"Pattern from (x={min_x},y={min_y},f={min_z}) to ({max_x},{max_y},{max_z})"
+        self.a_scans_b_scan = z.size
+        self.focus_positions = z.tolist()
+        self.y_positions = y.tolist()
+        self.x_positions = x.tolist()
+
     def _validate(self):
-        lists = [self._a_scans["focus_positions"], self._a_scans["x_positions"], self._a_scans["y_positions"]]
+        lists = [
+            self._a_scans["focus_positions"],
+            self._a_scans["x_positions"],
+            self._a_scans["y_positions"],
+        ]
         non_empty_lists = [lst for lst in lists if lst]
 
         # Check: not all lists are Empty
@@ -46,11 +93,15 @@ class Dem2BScanPattern:
         # Check: all non-Empty lists have equal length
         first_length = len(non_empty_lists[0])
         if not all(len(lst) == first_length for lst in non_empty_lists):
-            raise Dem2Errors.BScanPatternError("All non empty lists must be equal in length.")
+            raise Dem2Errors.BScanPatternError(
+                "All non empty lists must be equal in length."
+            )
 
         # Check: all non-Empty lists have length equal to number
         if first_length != self.a_scans_b_scan:
-            raise Dem2Errors.BScanPatternError("All non empty lists must have length equal to a_scans_b_scan.")
+            raise Dem2Errors.BScanPatternError(
+                "All non empty lists must have length equal to a_scans_b_scan."
+            )
 
         return
 
@@ -121,20 +172,20 @@ class Dem2BScanPattern:
 
         self.from_dict(sp_dict=_dict)
 
-    def generate_line(self, min_x, max_x, min_y, max_y, amount):
-        """
-        Creates linearly spaced lines for listA and listB.
-        
-        Parameters:
-            min_x: minimum value for listA
-            max_x: maximum value for listA
-            min_y: minimum value for listB
-            max_y: maximum value for listB
-            amount: length of both lists
-        """
-        self.a_scans_b_scan = amount
-        self.x_positions = np.linspace(min_x, max_x, amount).tolist()
-        self.y_positions = np.linspace(min_y, max_y, amount).tolist()
+    # def generate_line(self, min_x, max_x, min_y, max_y, amount):
+    #     """
+    #     Creates linearly spaced lines for listA and listB.
+    #
+    #     Parameters:
+    #         min_x: minimum value for listA
+    #         max_x: maximum value for listA
+    #         min_y: minimum value for listB
+    #         max_y: maximum value for listB
+    #         amount: length of both lists
+    #     """
+    #     self.a_scans_b_scan = amount
+    #     self.x_positions = np.linspace(min_x, max_x, amount).tolist()
+    #     self.y_positions = np.linspace(min_y, max_y, amount).tolist()
 
     # Properties
 
@@ -143,7 +194,7 @@ class Dem2BScanPattern:
         """X-Position list."""
         if self._a_scans["x_positions"]:
             return self._a_scans["x_positions"]
-        return [0]*self.a_scans_b_scan
+        return [0] * self.a_scans_b_scan
 
     @x_positions.setter
     def x_positions(self, value: list[float]) -> None:
@@ -172,7 +223,7 @@ class Dem2BScanPattern:
         """Y-Position list."""
         if self._a_scans["y_positions"]:
             return self._a_scans["y_positions"]
-        return [0]*self.a_scans_b_scan
+        return [0] * self.a_scans_b_scan
 
     @y_positions.setter
     def y_positions(self, value: list[float]) -> None:
@@ -201,7 +252,7 @@ class Dem2BScanPattern:
         """Focus Position list."""
         if self._a_scans["focus_positions"]:
             return self._a_scans["focus_positions"]
-        return [0]*self.a_scans_b_scan
+        return [0] * self.a_scans_b_scan
 
     @focus_positions.setter
     def focus_positions(self, value: list[float]) -> None:

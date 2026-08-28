@@ -205,7 +205,12 @@ class Dem2Stage:
         # todo mode check
         self._log.info("Initialising the stage...")
         if self._state != Dem2State.CONNECTED:
-            raise Dem2Errors.StageError("Must be connected to Initialize!")
+            raise Dem2Errors.StageError("Must be connected to Initialize stage!")
+        if self.mode == Dem2StageMode.PATTERN and self._b_scan_pattern is None:
+            raise Dem2Errors.StageError(
+                "Must set or generate scan pattern before stage initialization!"
+            )
+
         # Initialize focus:
         self.focus = MTB.Api.IMTBFocus(self._root.GetComponent("MTBFocus"))
         # Initialize stage:
@@ -322,8 +327,12 @@ class Dem2Stage:
 
     def move_along_scan_pattern(self):
         """Move to the next index of the scan pattern."""
-        if self._state is None:
-            raise Dem2Errors.StageError("Scan pattern must be set!")
+        if self.state != Dem2State.READY:
+            raise Dem2Errors.StageError("Stage must be calibrated!")
+        if self._b_scan_pattern is None and self.mode != Dem2StageMode.PATTERN:
+            raise Dem2Errors.StageError(
+                "Scan pattern must be set and stage set to pattern mode!"
+            )
         self.move_stage(
             self._b_scan_pattern.x_positions[self._bsp_current_index],
             self._b_scan_pattern.y_positions[self._bsp_current_index],
@@ -335,7 +344,9 @@ class Dem2Stage:
             self._bsp_current_index = 0
 
     def run_b_scan_pattern(self):
-        if self._state is None:
+        if self.state != Dem2State.READY:
+            raise Dem2Errors.StageError("Stage must be calibrated!")
+        if self._b_scan_pattern is None:
             raise Dem2Errors.StageError("Scan pattern must be set!")
         self._bsp_current_index = 0
         for i in range(self._b_scan_pattern.a_scans_b_scan):
@@ -364,9 +375,12 @@ class Dem2Stage:
         )
 
     @b_scan_pattern.setter
-    def b_scan_pattern(self, b_scan_pattern: Dem2BScanPattern):
-        self._b_scan_pattern = b_scan_pattern
+    def b_scan_pattern(self, b_scan_pattern: Dem2BScanPattern | str):
         self._bsp_current_index = 0
+        if isinstance(b_scan_pattern, Dem2BScanPattern):
+            self._b_scan_pattern = b_scan_pattern
+            return
+        self._b_scan_pattern = Dem2BScanPattern(b_scan_pattern)
 
     def get_position(self):
         """Get stage current position."""

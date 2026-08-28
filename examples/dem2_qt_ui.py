@@ -34,7 +34,9 @@ from PySide6.QtWidgets import (
     QCheckBox,
     QSizePolicy,
     QTabWidget,
+    QLineEdit,
 )
+
 from src.dem_2_3d_label_free.dem2_common.dem2_bscan_pattern import Dem2BScanPattern  # noqa: F401
 from src.dem_2_3d_label_free.dem2_common.dem2_constants import (
     Dem2State,
@@ -642,23 +644,116 @@ class MainWindow(QMainWindow):
         self.btn_stage_focus_move = QPushButton("MOVE ΔZ")
         self.btn_stage_estop = QPushButton("EMERGENCY STOP")
         self.btn_stage_estop.setStyleSheet("background-color: #dc2626; color: white;")
-        grid_stage.addWidget(QLabel("X"), 0, 0)
+        grid_stage.addWidget(QLabel("X, Y"), 0, 0)
         grid_stage.addWidget(self.spin_stage_x, 0, 1)
-        grid_stage.addWidget(QLabel("Y"), 1, 0)
-        grid_stage.addWidget(self.spin_stage_y, 1, 1)
-        grid_stage.addWidget(self.btn_stage_set_xy, 0, 2, 2, 1)
-        grid_stage.addWidget(QLabel("ΔX"), 2, 0)
-        grid_stage.addWidget(self.spin_stage_dx, 2, 1)
-        grid_stage.addWidget(QLabel("ΔY"), 3, 0)
-        grid_stage.addWidget(self.spin_stage_dy, 3, 1)
-        grid_stage.addWidget(self.btn_stage_move_xy, 2, 2, 2, 1)
-        grid_stage.addWidget(QLabel("Z"), 4, 0)
-        grid_stage.addWidget(self.spin_stage_z, 4, 1)
-        grid_stage.addWidget(self.btn_stage_focus_set, 4, 2)
-        grid_stage.addWidget(QLabel("ΔZ"), 5, 0)
-        grid_stage.addWidget(self.spin_stage_dz, 5, 1)
-        grid_stage.addWidget(self.btn_stage_focus_move, 5, 2)
-        stage_layout.addLayout(grid_stage)
+        # grid_stage.addWidget(QLabel("Y"), 1, 0)
+        grid_stage.addWidget(self.spin_stage_y, 0, 2)
+        grid_stage.addWidget(self.btn_stage_set_xy, 0, 3)
+        grid_stage.addWidget(QLabel("ΔX, ΔY"), 1, 0)
+        grid_stage.addWidget(self.spin_stage_dx, 1, 1)
+        # grid_stage.addWidget(QLabel("ΔY"), 3, 0)
+        grid_stage.addWidget(self.spin_stage_dy, 1, 2)
+        grid_stage.addWidget(self.btn_stage_move_xy, 1, 3)
+        grid_stage.addWidget(QLabel("Z"), 2, 0)
+        grid_stage.addWidget(self.spin_stage_z, 2, 1)
+        grid_stage.addWidget(self.btn_stage_focus_set, 2, 2)
+        grid_stage.addWidget(QLabel("ΔZ"), 3, 0)
+        grid_stage.addWidget(self.spin_stage_dz, 3, 1)
+        grid_stage.addWidget(self.btn_stage_focus_move, 3, 2)
+
+        grid_stage_pat = QGridLayout()
+
+        # --- PATH SECTION ---
+        self.lbl_path = QLabel("Path:")
+        self.edit_path = QLineEdit()
+        self.edit_path.setText(str(Path(__datapath__) / "b_scan_pattern.yml"))
+        self.btn_load_path = QPushButton("Load")
+        self.btn_generate = QPushButton("Generate")
+
+        # Layout: Label (0,0), Input (0,1), Button (0,2)
+        grid_stage_pat.addWidget(self.lbl_path, 0, 0)
+        grid_stage_pat.addWidget(self.edit_path, 0, 1, 1, 2)
+        grid_stage_pat.addWidget(self.btn_load_path, 0, 3)
+        grid_stage_pat.addWidget(self.btn_generate, 1, 3)
+
+        # --- GENERATE SECTION ---
+        # group_generate = QGroupBox("Generate")
+        # gen_layout = QGridLayout()
+
+        # Amount
+        self.lbl_amount = QLabel("Generate Pattern with Amount:")
+        self.spin_amount = QSpinBox()
+        self.spin_amount.setRange(1, 1000000)
+        grid_stage_pat.addWidget(self.lbl_amount, 1, 0, 1, 2)
+        grid_stage_pat.addWidget(self.spin_amount, 1, 2)
+
+        # Min X, Y, Z
+        self.lbl_min = QLabel("Min X, Y, Z:")
+        self.spin_min_x = QDoubleSpinBox(
+            decimals=3, singleStep=0.001, minimum=-100000, maximum=100000
+        )
+        self.spin_min_y = QDoubleSpinBox(
+            decimals=3, singleStep=0.001, minimum=-100000, maximum=100000
+        )
+        self.spin_min_z = QDoubleSpinBox(
+            decimals=3, singleStep=0.001, minimum=-100000, maximum=100000
+        )
+        grid_stage_pat.addWidget(self.lbl_min, 2, 0)
+        grid_stage_pat.addWidget(self.spin_min_x, 2, 1)
+        grid_stage_pat.addWidget(self.spin_min_y, 2, 2)
+        grid_stage_pat.addWidget(self.spin_min_z, 2, 3)
+
+        # Max X, Y, Z
+        self.lbl_max = QLabel("Max X, Y, Z:")
+        self.spin_max_x = QDoubleSpinBox(
+            decimals=3, singleStep=0.001, minimum=-100000, maximum=100000
+        )
+        self.spin_max_y = QDoubleSpinBox(
+            decimals=3, singleStep=0.001, minimum=-100000, maximum=100000
+        )
+        self.spin_max_z = QDoubleSpinBox(
+            decimals=3, singleStep=0.001, minimum=-100000, maximum=100000
+        )
+        grid_stage_pat.addWidget(self.lbl_max, 3, 0)
+        grid_stage_pat.addWidget(self.spin_max_x, 3, 1)
+        grid_stage_pat.addWidget(self.spin_max_y, 3, 2)
+        grid_stage_pat.addWidget(self.spin_max_z, 3, 3)
+
+        # Speckle Toggle
+        self.chk_use_speckle = QCheckBox("Spckl. Size")
+        grid_stage_pat.addWidget(self.chk_use_speckle, 4, 0)
+
+        # Speckle Size X, Y
+        self.spin_speckle_x = QDoubleSpinBox(
+            decimals=3, singleStep=0.001, minimum=-100000, maximum=100000
+        )
+        self.spin_speckle_y = QDoubleSpinBox(
+            decimals=3, singleStep=0.001, minimum=-100000, maximum=100000
+        )
+        grid_stage_pat.addWidget(self.spin_speckle_x, 4, 1)
+        grid_stage_pat.addWidget(self.spin_speckle_y, 4, 2)
+
+        # group_generate.setLayout(gen_layout)
+
+        # Add the group box to the main grid
+        # grid_stage_pat.addWidget(group_generate, 1, 0, 1, 3)
+
+        # Optional: Ensure the path input expands to fill space
+        # grid_stage_pat.setColumnStretch(1, 1)
+        # --- Tabs for stage controls and pattern settings ---
+        tabs_stagectrl = QTabWidget()
+        # Control tab
+        stg_control_widget = QWidget()
+        stg_control_layout = QVBoxLayout(stg_control_widget)
+        stg_control_layout.addLayout(grid_stage)
+        tabs_stagectrl.addTab(stg_control_widget, "Control")
+        # Pattern tab
+        stg_pat_widget = QWidget()
+        stg_pat_layout = QVBoxLayout(stg_pat_widget)
+        stg_pat_layout.addLayout(grid_stage_pat)
+        tabs_stagectrl.addTab(stg_pat_widget, "Pattern")
+
+        stage_layout.addWidget(tabs_stagectrl)
         stage_layout.addWidget(self.btn_stage_estop)
         stage_layout.addStretch()
         # --- TOP ROW: controller + laser + stage in one row ---
@@ -958,6 +1053,9 @@ class MainWindow(QMainWindow):
         self.btn_stage_estop.clicked.connect(
             lambda: self._with_wait(self.emergency_stop)
         )
+        # staage pattern
+        self.btn_load_path.clicked.connect(self._read_b_scan_file)
+        self.btn_generate.clicked.connect(self._generate_b_scan_file)
 
     def _with_wait(self, func):
         try:
@@ -1166,6 +1264,8 @@ class MainWindow(QMainWindow):
         self.btn_stage_disc.setEnabled(stage["status"] not in (0, 99))
         self.btn_stage_calib.setEnabled(stage["status"] == 2)
         self.btn_stage_init.setEnabled(stage["status"] == 1)
+        self.btn_load_path.setEnabled(stage["status"] not in (0, 99))
+        self.btn_generate.setEnabled(stage["status"] not in (0, 99))
 
     # ------------------------------------------------------------------
     # Actions (mirror JS functions)
@@ -1234,6 +1334,39 @@ class MainWindow(QMainWindow):
 
     def _disc_stage(self):
         self.disconnect_device("stage")
+
+    def _read_b_scan_file(self):
+        path = self.edit_path.text()
+        if path:
+            controller.stage.b_scan_pattern = Dem2BScanPattern(path)
+        else:
+            raise "Please enter a path"
+
+    def _generate_b_scan_file(self):
+        path = self.edit_path.text()
+        if not path:
+            raise "Please enter a path"
+        b_scan_pattern = Dem2BScanPattern()
+        amount = int(self.spin_amount.value())
+        minimum = (
+            self.spin_min_z.value(),
+            self.spin_min_y.value(),
+            self.spin_min_x.value(),
+        )
+        if self.chk_use_speckle.isChecked():
+            speckle_size = (self.spin_speckle_y.value(), self.spin_speckle_x.value())
+            b_scan_pattern.generate_line(
+                amount, minimum, self.spin_max_z.value(), speckle_size
+            )
+        else:
+            maximum = (
+                self.spin_max_z.value(),
+                self.spin_max_y.value(),
+                self.spin_max_x.value(),
+            )
+            b_scan_pattern.generate_line(amount, minimum, maximum)
+        b_scan_pattern.as_file(path)
+        controller.stage.b_scan_pattern = b_scan_pattern
 
     def _get_single_image(self):
         gamma = float(self.gamma_spin.value())
