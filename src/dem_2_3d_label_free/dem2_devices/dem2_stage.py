@@ -242,7 +242,7 @@ class Dem2Stage:
             raise Dem2Errors.StageError("Must be Initialized to calibrate!")
         self._log.info("Calibrating focus...")
         # Calibrate focus:
-        self._calibrate_axis(self.focus)
+        self._calibrate_axis(self.focus) # returns  -> tuple[Future, Future]
         self._log.info(
             "Focus: " + self._focus_settled_future.result()
             if isinstance(self._focus_settled_future.result(), str)

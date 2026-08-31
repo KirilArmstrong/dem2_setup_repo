@@ -39,6 +39,7 @@ class Dem2Camera(xiapi.Camera):
             raise Dem2Errors.CameraError("Minimum idle time is 0 us.")
         self.t_read = self._cfg["time_readout"]
         self.lateral_size = (self._cfg["lateral_size_x"], self._cfg["lateral_size_y"])
+        self.pixel_size = (self._cfg["pixel_size_x"], self._cfg["pixel_size_y"])
 
         # Number of images per a-scan.
         self.samples_a_scan: int | None = None

@@ -261,6 +261,17 @@ class Dem2Controller(Dem2SystemCalculator):
             self.na if na is None else na,
         )
 
+    def speckle_size(self, pixel_no_x: float, pixel_no_y: float) -> tuple[float, float]:
+        """
+        Calculate speckle size based on no. of pixels for each speckle in um.
+        :param pixel_no_x: Number of pixels in X.
+        :param pixel_no_y: Number of pixels in Y.
+        :return: tuple of speckle size in um as (x, y).
+        """
+        x = self.pixel_to_um(pixel_no_x, self.camera.pixel_size[0], self.mag)
+        y = self.pixel_to_um(pixel_no_y, self.camera.pixel_size[1], self.mag)
+        return x, y
+
     # Properties
 
     @property

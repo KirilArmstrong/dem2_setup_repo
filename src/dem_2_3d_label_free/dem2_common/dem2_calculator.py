@@ -6,6 +6,7 @@ import numpy as np
 
 _2_LN2_OVR_PI = 2 * math.log(2) / math.pi
 
+
 class Dem2SystemCalculator:
     def __init__(self):
         # Non-root logging. See dem2_helper.setup_root_logger() documentation.
@@ -58,7 +59,7 @@ class Dem2SystemCalculator:
         :return: Signal roll off in um.
         """
         return (
-                (_2_LN2_OVR_PI * (pow(lambda_0 / 1000, 2))) / (lambda_instant / 1000)
+            (_2_LN2_OVR_PI * (pow(lambda_0 / 1000, 2))) / (lambda_instant / 1000)
         ) / 2
 
     def exposure_lambda_range(self, t_exp, sweep_speed):
@@ -113,3 +114,15 @@ class Dem2SystemCalculator:
         k_end = 2 * np.pi / end_lambda
         array = np.linspace(k_start, k_end, no_of_images)
         return 2 * np.pi / array
+
+    def pixel_to_um(
+        self, pixel_no: float, pixel_size: float = 3.9, magnification: float = 1
+    ):
+        """
+        Calculate the corresponding real size of a number of pixels in um.
+        :param pixel_size: Size of pixel in um.
+        :param pixel_no: Number of pixels.
+        :param magnification: Magnification if applicable.
+        :return: Distance in um.
+        """
+        return (pixel_no * pixel_size) / magnification

@@ -179,7 +179,7 @@ def recon_zs(
                 continue
         t1 = time.time()
         packet.append_frame(
-            abs(
+            abs(  # DONT USE COMPLEX!
                 processor.reconstruct(
                     roi=roi,
                     centre=(y[i], x[i]),
@@ -198,7 +198,6 @@ def recon_zs(
 
 def use_processor(log):
     """Demo script"""
-
 
     processor = Dem2Processor(FILE_NAME, DATA_PATH, "1")
     try:
