@@ -8,6 +8,7 @@ running long experiments, or live.
 
 import logging
 import sys
+import time
 from datetime import datetime
 from pathlib import Path
 import threading
@@ -44,6 +45,7 @@ from src.dem_2_3d_label_free.dem2_common.dem2_constants import (
     Dem2CameraMode,
     STATUS_MAP,
     MODES,
+    Dem2StageMode,
 )
 from src.dem_2_3d_label_free.dem2_common.dem2_errors import Dem2Errors
 from src.dem_2_3d_label_free.dem2_common.dem2_helper import (
@@ -873,7 +875,7 @@ class MainWindow(QMainWindow):
             controller.camera.change_mode(Dem2CameraMode(new_mode))
         elif device == "stage":
             controller.stage.change_mode(
-                Dem2LaserMode(new_mode)
+                Dem2StageMode(new_mode)
             )  # same as your backend
 
     def set_laser_properties(self):
@@ -1458,8 +1460,25 @@ class MainWindow(QMainWindow):
             controller.laser.wavelength_max,
             int(controller.camera.samples_a_scan),
         )
+        if controller.stage.mode == Dem2StageMode.PATTERN:
+            for i in range(controller.stage.b_scan_pattern[0].a_scans_b_scan):
+                controller.stage.move_along_scan_pattern()
+                self._log.info(
+                    f"Moved to scan pattern position {controller.stage.b_scan_current_index}"
+                )
+                time.sleep(0.5)
+                controller.run_multiple_lambdas(
+                    str(DATA_PATH / "image_discrete.h5"),
+                    lambdas,
+                    False,
+                    (controller.stage.b_scan_current_index + 1),
+                )
+                time.sleep(0.5)
+            return
         controller.run_multiple_lambdas(
-            str(DATA_PATH / "image_discrete.h5"), lambdas, False
+            str(DATA_PATH / "image_discrete.h5"),
+            lambdas,
+            False,
         )
 
     def _set_integration_time(self):

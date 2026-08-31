@@ -26,7 +26,7 @@ class Dem2SweepPacket:
     def open_file(self):
         """Prepares the HDF5 file to receive streaming frames."""
         os.makedirs(os.path.dirname(self.filepath), exist_ok=True)
-        self._h5_file = h5py.File(self.filepath, "w")
+        self._h5_file = h5py.File(self.filepath, "a")
         self._data = None
         self._frame_count = 0
 
@@ -429,7 +429,7 @@ class Dem2SweepPacket:
         :param max_elements: Show elements within dataset.
         """
         return collect_h5_contents(
-            self.filepath, self.log if log_it else None, max_elements
+            self.filepath, self._log if log_it else None, max_elements
         )
 
     @property

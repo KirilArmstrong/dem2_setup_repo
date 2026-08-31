@@ -186,13 +186,18 @@ class Dem2Controller(Dem2SystemCalculator):
         return self.cam_capturer.packet if filename else self.cam_capturer.array_stack
 
     def run_multiple_lambdas(
-        self, filename, lambdas: np.ndarray, increment_data_set: bool = True
+        self,
+        filename,
+        lambdas: np.ndarray,
+        increment_data_set: bool = True,
+        data_set_start: int = 1,
     ) -> Dem2SweepPacket:
         """
         Capture single images at multiple CW wavelengths.
         :param filename: File to save data to.
         :param lambdas: Wavelength list in nm.
         :param increment_data_set: Increment the data set for each wavelength.
+        :param data_set_start: Starting index of the data sets. Min 1
         :return: Data packet.
         """
         self._log.info(
@@ -206,7 +211,7 @@ class Dem2Controller(Dem2SystemCalculator):
             if increment_data_set or i == 0:
                 if not increment_data_set:
                     self.camera.start_acquisition()
-                packet.data_set = str(i + 1)
+                packet.data_set = str(i + data_set_start)
                 packet.open_file()
             self.laser.send_cw(lambdas[i])
             self.laser.toggle_emission()

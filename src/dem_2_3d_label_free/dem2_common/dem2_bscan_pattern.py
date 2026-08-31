@@ -63,11 +63,11 @@ class Dem2BScanPattern:
         z = np.linspace(min_z, max_z, amount)
         if speckle_size is not None:
             speckle_y, speckle_x = speckle_size
-            y = np.linspace(min_y, min_y + (speckle_y * (amount - 2)), amount)
-            x = np.linspace(min_x, min_x + (speckle_x * (amount - 2)), amount)
+            y = np.linspace(min_y, min_y + (speckle_y * (amount - 1)), amount)
+            x = np.linspace(min_x, min_x + (speckle_x * (amount - 1)), amount)
             self.description = (
                 f"Pattern from (x={min_x},y={min_y},f={min_z}) to "
-                f"({min_x + (speckle_x * (amount - 2))},{min_y + (speckle_y * (amount - 2))},{max_z})"
+                f"({min_x + (speckle_x * (amount - 1))},{min_y + (speckle_y * (amount - 1))},{max_z})"
             )
         else:
             y = np.linspace(min_y, max_y, amount)
