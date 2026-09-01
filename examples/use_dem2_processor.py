@@ -36,6 +36,7 @@ def prep_zernike(processor: Dem2Processor, array: np.ndarray, centre: tuple[int,
 
 SEE_ZS = None # [0, 45, 99, 140, 340, 400, 422]
 
+
 def determine_properties(processor, centre, w, h, z_slice):
     roi_bool = input("Roi? y/n: ")
     roi = None
@@ -73,6 +74,7 @@ def _estimate_batch_size(H, W, safety=0.5):
     bytes_per_image = H * W * 4 + H * W * 8 + H * W * 8
     return max(1, int(free * safety / bytes_per_image))
 
+
 def _process_batch_along_z(imgs_batch, pad_dz=0):
     imgs_batch = cp.asarray(imgs_batch, dtype=cp.float32)
     # dy = imgs_batch.shape[0] // 2 if pad is None else pad
@@ -84,6 +86,7 @@ def _process_batch_along_z(imgs_batch, pad_dz=0):
         arr_padded = np.vstack([pad_top, imgs_batch, pad_bottom])
         return cp.fft.fftshift(cp.fft.fft(arr_padded, axis=0), axes=0)
     return cp.fft.fftshift(cp.fft.fft(imgs_batch, axis=0), axes=0)
+
 
 def _process_batch(imgs_batch, cx, cy, w, h):
     """
@@ -126,7 +129,7 @@ def recon_zs(
     roi, y, x = determine_properties(processor, centre, w, h, z_slice)
     log.info("Beginning full reconstruction...")
     packet = Dem2SweepPacket(
-        str(DATA_PATH / FILE_NAME)[:-3] + "_recon.h5", "1", processor.get_attributes()
+        str(DATA_PATH / FILE_NAME)[:-3] + "_recon.h5", dset, processor.get_attributes()
     )
     packet.open_file()
     if cuda_version:
@@ -138,15 +141,18 @@ def recon_zs(
         # ]
         log.info("This'll take a while...")
         Z = processor.shape[0]
-        y_roi, x_roi = roi[0] if roi is not None else slice(None), roi[1] if roi is not None else slice(None)
-        H = processor[0,y_roi,0].shape[0]
-        W = processor[0,0,x_roi].shape[0]
+        y_roi, x_roi = (
+            roi[0] if roi is not None else slice(None),
+            roi[1] if roi is not None else slice(None),
+        )
+        H = processor[0, y_roi, 0].shape[0]
+        W = processor[0, 0, x_roi].shape[0]
         # imgs = holography_full_recon(processor[z_slice:,roi[0] if roi is not None else slice(None),roi[1] if roi is not None else slice(None)], np.array([y,x]), w, h)
         # packet.set_array(imgs)
         # process and stream to the packet's HDF5 file
         ds = packet.prepare_dataset(
             (Z - z_slice, H, W),
-            dtype=np.complex64,
+            dtype=np.float32,
             data_set=dset,
         )
 
@@ -163,12 +169,17 @@ def recon_zs(
                 w,
                 h,
             )
-            packet.write_batch(start, cp.asnumpy(images), data_set=dset)
+            packet.write_batch(
+                start, np.abs(cp.asnumpy(images)).astype(np.float32), data_set=dset
+            )
             del images
             cp.get_default_memory_pool().free_all_blocks()
 
-            dt = (time.time() - t1) * ((Z - end)/batch_size)
-            log.info(f"{start}:{end} / {Z} " + f"{int(end / Z * 100)}%, ETA: {int(dt // 60)} mins {int(dt % 60)} s.")
+            dt = (time.time() - t1) * ((Z - end) / batch_size)
+            log.info(
+                f"{start}:{end} / {Z} "
+                + f"{int(end / Z * 100)}%, ETA: {int(dt // 60)} mins {int(dt % 60)} s."
+            )
         packet.close_file()
         packet.set_attributes()
         return
@@ -198,20 +209,27 @@ def recon_zs(
 
 def use_processor(log):
     """Demo script"""
+    data_set = input("Which dataset to use? ")
+    if not data_set:
+        data_set = "1"
 
-    processor = Dem2Processor(FILE_NAME, DATA_PATH, "1")
+    processor = Dem2Processor(FILE_NAME, DATA_PATH, data_set)
     try:
         # Convert a tif file to h5:
         processor.convert_tif_to_h5()
-    except:
-        pass  # will error if not tif, so for demo purposes, it handles the error.
+        log.info("Successfully converted tif to h5.")
+        return
+    except Exception as e:
+        log.error(e)
 
     log.info(collect_h5_contents(processor.path))
 
     # start_pos = ()
     if input("Only convert to f32? (y/n): ").lower() == "y":
         packet = Dem2SweepPacket(
-            str(DATA_PATH / FILE_NAME)[:-3] + "_f32.h5", "1", processor.get_attributes()
+            str(DATA_PATH / FILE_NAME)[:-3] + "_f32.h5",
+            data_set,
+            processor.get_attributes(),
         )
         packet.open_file()
         for i in range(processor.shape[0]):
@@ -231,7 +249,9 @@ def use_processor(log):
         cuda_version = input("cuda? (y/n): ")
         if cuda_version.lower() == "y":
             packet = Dem2SweepPacket(
-                str(DATA_PATH / FILE_NAME)[:-3] + "_oct_recon.h5", "1", processor.get_attributes()
+                str(DATA_PATH / FILE_NAME)[:-3] + "_oct_recon.h5",
+                data_set,
+                processor.get_attributes(),
             )
             packet.open_file()
             Z, H, W = processor.shape
@@ -241,38 +261,44 @@ def use_processor(log):
             # process and stream to the packet's HDF5 file
             ds = packet.prepare_dataset(
                 (Z, H, W),
-                dtype=np.complex64,
+                dtype=np.float32,
                 chunks=(Z, 1, W),
-                data_set="1",
+                data_set=data_set,
             )
             packet._frame_count = Z
             batch_size = _estimate_batch_size(Z, W)
 
-            log.info(f"Beginning reconstruction... Final file size estimate: {int((Z*H*W*8)/1e9)} GB.")
+            log.info(
+                f"Beginning reconstruction... Final file size estimate: {int((Z * H * W * 4) / 1e9)} GB."
+            )
             for start in range(0, H, batch_size):
                 t1 = time.time()
                 end = min(start + batch_size, H)
-                images = _process_batch_along_z(
-                    processor[:,start:end,:],
-                    dz
+                images = _process_batch_along_z(abs(processor[:, start:end, :]), dz)
+                packet.write_batch(
+                    start,
+                    np.abs(cp.asnumpy(images)).astype(np.float32),
+                    data_set=data_set,
+                    axis=1,
                 )
-                packet.write_batch(start, cp.asnumpy(images), data_set="1", axis=1)
                 del images
                 cp.get_default_memory_pool().free_all_blocks()
 
                 dt = (time.time() - t1) * ((H - end) / batch_size)
                 log.info(
-                    f"{start}:{end} / {H} " + f"{int(end / H * 100)}%, ETA: {int(dt // 60)} mins {int(dt % 60)} s.")
+                    f"{start}:{end} / {H} "
+                    + f"{int(end / H * 100)}%, ETA: {int(dt // 60)} mins {int(dt % 60)} s."
+                )
             packet.close_file()
             packet.set_attributes()
             log.info("Reconstruction complete.")
             return
-        oct_recon = processor.oct_reconstruct(abs(processor[:,Y,:]), pad=padding)
+        oct_recon = oct_reconstruct(abs(processor[:, Y, :]), pad=padding)
         # oct_recon = oct_recon[:oct_recon.shape[0]//2,:]
         processor._prep_plot(oct_recon, "OCT Recon", gamma=GAMMA)
         plt.show()
         return
-    # processor.rename_dataset("images", "1")
+    # processor.rename_dataset("images", data_set)
     cuda_all_z_bool = False
     # Just plot the FFT of the image. Useful to find 1st order center point.
     cor_bool = input("Plot reconstruction? y/n: ")
@@ -311,7 +337,14 @@ def use_processor(log):
             )
         else:
             recon_zs(
-                log, processor, centre, w, h, z_slice, cuda_version=cuda_all_z_bool
+                log,
+                processor,
+                centre,
+                w,
+                h,
+                z_slice,
+                cuda_version=cuda_all_z_bool,
+                dset=data_set,
             )
             return
 
@@ -349,7 +382,14 @@ def use_processor(log):
             )
         else:
             recon_zs(
-                log, processor, centre, w, h, z_slice, cuda_version=cuda_all_z_bool
+                log,
+                processor,
+                centre,
+                w,
+                h,
+                z_slice,
+                cuda_version=cuda_all_z_bool,
+                dset=data_set,
             )
             return
     # a, N = prep_zernike(processor, recon_arr, centre=(1620, 2455), radius=1550)
@@ -373,7 +413,7 @@ def use_processor(log):
         plt.title("Y correlation coefs")
         plt.show()
 
-    corZ_bool = input("Correlate Z? y/n: ")
+    corZ_bool = input("Correlate Z? y/n: ").lower() == "y"
     if corZ_bool:
         z_slice = int(input(f"Z to correlate (shape[0]={processor.shape[0]}): "))
         z_start = input("Z stack start (def. 0): ")

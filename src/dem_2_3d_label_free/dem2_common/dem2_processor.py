@@ -61,7 +61,7 @@ class Dem2Processor(Dem2SweepPacket):
             self._log.info(f"Removed existing file: {h5_path}")
 
         self.save(array, Path(h5_path))
-        self.load(full_path=Path(h5_path))
+        # self.load(full_path=Path(h5_path))
 
     def load(
         self,
@@ -97,10 +97,11 @@ class Dem2Processor(Dem2SweepPacket):
         # Base attributes
         attrs = attributes if attributes is not None else self._attributes
 
-        path = path if str(path) != "." else self.path
+        self.filepath = path if str(path) != "." else self.path
+        self._path_override = self.filepath
         ds_name = dataset_name if dataset_name else self.data_set
 
-        with h5py.File(str(path), "a") as f:
+        with h5py.File(self.path, "a") as f:
             if array is not None:
                 attrs.update(
                     {
@@ -133,7 +134,7 @@ class Dem2Processor(Dem2SweepPacket):
             # for key, value in attrs.items():
             #     if value is not None:
             #         dset.attrs[key] = value
-            self.set_attributes(attrs, ds_name)
+        self.set_attributes(attrs, ds_name)
 
         self._log.info(f"Saved H5 file: {path}")
         self._log.info(f"File size: {os.path.getsize(path) / 1024 / 1024:.2f} MB")

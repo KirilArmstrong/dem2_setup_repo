@@ -421,6 +421,7 @@ class Dem2SweepPacket:
             return
 
         ds[start:end] = data
+        self._frame_count += data.shape[axis]
 
     def get_info(self, log_it: bool = True, max_elements=0) -> str:
         """
