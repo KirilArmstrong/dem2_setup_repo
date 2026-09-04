@@ -170,7 +170,7 @@ def recon_zs(
                 h,
             )
             packet.write_batch(
-                start, np.abs(cp.asnumpy(images)).astype(np.float32), data_set=dset
+                start, np.real(cp.asnumpy(images)).astype(np.float32), data_set=dset
             )
             del images
             cp.get_default_memory_pool().free_all_blocks()
@@ -274,10 +274,10 @@ def use_processor(log):
             for start in range(0, H, batch_size):
                 t1 = time.time()
                 end = min(start + batch_size, H)
-                images = _process_batch_along_z(abs(processor[:, start:end, :]), dz)
+                images = _process_batch_along_z(np.real(processor[:, start:end, :]), dz)
                 packet.write_batch(
                     start,
-                    np.abs(cp.asnumpy(images)).astype(np.float32),
+                    np.real(cp.asnumpy(images)).astype(np.float32),
                     data_set=data_set,
                     axis=1,
                 )
@@ -293,7 +293,7 @@ def use_processor(log):
             packet.set_attributes()
             log.info("Reconstruction complete.")
             return
-        oct_recon = oct_reconstruct(abs(processor[:, Y, :]), pad=padding)
+        oct_recon = oct_reconstruct(np.real(processor[:, Y, :]), pad=padding)
         # oct_recon = oct_recon[:oct_recon.shape[0]//2,:]
         processor._prep_plot(oct_recon, "OCT Recon", gamma=GAMMA)
         plt.show()
