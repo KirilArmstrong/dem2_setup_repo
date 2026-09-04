@@ -190,7 +190,7 @@ def recon_zs(
                 continue
         t1 = time.time()
         packet.append_frame(
-            abs(  # DONT USE COMPLEX!
+            np.real(  # DONT USE abs!
                 processor.reconstruct(
                     roi=roi,
                     centre=(y[i], x[i]),
@@ -233,7 +233,7 @@ def use_processor(log):
         )
         packet.open_file()
         for i in range(processor.shape[0]):
-            packet.append_frame(np.abs(processor[i, :, :]).astype(np.float32))
+            packet.append_frame(np.real(processor[i, :, :]).astype(np.float32))
             if i % (processor.shape[0] // 10) == 0:
                 log.info(f"{i / processor.shape[0] * 100}%")
         packet.close_file()
