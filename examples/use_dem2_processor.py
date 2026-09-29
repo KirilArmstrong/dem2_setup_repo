@@ -116,6 +116,17 @@ def _process_batch(imgs_batch, cx, cy, w, h):
 
     crop = Fshift[cp.arange(B)[:, None, None], y_idx_c, x_idx_c]  # (B, h, w)
 
+    # embed the crop in the centre of a full (B, H, W) array
+    y0 = (H - h) // 2
+    x0 = (W - w) // 2
+    spectra = cp.zeros((B, H, W), dtype=Fshift.dtype)
+    spectra[:, y0 : y0 + h, x0 : x0 + w] = crop
+
+    images = cp.fft.ifft2(cp.fft.ifftshift(spectra, axes=(1, 2)), axes=(1, 2))
+
+    return images
+
+
 def recon_zs(
     log,
     processor,
@@ -139,6 +150,7 @@ def recon_zs(
         #     roi[0] if roi is not None else slice(None),
         #     roi[1] if roi is not None else slice(None),
         # ]
+        save_complex = input("Save complex data? (y/n):").lower() == "y"
         log.info("This'll take a while...")
         Z = processor.shape[0]
         y_roi, x_roi = (
@@ -152,7 +164,7 @@ def recon_zs(
         # process and stream to the packet's HDF5 file
         ds = packet.prepare_dataset(
             (Z - z_slice, H, W),
-            dtype=np.float32,
+            dtype=np.complex64 if save_complex else np.float32,
             data_set=dset,
         )
 
@@ -170,7 +182,11 @@ def recon_zs(
                 h,
             )
             packet.write_batch(
-                start, np.real(cp.asnumpy(images)).astype(np.float32), data_set=dset
+                start,
+                cp.asnumpy(images)
+                if save_complex
+                else np.real(cp.asnumpy(images)).astype(np.float32),
+                data_set=dset,
             )
             del images
             cp.get_default_memory_pool().free_all_blocks()
@@ -246,6 +262,7 @@ def use_processor(log):
             padding = None
         else:
             padding = int(padding) if padding != "" else 0
+        recon_abs = input("recon absolute? (y/n): ").lower() == "y"
         cuda_version = input("cuda? (y/n): ")
         if cuda_version.lower() == "y":
             packet = Dem2SweepPacket(
@@ -277,7 +294,9 @@ def use_processor(log):
                 images = _process_batch_along_z(np.real(processor[:, start:end, :]), dz)
                 packet.write_batch(
                     start,
-                    np.real(cp.asnumpy(images)).astype(np.float32),
+                    np.abs(cp.asnumpy(images)).astype(np.float32)
+                    if recon_abs
+                    else np.real(cp.asnumpy(images)).astype(np.float32),
                     data_set=data_set,
                     axis=1,
                 )
@@ -293,7 +312,15 @@ def use_processor(log):
             packet.set_attributes()
             log.info("Reconstruction complete.")
             return
-        oct_recon = oct_reconstruct(np.real(processor[:, Y, :]), pad=padding)
+        y = input("Y level? (int|None):")
+        try:
+            y = int(y)
+        except Exception as e:
+            y = Y
+        oct_recon = oct_reconstruct(
+            np.abs(processor[:, y, :]) if recon_abs else np.real(processor[:, y, :]),
+            pad=padding,
+        )
         # oct_recon = oct_recon[:oct_recon.shape[0]//2,:]
         processor._prep_plot(oct_recon, "OCT Recon", gamma=GAMMA)
         plt.show()
