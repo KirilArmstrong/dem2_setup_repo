@@ -137,10 +137,12 @@ class Dem2Stage:
         self._focus_settled_future = Future()
         self._focus_set_pos = z_pos
         self._state = Dem2State.RUNNING
-        if self.get_focus() == self._focus_set_pos:
+        current_focus = self.get_focus()
+        self._log.info(str(current_focus) + " " + str(z_pos))
+        if round(current_focus, 2) == round(self._focus_set_pos, 2):
             self._log.info("Focus already at pos " + z_pos.__str__())
             self._state = Dem2State.READY
-            self._focus_settled_future.set_result(self.get_focus())
+            self._focus_settled_future.set_result(current_focus)
         else:
             self._log.info("moving focus to: " + z_pos.__str__())
             self.focus.SetPosition(self._focus_set_pos, self._pos_unit, self._move_mode)
@@ -339,6 +341,7 @@ class Dem2Stage:
             self._b_scan_pattern.y_positions[self._bsp_current_index],
         )
         self.move_focus(self._b_scan_pattern.focus_positions[self._bsp_current_index])
+        self._log.info(f"Stage moved to index {self._bsp_current_index}")
         if self._b_scan_pattern.a_scans_b_scan == self._bsp_current_index - 1:
             self._log.info("Reached the end of the scan pattern. Resetting to index 0.")
             self._bsp_current_index = -1

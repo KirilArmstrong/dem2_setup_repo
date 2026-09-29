@@ -155,7 +155,7 @@ class ProcessingWorker(QObject):
                 if image_array is None:
                     continue
                 image_array = image_array[:, self._oct_recon_y_level, :]
-                image_array = abs(image_array)
+                image_array = np.real(image_array)
                 image_array = oct_reconstruct(image_array, self._padding) ** self._gamma
             else:
                 image_array = self.controller.camera.get_image(
@@ -1371,6 +1371,10 @@ class MainWindow(QMainWindow):
         controller.stage.b_scan_pattern = b_scan_pattern
 
     def _get_single_image(self):
+        if controller.stage.mode == Dem2StageMode.PATTERN:
+            lambdas = np.array([controller.laser.wavelength])
+            self._run_discrete_sweep(lambdas)
+            return
         gamma = float(self.gamma_spin.value())
         if not 0.0 <= gamma <= 1.0:
             raise ValueError("Gamma must be between 0 and 1")
@@ -1454,11 +1458,15 @@ class MainWindow(QMainWindow):
         self.start_trigger_capturing()
         self.state.isCaptBurst = True
 
-    def _run_discrete_sweep(self):
-        lambdas = controller.lambdas_array(
-            controller.laser.wavelength_min,
-            controller.laser.wavelength_max,
-            int(controller.camera.samples_a_scan),
+    def _run_discrete_sweep(self, lambdas=None):
+        lambdas = (
+            controller.lambdas_array(
+                controller.laser.wavelength_min,
+                controller.laser.wavelength_max,
+                int(controller.camera.samples_a_scan),
+            )
+            if lambdas is None
+            else lambdas
         )
         if controller.stage.mode == Dem2StageMode.PATTERN:
             for i in range(controller.stage.b_scan_pattern[0].a_scans_b_scan):
