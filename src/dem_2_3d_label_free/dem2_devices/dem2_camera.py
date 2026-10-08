@@ -125,6 +125,11 @@ class Dem2Camera(xiapi.Camera):
                     raise Dem2Errors.CameraError(
                         f"Camera fps must be between 0.01 and 10,000 fps. Yours:{self._fps} fps."
                     )
+                if self._fps > 311:
+                    self._log.warning(
+                        "Camera can only do 311 fps at full frame! Yours: "
+                        + str(self._fps)
+                    )
                 self.set_framerate(self._fps)
                 self._log.info(f"Frame rate on. set to {self._fps} fps.")
 

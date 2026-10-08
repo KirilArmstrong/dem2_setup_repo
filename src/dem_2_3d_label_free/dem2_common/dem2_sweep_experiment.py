@@ -26,7 +26,10 @@ class Dem2SweepPacket:
     def open_file(self):
         """Prepares the HDF5 file to receive streaming frames."""
         os.makedirs(os.path.dirname(self.filepath), exist_ok=True)
-        self._h5_file = h5py.File(self.filepath, "a")
+        try:
+            self._h5_file = h5py.File(self.filepath, "a")
+        except:
+            self._h5_file = h5py.File(self.filepath, "w")
         self._data = None
         self._frame_count = 0
 
@@ -65,11 +68,15 @@ class Dem2SweepPacket:
         if self._h5_file is None:
             raise RuntimeError("Packet is not open. Call start_capture() first.")
 
+        dset = self.data_set if data_set is None else data_set
+
         if self._data is None:
             h, w = frame_data.shape
+            if dset in self._h5_file:
+                del self._h5_file[dset]
             # Initialize resizable dataset on the first frame
             self._data = self._h5_file.create_dataset(
-                self.data_set if data_set is None else data_set,
+                dset,
                 shape=(1, h, w),
                 maxshape=(None, h, w),
                 dtype=frame_data.dtype,

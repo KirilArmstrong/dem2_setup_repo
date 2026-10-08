@@ -53,7 +53,12 @@ class Dem2Capturer(Thread):
             self.packet.open_file()
             self._log.info("Capturer Thread: Starting acquisition...")
             self._cam.start_acquisition()
-        self._log.info("Capturer Thread: Waiting for external trigger...")
+        self._log.info(
+            "Capturer Thread: Waiting for external trigger...\n"
+            "  / \   +---------------------------------------------------------------+\n"
+            " / | \  | If your not in Live mode, you must trigger emission yourself! |\n"
+            "/__'__\ +---------------------------------------------------------------+\n"
+        )
 
         try:
             while True:
@@ -83,7 +88,9 @@ class Dem2Capturer(Thread):
         finally:
             # Crucial cleanup
             self._log.info(
-                "Writing frames to " + "ram" if self.packet is None else "disk" + "..."
+                f"Writing {len(imgs)} frames to "
+                + ("ram" if self.packet is None else "disk")
+                + "..."
             )
             arrs = None
             for i in range(len(imgs)):
@@ -95,7 +102,7 @@ class Dem2Capturer(Thread):
                 arr = imgs[i].get_image_data_numpy()
                 if self.packet is not None:
                     self.packet.append_frame(arr)
-                    if i % (len(imgs) // 10) == 0:
+                    if i % max(len(imgs) // 10, 1) == 0:
                         self._log.info(
                             f"writing frames {int((i / len(imgs)) * 100)}% ({('up to ' + str(imgs[i].nframe)) if i != 0 else 'starting at frame ' + str(imgs[i].nframe)})"
                         )

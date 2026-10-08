@@ -56,6 +56,7 @@ from src.dem_2_3d_label_free.dem2_common.dem2_helper import (
     numpy_to_qpixmap,
     crop_centre_ifft,
     phase_to_hsv,
+    ui_prep_img,
 )
 from src.dem_2_3d_label_free.dem2_common.dem2_sweep_experiment import Dem2SweepPacket
 from src.dem_2_3d_label_free.dem2_components.dem2_capturer import Dem2Capturer
@@ -102,7 +103,7 @@ class ProcessingWorker(QObject):
         self._fft_enabled = False
         self._fft_track = False
         self._gamma = 0.3
-        self._oct_recon_y_level = 0
+        self._oct_recon_y_level = 1
         self._oct_mode = False
         self._padding = 0
         # ROIs: (tl_x, tl_y, br_x, br_y)
@@ -155,8 +156,11 @@ class ProcessingWorker(QObject):
                 if image_array is None:
                     continue
                 image_array = image_array[:, self._oct_recon_y_level, :]
-                image_array = np.real(image_array)
-                image_array = oct_reconstruct(image_array, self._padding) ** self._gamma
+                # image_array = np.real(image_array)
+                image_array = oct_reconstruct(image_array, self._padding)
+                y = image_array.shape[0] // 2
+                image_array[y - 2 : y + 2, :] = 0
+                image_array = image_array**self._gamma
             else:
                 image_array = self.controller.camera.get_image(
                     self.controller.camera.image
@@ -164,16 +168,7 @@ class ProcessingWorker(QObject):
 
             if image_array is None:
                 continue
-            # Normalize to uint8 for display / ROI drawing
-            if image_array.dtype in (np.float32, np.float64):
-                display_arr = (np.clip(image_array, 0, 1) * 255).astype(np.uint8)
-            else:
-                display_arr = image_array.astype(np.uint8)
-            # Build RGB display image and draw camera ROI if active
-            if display_arr.ndim == 2:
-                display_rgb = np.stack([display_arr, display_arr, display_arr], axis=-1)
-            else:
-                display_rgb = np.ascontiguousarray(display_arr)
+            display_rgb, display_arr = ui_prep_img(image_array)
 
             if self._oct_mode:
                 self.frame_ready.emit(display_rgb, None, None)
@@ -418,6 +413,7 @@ class MainWindow(QMainWindow):
         self.gamma_spin.setValue(0.3)
         self.btn_cam_live = QPushButton("Live")
         self.btn_cam_burst = QPushButton("Capt. Burst")
+        self.btn_reac_cont_oct = QPushButton("Show")
         self.btn_cam_disc_sweep = QPushButton("Discrete Swp.")
         self.btn_cam_set_int = QPushButton("Set Texp")
         self.int_time_spin = QDoubleSpinBox()
@@ -439,6 +435,7 @@ class MainWindow(QMainWindow):
         grid_camctrl_mono.addWidget(self.btn_cam_capture, 0, 0)
         grid_camctrl_mono.addWidget(self.btn_cam_live, 0, 1)
         grid_camctrl_burst.addWidget(self.btn_cam_burst, 0, 0)
+        grid_camctrl_burst.addWidget(self.btn_reac_cont_oct, 1, 0)
         grid_camctrl_mono.addWidget(self.btn_cam_disc_sweep, 0, 2)
 
         tabs_camctrl_mode = QTabWidget()
@@ -997,6 +994,9 @@ class MainWindow(QMainWindow):
             lambda: self._with_wait(self._toggle_live_clicked)
         )
         self.btn_cam_burst.clicked.connect(lambda: self._with_wait(self._start_burst))
+        self.btn_reac_cont_oct.clicked.connect(
+            lambda: self._with_wait(self._read_oct_cont())
+        )
         self.chk_fft.stateChanged.connect(self._update_flags)
         self.chk_save.stateChanged.connect(self._update_flags)
         self.chk_oct.stateChanged.connect(self._update_flags)
@@ -1457,6 +1457,21 @@ class MainWindow(QMainWindow):
     def _start_burst(self):
         self.start_trigger_capturing()
         self.state.isCaptBurst = True
+
+    def _read_oct_cont(self):
+        packet = Dem2SweepPacket(str(DATA_PATH / "image_cont.h5"))
+        image_array = packet[:, 1, :]
+        # image_array = controller.run_single_sweep()
+        # self._log.info("test)")
+        # if image_array is None:
+        #     return
+        # image_array = image_array[:, 1, :]
+        y = image_array.shape[0] // 2
+        image_array = oct_reconstruct(image_array, y)
+        image_array[y - 50 : y + 50, :] = 0
+        image_array = image_array**0.52
+        display_rgb, _ = ui_prep_img(image_array)
+        self.proc_worker.frame_ready.emit(display_rgb, None, None)
 
     def _run_discrete_sweep(self, lambdas=None):
         lambdas = (

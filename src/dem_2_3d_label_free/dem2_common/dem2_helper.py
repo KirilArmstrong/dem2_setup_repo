@@ -186,6 +186,22 @@ def collect_h5_contents(filename, log=None, max_elements=0) -> str:
     return strs
 
 
+def ui_prep_img(
+    image_array: np.ndarray,
+) -> tuple[np.ndarray, np.ndarray]:
+    # Normalize to uint8 for display / ROI drawing
+    if image_array.dtype in (np.float32, np.float64):
+        display_arr = (np.clip(image_array, 0, 1) * 255).astype(np.uint8)
+    else:
+        display_arr = image_array.astype(np.uint8)
+    # Build RGB display image and draw camera ROI if active
+    if display_arr.ndim == 2:
+        display_rgb = np.stack([display_arr, display_arr, display_arr], axis=-1)
+    else:
+        display_rgb = np.ascontiguousarray(display_arr)
+    return display_rgb, display_arr
+
+
 def oct_reconstruct(
     array: np.ndarray,
     pad: int | None = None,

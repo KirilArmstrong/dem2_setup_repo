@@ -172,12 +172,14 @@ def recon_zs(
         batch_size = _estimate_batch_size(H, W)
 
         for start in range(z_slice, Z, batch_size):
+            cent_strt = start - z_slice
             t1 = time.time()
             end = min(start + batch_size, Z)
+            cent_end = end - z_slice
             images = _process_batch(
                 processor[start:end, y_roi, x_roi],
-                cen[0, start:end],
-                cen[1, start:end],
+                cen[0, cent_strt:cent_end],
+                cen[1, cent_strt:cent_end],
                 w,
                 h,
             )
