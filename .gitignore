@@ -1,0 +1,15 @@
+# Default ignored files
+/shelf/
+/workspace.xml
+/data/
+/config/
+/configs/
+/log/
+/logs/
+/.idea/
+*.pyc
+/test/
+/tests/
+/.vscode/
+/dem2_doc_vault/.obsidian/
+/dem2_doc_vault/Templates/

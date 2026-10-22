@@ -1,0 +1,26 @@
+laser:
+  port: "COM3"
+  wavelength_center: 840.0 # nm.
+  wavelength_min: 805.0 # nm.
+  wavelength_max: 880.0 # nm.
+camera:
+  device_id: 0 # camera dev_id. 0 will take first one found.
+  time_exposure: 20.0 # ms.
+  time_readout: 6.65 # ms.
+  lateral_size: 12.8 # mm.
+  mode: 0 # Default camera mode.
+stage:
+  a-scans: 0
+  focus_z_pos: 0.0 # Initial focus z position.
+  axis_limit_min: -100000.0
+  axis_limit_max: 100000.0
+system:
+  depth_max: 2000.0 # um, determines no. of images per a-scan.
+  numerical_aperture: 0.075 # objective NA.
+  magnification: 2.5 # objective Mag, i.e. 2.5x.
+  # Example objectives:
+  # Mag   | NA
+  # 1.25x | 0.035
+  # 2.5x  | 0.075
+  # 4x    | 0.1
+  # 5x    | 0.15-0.25

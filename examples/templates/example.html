@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dem2Controller Interface</title>
+    <style>
+        @import url('https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css');
+    </style>
+</head>
+<body class="bg-gray-100 flex items-center justify-center h-screen">
+<div class="bg-white p-8 rounded shadow-md w-96">
+    <h1 class="text-2xl font-bold mb-4">Dem2Controller Interface</h1>
+    <div class="mb-4">
+        <label class="block text-gray-700">State:</label>
+        <div id="state" class="text-xl font-semibold">DISCONNECTED</div>
+    </div>
+    <div class="mb-4">
+        <label class="block text-gray-700">System Properties:</label>
+        <ul id="properties" class="text-sm">
+            <!-- Properties will be populated here -->
+        </ul>
+    </div>
+    <div class="flex space-x-4 mb-4">
+        <button id="connect" class="bg-blue-500 text-white px-4 py-2 rounded">Connect</button>
+        <button id="disconnect" class="bg-red-500 text-white px-4 py-2 rounded">Disconnect</button>
+        <button id="initialize" class="bg-green-500 text-white px-4 py-2 rounded">Initialize</button>
+    </div>
+    <div class="mb-4">
+        <label class="block text-gray-700">Upload Config:</label>
+        <input type="file" id="configFile"
+               class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+               accept=".yml">
+        <button id="uploadConfig" class="bg-blue-500 text-white px-4 py-2 rounded mt-2">Upload</button>
+    </div>
+    <div class="mb-4">
+        <label class="block text-gray-700">Upload BScan Pattern:</label>
+        <input type="file" id="bscanFile"
+               class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+               accept=".yml">
+        <button id="uploadBScan" class="bg-blue-500 text-white px-4 py-2 rounded mt-2">Upload</button>
+    </div>
+    <div class="flex space-x-4 mb-4">
+        <button id="runBScan" class="bg-purple-500 text-white px-4 py-2 rounded">Run BScan Pattern</button>
+    </div>
+    <div class="mb-4">
+        <label class="block text-gray-700">Image:</label>
+        <img id="imageDisplay" class="w-full h-auto" alt="Image from Controller">
+    </div>
+    <div class="flex space-x-4 mb-4">
+        <button id="getImage" class="bg-indigo-500 text-white px-4 py-2 rounded">Get Image</button>
+        <label class="inline-flex items-center">
+            <input type="checkbox" id="fftCheckbox" class="form-checkbox">
+            <span class="ml-2 text-gray-700">Apply FFT</span>
+        </label>
+    </div>
+
+    <div id="notifications" class="text-red-500 text-sm"></div>
+</div>
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const stateElement = document.getElementById('state');
+        const propertiesElement = document.getElementById('properties');
+        const notificationsElement = document.getElementById('notifications');
+        const imageDisplayElement = document.getElementById('imageDisplay');
+        const fftCheckbox = document.getElementById('fftCheckbox');
+
+        function updateState() {
+            fetch('/get_state')
+                .then(response => response.json())
+                .then(data => {
+                    stateElement.textContent = data.state;
+                });
+        }
+
+        function updateProperties() {
+            fetch('/get_properties')
+                .then(response => response.json())
+                .then(data => {
+                    propertiesElement.innerHTML = '';
+                    for (const [key, value] of Object.entries(data)) {
+                        const li = document.createElement('li');
+                        li.textContent = `${key}: ${value}`;
+                        propertiesElement.appendChild(li);
+                    }
+                });
+        }
+
+        function showNotification(message) {
+            notificationsElement.textContent = message;
+            setTimeout(() => {
+                notificationsElement.textContent = '';
+            }, 5000);
+        }
+
+        document.getElementById('connect').addEventListener('click', function() {
+            fetch('/connect', { method: 'POST' })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        showNotification(data.success);
+                    } else {
+                        showNotification(data.error);
+                    }
+                    updateState();
+                });
+        });
+
+        document.getElementById('disconnect').addEventListener('click', function() {
+            fetch('/disconnect', { method: 'POST' })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        showNotification(data.success);
+                    } else {
+                        showNotification(data.error);
+                    }
+                    updateState();
+                });
+        });
+
+        document.getElementById('initialize').addEventListener('click', function() {
+            fetch('/initialize', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ stage_wait_time: 20 })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showNotification(data.success);
+                } else {
+                    showNotification(data.error);
+                }
+                updateState();
+            });
+        });
+
+        document.getElementById('uploadConfig').addEventListener('click', function() {
+            const fileInput = document.getElementById('configFile');
+            const file = fileInput.files[0];
+            const formData = new FormData();
+            formData.append('file', file);
+
+            fetch('/upload_config', { method: 'POST', body: formData })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        showNotification(data.success);
+                        updateProperties();
+                    } else {
+                        showNotification(data.error);
+                    }
+                });
+        });
+
+        document.getElementById('uploadBScan').addEventListener('click', function() {
+            const fileInput = document.getElementById('bscanFile');
+            const file = fileInput.files[0];
+            const formData = new FormData();
+            formData.append('file', file);
+
+            fetch('/upload_bscan', { method: 'POST', body: formData })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        showNotification(data.success);
+                    } else {
+                        showNotification(data.error);
+                    }
+                });
+        });
+
+        document.getElementById('runBScan').addEventListener('click', function() {
+            fetch('/run_bscan_pattern', { method: 'POST' })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        showNotification(data.success);
+                    } else {
+                        showNotification(data.error);
+                    }
+                });
+        });
+
+        updateState();
+        updateProperties();
+
+        document.getElementById('getImage').addEventListener('click', function() {
+            const ft = fftCheckbox.checked;
+
+            fetch('/get_image', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ ft: ft })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.image) {
+                    imageDisplayElement.src = `data:image/png;base64,${data.image}`;
+                } else {
+                    showNotification(data.error);
+                }
+            });
+        });
+    });
+</script>
+</body>
+</html>
