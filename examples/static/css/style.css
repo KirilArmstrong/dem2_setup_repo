@@ -1,0 +1,32 @@
+/* Custom styles for light and dark themes */
+body.light {
+    background-color: #FFFFFF;
+    color: #000000;
+}
+body.dark {
+    background-color: #32373E;
+    color: #FFFFFF;
+}
+/*.title {
+    color: #244A86;
+} */
+.title {
+    color: #6AB0E2;
+}
+.label {
+    color: #8DAAC8;
+}
+.accent {
+    background-color: #0F2DB3;
+}
+.highlight {
+    background-color: #0072EF;
+}
+
+
+.modal {
+    display: none;
+}
+.modal.active {
+    display: flex;
+}
