@@ -355,9 +355,14 @@ def use_processor(log):
             center_y=center_y,
             y_ax_lbl="Z [pix]",
         )
+        height = oct_recon.shape[0]
+        pad = height // 2 if padding is None else padding
+        new_k = int((k / (height // 2)) * (((2 * pad) + height) // 2))
         p = np.abs(
             processor[
-                k + (processor.shape[0] // 2 if alread_recon and center_y else 0), :, :
+                new_k + (processor.shape[0] // 2 if alread_recon and center_y else 0),
+                :,
+                :,
             ]
         )
         # fig2 = processor._prep_plot(p, "XY", y=y, gamma=0.4)

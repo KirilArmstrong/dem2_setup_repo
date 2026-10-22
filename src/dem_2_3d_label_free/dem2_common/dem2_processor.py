@@ -331,7 +331,8 @@ class Dem2Processor(Dem2SweepPacket):
                 pad = height // 2 if padding is None else padding
                 new_k = int((k / (height // 2)) * (((2 * pad) + height) // 2))
                 plt.axhline(
-                    (height // 2 if center_y else 0) + new_k,
+                    # (height // 2 if center_y else 0) + new_k,
+                    new_k,
                     color="red",
                     linestyle="-",
                     linewidth=0.5,
