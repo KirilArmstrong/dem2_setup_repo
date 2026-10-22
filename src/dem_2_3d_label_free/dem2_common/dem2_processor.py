@@ -174,6 +174,16 @@ class Dem2Processor(Dem2SweepPacket):
         w = width - 1 if width % 2 == 1 else width
         h = height - 1 if height % 2 == 1 else height
         new_arr = np.zeros_like(array)
+        if (
+            centre[0] - int(h / 2) < 0
+            or centre[1] - int(w / 2) < 0
+            or centre[0] + int(h / 2) > array.shape[0]
+            or centre[0] + int(w / 2) > array.shape[1]
+        ):
+            raise Exception(
+                f"Selection out of array bounds! x is {centre[1] - int(w / 2)} to {centre[0] + int(w / 2)} "
+                f"and y is {centre[0] - int(h / 2)} to {centre[0] + int(h / 2)}."
+            )
         new_arr[
             int(array.shape[0] / 2) - int(h / 2) : int(array.shape[0] / 2) + int(h / 2),
             int(array.shape[1] / 2) - int(w / 2) : int(array.shape[1] / 2) + int(w / 2),
@@ -244,7 +254,7 @@ class Dem2Processor(Dem2SweepPacket):
             self._log.info("Plotting...")
             self._prep_plot(arr, "Intensity Hologram", roi=roi)
             self._prep_plot(ft_arr, "FFT of Hologram", gamma=0.05, point=self.centre)
-            self._prep_plot(cft_arr, "Cropped & Centred FFT", gamma=0.05)
+            self._prep_plot(cft_arr, "Cropped & Centred FFT", gamma=0.3)
             self._prep_plot(recon_arr, "Reconstructed Intensity")
             self._prep_plot(recon_arr, "Reconstructed Phase", cmap="hsv")
             self._prep_plot(
@@ -268,6 +278,12 @@ class Dem2Processor(Dem2SweepPacket):
         cmap: str = "gray",
         unwrap: bool = False,
         point: tuple[int, int] = None,
+        y: int = None,
+        k: int = None,
+        padding: int | None = None,
+        y_ax_lbl: str = "Y [pix]",
+        x_ax_lbl: str = "X [pix]",
+        center_y=False,
     ):
         """
         Prepare plots.
@@ -277,7 +293,10 @@ class Dem2Processor(Dem2SweepPacket):
         :param gamma: Apply gamma to array.
         :param cmap: Color map, ie 'hsv' for phase.
         """
-        plt.figure()
+
+        if k is not None and y is not None:
+            raise ValueError("Only one of 'k' or 'y' can be set, not both.")
+        fig = plt.figure()
         if roi is not None:
             array = array[roi[0], roi[1]]
         if cmap == "hsv":
@@ -287,9 +306,13 @@ class Dem2Processor(Dem2SweepPacket):
         elif np.issubdtype(array.dtype, np.complexfloating):
             # array = (array * array.conj()).real
             array = abs(array)
-            if gamma is not None:
-                array = array**gamma
-        im = plt.imshow(array, cmap=cmap)
+        if gamma is not None:
+            array = array**gamma
+        height, width = array.shape
+        if center_y:
+            plt.imshow(array, cmap=cmap, extent=(0, width, height / 2, -height / 2))
+        else:
+            plt.imshow(array, cmap=cmap)
 
         if point is not None:
             row, col = point
@@ -303,10 +326,33 @@ class Dem2Processor(Dem2SweepPacket):
                 # imshow uses x=column and y=row
                 plt.scatter(col, row, c="red", marker="x", s=80, linewidths=2)
 
+        if k is not None:
+            if gamma is not None:
+                pad = height // 2 if padding is None else padding
+                new_k = int((k / (height // 2)) * (((2 * pad) + height) // 2))
+                plt.axhline(
+                    (height // 2 if center_y else 0) + new_k,
+                    color="red",
+                    linestyle="-",
+                    linewidth=0.5,
+                )
+            else:
+                plt.axhline(
+                    (height // 2 if center_y else 0) + k,
+                    color="red",
+                    linestyle="-",
+                    linewidth=0.5,
+                )
+        elif y is not None:
+            plt.axhline(y, color="red", linestyle="-", linewidth=0.5)
+
         if cmap == "hsv":
             plt.colorbar(fraction=0.046, pad=0.04)
         plt.title(title)
-        plt.axis("off")
+        plt.xlabel(x_ax_lbl)
+        plt.ylabel(y_ax_lbl)
+        # plt.axis("off")
+        return fig
 
     def plot_ft(
         self,
@@ -342,11 +388,11 @@ class Dem2Processor(Dem2SweepPacket):
         :param plot: Represent nolls on plot.
         :return: Zernike coefficients array.
         """
+        # square ROI
         array = array[
             centre[0] - radius - 1 : centre[0] + radius,
             centre[1] - radius - 1 : centre[1] + radius,
         ]
-        # U: complex array, result of your holography reconstruction
         phase = np.angle(array)
         phase = unwrap_phase(phase)
 
@@ -374,7 +420,7 @@ class Dem2Processor(Dem2SweepPacket):
         theta_p = theta[valid]
         phi_p = phase[valid]
 
-        # --- Fit Zernike coefficients (Noll indexing) ---
+        # fit Zernike coefficients w/ Noll indexing
         self._log.info("Fitting coefficients...")
         Z = []
         for j in range(1, max_noll + 1):

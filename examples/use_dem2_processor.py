@@ -2,10 +2,13 @@
 
 import time
 from pathlib import Path
+
 from matplotlib import pyplot as plt
 
 import numpy as np
-import cupy as cp
+from matplotlib.patches import Rectangle
+
+# import cupy as cp
 
 from src.dem_2_3d_label_free.dem2_common.dem2_helper import (
     setup_directories,
@@ -15,6 +18,7 @@ from src.dem_2_3d_label_free.dem2_common.dem2_helper import (
 )
 from src.dem_2_3d_label_free.dem2_common.dem2_processor import Dem2Processor
 from src.dem_2_3d_label_free.dem2_common.dem2_sweep_experiment import Dem2SweepPacket
+
 
 # DATA_PATH = Path(__datapath__)
 # FILE_NAME = Path("filename.h5")
@@ -27,7 +31,13 @@ FILE_NAME = Path("dem2") / "26-06-12" / "collimated_via_eye_2.h5"
 # FILE_NAME = Path("26-06-16") / "scotch_stairs.h5"
 # FILE_NAME = Path("26-06-16") / "mirror.h5"
 
-def prep_zernike(processor: Dem2Processor, array: np.ndarray, centre: tuple[int,int]|None=None, radius:int|None=None):
+
+def prep_zernike(
+    processor: Dem2Processor,
+    array: np.ndarray,
+    centre: tuple[int, int] | None = None,
+    radius: int | None = None,
+):
     cx = int(input("Centre X: ")) if centre is None else centre[1]
     cy = int(input("Centre Y: ")) if centre is None else centre[0]
     r = int(input("Radius: ")) if radius is None else radius
@@ -258,7 +268,7 @@ def use_processor(log):
         packet.get_info()
         return
 
-    if OCT_RECON:
+    if input("OCT RECON? (y/n): ").lower() == "y":
         padding = input("padding (auto/0/#): ")
         if padding.lower() == "auto":
             padding = None
@@ -317,14 +327,41 @@ def use_processor(log):
         y = input("Y level? (int|None):")
         try:
             y = int(y)
-        except Exception as e:
+        except Exception:
             y = Y
-        oct_recon = oct_reconstruct(
-            np.abs(processor[:, y, :]) if recon_abs else np.real(processor[:, y, :]),
-            pad=padding,
-        )
+        alread_recon = input("is data already oct reconned? (y/n):").lower() == "y"
+        if not alread_recon:
+            oct_recon = oct_reconstruct(
+                np.abs(processor[:, y, :])
+                if recon_abs
+                else np.real(processor[:, y, :]),
+                pad=padding,
+            )
+        else:
+            oct_recon = np.abs(processor[:, y, :])
+        k = input("k? (int|None):")
+        try:
+            k = int(k)
+        except Exception:
+            k = None
         # oct_recon = oct_recon[:oct_recon.shape[0]//2,:]
-        processor._prep_plot(oct_recon, "OCT Recon", gamma=GAMMA)
+        center_y = input("Center y? (y/n):").lower() == "y"
+        fig1 = processor._prep_plot(
+            oct_recon,
+            "XZ",
+            gamma=GAMMA,
+            k=k,
+            padding=padding,
+            center_y=center_y,
+            y_ax_lbl="Z [pix]",
+        )
+        p = np.abs(
+            processor[
+                k + (processor.shape[0] // 2 if alread_recon and center_y else 0), :, :
+            ]
+        )
+        # fig2 = processor._prep_plot(p, "XY", y=y, gamma=0.4)
+        fig2 = processor._prep_plot(p, "XY", y=y)
         plt.show()
         return
     # processor.rename_dataset("images", data_set)
@@ -478,7 +515,14 @@ def use_processor(log):
 
     zer_bool = input("Zernike estimation? y/n: ")
     if zer_bool.lower() == "y":
-        a, N = prep_zernike(processor, recon_arr, centre=(2070, 2410), radius=1300)
+        hlf_width, hlf_height = recon_arr.shape[1] // 2, recon_arr.shape[0] // 2
+        radius = min(hlf_width, hlf_height) - 1
+        a, N = prep_zernike(
+            processor,
+            recon_arr,
+            centre=(hlf_width, hlf_height),
+            radius=radius,
+        )
         # a, N = prep_zernike(processor, processor.ft(recon_arr), centre=(1712, 2352), radius=145)
 
         a_no_tdf = a.copy()
@@ -489,11 +533,35 @@ def use_processor(log):
         wave_no_tdf, inside = processor.reconstruct_from_zernikes(
             a_no_tdf, max_noll=len(a), N=N
         )
+        wave_wrapped = np.angle(np.exp(1j * wave_no_tdf))
 
         plt.figure()
-        plt.imshow(wave_no_tdf, cmap="twilight", origin="lower")
+        plt.imshow(wave_wrapped, cmap="hsv", origin="lower", vmin=-np.pi, vmax=np.pi)
         plt.colorbar(label="Phase [rad]")
         plt.title("Wavefront Estimate")
+        phase = np.angle(recon_arr)
+        fig, ax = plt.subplots()
+        im = ax.imshow(
+            phase,
+            cmap="hsv",
+            origin="lower",
+            vmin=-np.pi,
+            vmax=np.pi,
+        )
+
+        # Rectangle expects lower-left corner: (x, y)
+        box = Rectangle(
+            (hlf_width - radius, hlf_height - radius),
+            2 * radius,
+            2 * radius,
+            linewidth=2,
+            edgecolor="black",
+            facecolor="none",
+        )
+        ax.add_patch(box)
+
+        fig.colorbar(im, ax=ax, label="Phase [rad]")
+        ax.set_title("Wavefront Real")
         plt.show()
 
 
