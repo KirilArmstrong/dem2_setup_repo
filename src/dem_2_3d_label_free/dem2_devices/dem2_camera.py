@@ -32,8 +32,8 @@ class Dem2Camera(xiapi.Camera):
 
         # Save config exposure time.
         self._t_exp = self._cfg["time_exposure"]
-        if self._t_exp < 0.1:
-            raise Dem2Errors.CameraError("Minimum exposure time is 100 us.")
+        if self._t_exp < 0.01:
+            raise Dem2Errors.CameraError("Minimum exposure time is 10 us.")
         self._t_idle = self._cfg["time_idle"]
         if self._t_idle < 0:
             raise Dem2Errors.CameraError("Minimum idle time is 0 us.")
@@ -237,7 +237,7 @@ class Dem2Camera(xiapi.Camera):
     def t_exp(self, value: float):
         """Set camera integration time in ms."""
 
-        if value < 0.1:
+        if value < 0.01:
             raise Dem2Errors.CameraError(
                 "Camera integration time must be more than 100 us!"
             )

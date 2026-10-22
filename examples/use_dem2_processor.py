@@ -8,7 +8,7 @@ from matplotlib import pyplot as plt
 import numpy as np
 from matplotlib.patches import Rectangle
 
-# import cupy as cp
+import cupy as cp
 
 from src.dem_2_3d_label_free.dem2_common.dem2_helper import (
     setup_directories,
@@ -23,13 +23,11 @@ from src.dem_2_3d_label_free.dem2_common.dem2_sweep_experiment import Dem2SweepP
 # DATA_PATH = Path(__datapath__)
 # FILE_NAME = Path("filename.h5")
 
-DATA_PATH = Path("C:/Users/ZOKARMST/OneDrive - Carl Zeiss AG/PycharmProjects/kirils_playground/data")
-# FILE_NAME = Path("dem2") / "26-06-05" / "usaf.h5"
-FILE_NAME = Path("dem2") / "26-06-12" / "collimated_via_eye_2.h5"
+RAISE = False
 
-# DATA_PATH = Path("D:/Alignment/")
-# FILE_NAME = Path("26-06-16") / "scotch_stairs.h5"
-# FILE_NAME = Path("26-06-16") / "mirror.h5"
+OCT_RECON = False if input("OCT recon? y/n: ") != "y" else True
+Y = 1600
+GAMMA = 0.3
 
 
 def prep_zernike(
@@ -303,7 +301,12 @@ def use_processor(log):
             for start in range(0, H, batch_size):
                 t1 = time.time()
                 end = min(start + batch_size, H)
-                images = _process_batch_along_z(np.real(processor[:, start:end, :]), dz)
+                images = _process_batch_along_z(
+                    np.abs(processor[:, start:end, :])
+                    if recon_abs
+                    else np.real(processor[:, start:end, :]),
+                    dz,
+                )
                 packet.write_batch(
                     start,
                     np.abs(cp.asnumpy(images)).astype(np.float32)

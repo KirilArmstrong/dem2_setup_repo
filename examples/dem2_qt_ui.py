@@ -159,7 +159,7 @@ class ProcessingWorker(QObject):
                 # image_array = np.real(image_array)
                 image_array = oct_reconstruct(image_array, self._padding)
                 y = image_array.shape[0] // 2
-                image_array[y - 2 : y + 2, :] = 0
+                image_array[y - 2 : y + 2, :] = 0  # set zero order region to 0
                 image_array = image_array**self._gamma
             else:
                 image_array = self.controller.camera.get_image(
@@ -417,7 +417,7 @@ class MainWindow(QMainWindow):
         self.btn_cam_disc_sweep = QPushButton("Discrete Swp.")
         self.btn_cam_set_int = QPushButton("Set Texp")
         self.int_time_spin = QDoubleSpinBox()
-        self.int_time_spin.setRange(0.1, 1000.0)
+        self.int_time_spin.setRange(0.01, 1000.0)
         self.int_time_spin.setSingleStep(0.01)
         self.int_time_spin.setValue(controller.camera.t_exp)
         grid_camctrl.addWidget(QLabel("Int. time [ms]"), 0, 0)
@@ -1153,7 +1153,7 @@ class MainWindow(QMainWindow):
         if self.proc_worker is not None:
             self.proc_worker.set_fft_enabled(self.state.fftEnabled)
             self.proc_worker.set_oct_mode(self.state.octEnabled)
-            self.proc_worker.set_padding(400)
+            self.proc_worker.set_padding(0)
 
     def _update_fft_tracking(self):
         if self.proc_worker is not None:
