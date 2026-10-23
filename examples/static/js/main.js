@@ -1,6 +1,10 @@
 /**
  * MAIN CONTROLLER LOGIC
  * Simulates hardware connection and state management.
+
+Content ai generated and manually edited.
+
+This is file is deprecated.
  */
 
 // --- Global State ---

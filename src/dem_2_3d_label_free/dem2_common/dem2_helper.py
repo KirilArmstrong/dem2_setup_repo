@@ -21,7 +21,8 @@ from src.dem_2_3d_label_free.__globals__ import (
 
 
 def numpy_to_qpixmap(array: np.ndarray) -> QPixmap:
-    """Convert 2D/3D np.uint8 or float [0,1] array to QPixmap."""
+    """Convert 2D/3D np.uint8 or float [0,1] array to QPixmap.
+        This function was ai generated and manually edited."""
     # Handle float arrays in [0,1] range
     if array.dtype in (np.float32, np.float64):
         array = (np.clip(array, 0, 1) * 255).astype(np.uint8)
@@ -62,7 +63,8 @@ def covert_fft_to_img(ft_array: cp.ndarray, gamma: float) -> cp.ndarray:
 
 
 def phase_to_hsv(array: cp.ndarray) -> cp.ndarray:
-    """Convert -pi to pi to 0 - 1."""
+    """Convert -pi to pi to 0 - 1.
+        This function was ai generated and manually edited."""
     from matplotlib.colors import hsv_to_rgb
 
     hue = (cp.angle(array) + cp.pi) / (2 * cp.pi)
@@ -150,6 +152,7 @@ def collect_h5_contents(filename, log=None, max_elements=0) -> str:
     - All datasets, with shape, dtype, attributes
     - Optionally some data values
     Returns a single string with all information.
+        This function was ai generated and manually edited.
     """
     lines = []
     with h5py.File(filename, "r") as f:
@@ -283,7 +286,8 @@ def setup_root_logger(root_file=__file__) -> Logger:
 
 
 def noll_to_nm(j: int):
-    """Convert Noll index j (1-based) to (n, m)."""
+    """Convert Noll index j (1-based) to (n, m).
+        This function was ai generated and manually edited."""
     n = int(np.ceil((-3 + np.sqrt(9 + 8 * (j - 1))) / 2))
     p = j - n * (n + 1) // 2
     k = n % 2
@@ -294,7 +298,8 @@ def noll_to_nm(j: int):
 
 
 def radial_poly(n: int, m: int, r: np.ndarray):
-    """Radial Zernike polynomial R_n^m(r)."""
+    """Radial Zernike polynomial R_n^m(r).
+        This function was ai generated and manually edited."""
     m = abs(m)
     R = np.zeros_like(r, dtype=float)
     for k in range((n - m) // 2 + 1):
@@ -316,6 +321,7 @@ def zernike_noll(j: int, r: np.ndarray, theta: np.ndarray):
     Noll-indexed Zernike polynomial Z_j(r, theta), normalized in the
     usual way (unit disk, real-valued).
     r, theta: 1D arrays of same shape, with 0 <= r <= 1.
+        This function was ai generated and manually edited.
     """
     n, m = noll_to_nm(j)
     R = radial_poly(n, m, r)

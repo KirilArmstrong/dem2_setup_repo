@@ -1,6 +1,8 @@
 """
 Dem2Processor GUI Application
 A modern PySide6 interface for holographic image reconstruction
+
+Content ai generated and manually edited.
 """
 
 import sys

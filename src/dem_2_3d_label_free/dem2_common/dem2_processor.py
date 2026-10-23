@@ -382,6 +382,7 @@ class Dem2Processor(Dem2SweepPacket):
     ):
         """
         Get the Zernike Coefficients of a roi of a reconstructed field.
+        This function was ai generated and manually edited.
         :param array: Full array of object field.
         :param centre: Center of roi. (y,x)
         :param radius: Radius of roi.
@@ -509,6 +510,9 @@ class Dem2Processor(Dem2SweepPacket):
         return a, N
 
     def reconstruct_from_zernikes(self, a, N, max_noll=15):
+        """
+        This function was ai generated and manually edited.
+        """
         # Rebuild total wavefront from coefficients a[0..max_noll-1]
         y, x = np.indices((N, N))
         x = x - (N - 1) / 2

@@ -1,4 +1,6 @@
-"""Stage control script."""
+"""Stage control script.
+Adapted code from Mylene Amstutz
+"""
 
 import logging
 import time

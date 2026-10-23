@@ -1,3 +1,8 @@
+/* Content ai generated and manually edited.
+
+This is file is deprecated.
+*/
+
 function changeStatus(device, status) {
     const statusText = {
         0: 'Disconnected',

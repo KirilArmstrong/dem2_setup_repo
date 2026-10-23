@@ -4,6 +4,8 @@ Main GUI for Dem2. Broken down into 3 classes:
 - ProcessingWorker - This is a background processor that runs a separate thread so the GUI doesnt lock up when
 running long experiments, or live.
 - MainWindow - The GUI and its functions.
+
+Content ai generated and manually edited.
 """
 
 import logging
